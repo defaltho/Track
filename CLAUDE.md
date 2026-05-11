@@ -82,16 +82,16 @@ npx @claude-flow/cli@latest swarm init --topology hierarchical --max-agents 8 --
 - **YES**: 3+ files, new features, cross-module refactoring, API changes, security, performance
 - **NO**: single file edits, 1-2 line fixes, docs updates, config changes, questions
 
-### 4-Tier Model Routing
+### Model Routing (Anthropic-only)
 
-| Tier | Handler | Use Cases |
-|------|---------|-----------|
-| 1 | Agent Booster (WASM) | Simple transforms — skip LLM, use Edit directly |
-| 2 | Qwen3.5:9b (local, free) | Docs, config, single-file edits, test gen, git messages, data transforms, simple bug fixes, boilerplate |
-| 3 | Haiku | Medium complexity — multi-file reads, simple APIs, moderate reasoning |
-| 4 | Opus 4.6 (principal) | Architecture, security, complex multi-file refactor, novel reasoning |
+| Tier | Model | Use Cases |
+|------|-------|-----------|
+| 1 | Agent Booster (WASM) | Simple transforms — skip LLM entirely, use Edit directly |
+| 2 | Haiku 4.5 (`claude-haiku-4-5-20251001`) | Docs, config, single-file edits, test gen, git messages, data transforms, simple bug fixes, boilerplate |
+| 3 | Sonnet 4.6 (`claude-sonnet-4-6`) | Multi-file reads, feature implementation, code review, moderate reasoning |
+| 4 | Opus 4.7 (`claude-opus-4-7`) | Architecture, security audits, complex multi-file refactor, novel reasoning |
 
-**Qwen3.5:9b** corre localmente via Ollama (`http://localhost:11434`) — sem custos de tokens. Usar sempre que a tarefa não exija raciocínio complexo ou contexto extenso.
+**No local fallback** — `models.local.enabled=false`, `ollama.enabled=false`. All inference goes to Anthropic. Tier escalation is automatic based on task complexity scoring.
 
 ## Memory & Learning
 
