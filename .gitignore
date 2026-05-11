@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.DS_Store
+*.local
+.env
+
+# Claude / Ruflo runtime
+.claude/
+.claude-flow/
+.swarm/
+ruvector.db
+.mcp.json
