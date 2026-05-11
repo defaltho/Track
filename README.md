@@ -13,7 +13,7 @@ A minimalist PWA to track subscriptions, apps, events, tasks, and spending. Buil
         <img src="https://github.com/defaltho.png" width="80" height="80" alt="defaltho" style="border-radius:50%"/>
       </a>
       <br/>
-      <a href="https://github.com/defaltho"><b>Moisés Oliveira</b></a>
+      <a href="https://github.com/defaltho"><b>defaltho</b></a>
       <br/>
       <sub>Author</sub>
     </td>
