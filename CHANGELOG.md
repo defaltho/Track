@@ -9,6 +9,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- Migrated frontend stack from Svelte 5 + Vite to React Native Web (Expo Router)
+- Replaced Svelte stores with Zustand + AsyncStorage for cross-platform persistence
+- Replaced CSS variables with typed theme constants (`src/theme.ts`)
+- Replaced SVG HTML elements with `react-native-svg` (chart logic unchanged)
+- Navigation moved to Expo Router file-based tab routing (`app/(tabs)/`)
+
 ### Added
 - Dashboard widget grid (date, events, today, spending sparkline, quick actions)
 - Calendar page with dot indicators and day-click event modal
