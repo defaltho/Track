@@ -1,5 +1,14 @@
 # Ruflo — Claude Code Configuration
 
+## On Conversation Start
+
+When starting a new conversation in this project, ALWAYS check for remote updates first:
+1. Run `git fetch origin` silently
+2. Compare local and remote with `git status` and `git rev-list HEAD..origin/main --count`
+3. If there are remote updates available, ask the user: "Há atualizações no repositório remoto. Queres fazer git pull para atualizar?"
+4. If the user says yes, run `git pull origin main`
+5. If already up to date, proceed normally without mentioning it
+
 ## Rules
 
 - Do what has been asked; nothing more, nothing less
