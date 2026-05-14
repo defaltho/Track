@@ -40,7 +40,7 @@ export function Calendar() {
     [store.events]
   )
   const subDates = useMemo(
-    () => new Set(store.subscriptions.map((s: any) => s.nextChargeDate)),
+    () => new Set(store.subscriptions.filter((s: any) => s.active !== false).map((s: any) => s.nextChargeDate)),
     [store.subscriptions]
   )
   const todayStr = format(new Date(), 'yyyy-MM-dd')
@@ -58,7 +58,7 @@ export function Calendar() {
     [store.events, selectedDay]
   )
   const daySubs = useMemo(
-    () => (selectedDay ? store.subscriptions.filter((s: any) => s.nextChargeDate === selectedDay) : []),
+    () => (selectedDay ? store.subscriptions.filter((s: any) => s.active !== false && s.nextChargeDate === selectedDay) : []),
     [store.subscriptions, selectedDay]
   )
 
@@ -75,11 +75,11 @@ export function Calendar() {
     <ScrollView style={s.page} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
       <View style={s.card}>
         <View style={s.calHeader}>
-          <TouchableOpacity style={s.navBtn} onPress={prev}>
+          <TouchableOpacity style={s.navBtn} onPress={prev} accessibilityLabel="Previous month" accessibilityRole="button">
             <Text style={s.navText}>‹</Text>
           </TouchableOpacity>
           <Text style={s.monthLabel}>{label}</Text>
-          <TouchableOpacity style={s.navBtn} onPress={next}>
+          <TouchableOpacity style={s.navBtn} onPress={next} accessibilityLabel="Next month" accessibilityRole="button">
             <Text style={s.navText}>›</Text>
           </TouchableOpacity>
         </View>
@@ -121,7 +121,7 @@ export function Calendar() {
         </View>
       </View>
 
-      {upcoming.length > 0 && (
+      {upcoming.length > 0 ? (
         <View style={s.card}>
           <View style={s.sectionRow}>
             <Text style={s.sectionTitle}>This month</Text>
@@ -135,6 +135,10 @@ export function Calendar() {
               <Text style={s.eventName}>{ev.emoji ?? '•'} {ev.name}</Text>
             </View>
           ))}
+        </View>
+      ) : (
+        <View style={[s.card, s.emptyCard]}>
+          <Text style={s.emptyText}>Sem cobranças este mês</Text>
         </View>
       )}
 
@@ -173,7 +177,7 @@ export function Calendar() {
 
 const s = StyleSheet.create({
   page: { flex: 1, backgroundColor: theme.bg },
-  content: { padding: theme.sp4, gap: theme.sp4, paddingBottom: theme.sp8 },
+  content: { padding: theme.sp4, gap: theme.sp4, paddingBottom: 110 },
 
   card: {
     backgroundColor: theme.surface,
@@ -218,6 +222,8 @@ const s = StyleSheet.create({
   eventName: { fontSize: theme.textSm, fontWeight: '500', color: theme.text },
 
   dayEmpty: { fontSize: theme.textSm, color: theme.textMuted, paddingVertical: theme.sp2 },
+  emptyCard: { alignItems: 'center', padding: theme.sp8 },
+  emptyText: { fontSize: theme.textSm, color: theme.textMuted },
   dayRow: {
     flexDirection: 'row',
     gap: theme.sp3,

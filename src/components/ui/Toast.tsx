@@ -8,7 +8,7 @@ export function Toast() {
   if (items.length === 0) return null
 
   return (
-    <View style={s.container}>
+    <View style={s.container} pointerEvents="none">
       {items.map(t => (
         <View key={t.id} style={[s.toast, t.type === 'success' ? s.success : s.info]}>
           <Text style={s.text}>{t.message}</Text>
@@ -21,13 +21,12 @@ export function Toast() {
 const s = StyleSheet.create({
   container: {
     position: 'absolute',
-    bottom: 90,
+    bottom: 100, // above tab bar
     left: 0,
     right: 0,
     alignItems: 'center',
     zIndex: 999,
     gap: theme.sp2,
-    pointerEvents: 'none',
   },
   toast: {
     paddingHorizontal: theme.sp4,
@@ -44,6 +43,6 @@ const s = StyleSheet.create({
   text: {
     color: '#fff',
     fontSize: theme.textSm,
-    fontWeight: '600',
+    fontFamily: theme.fontMedium,
   },
 })

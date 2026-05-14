@@ -4,10 +4,12 @@ import {
   View,
   Text,
   TouchableOpacity,
+  Pressable,
   ScrollView,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  Dimensions,
 } from 'react-native'
 import { theme } from '../../theme'
 
@@ -26,7 +28,7 @@ export function Modal({ open, title, onClose, children }: Props) {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={s.kav}
         >
-          <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+          <Pressable onStartShouldSetResponder={() => true}>
             <View style={s.modal}>
               <View style={s.header}>
                 <Text style={s.title}>{title}</Text>
@@ -42,7 +44,7 @@ export function Modal({ open, title, onClose, children }: Props) {
                 {children}
               </ScrollView>
             </View>
-          </TouchableOpacity>
+          </Pressable>
         </KeyboardAvoidingView>
       </TouchableOpacity>
     </RNModal>
@@ -59,12 +61,13 @@ const s = StyleSheet.create({
   kav: {
     width: '100%',
     maxWidth: 520,
+    flex: 1,
   },
   modal: {
     backgroundColor: theme.surface,
     borderTopLeftRadius: theme.radiusXl,
     borderTopRightRadius: theme.radiusXl,
-    maxHeight: '88%' as any,
+    maxHeight: Dimensions.get('window').height * 0.88,
   },
   header: {
     flexDirection: 'row',
@@ -77,7 +80,7 @@ const s = StyleSheet.create({
   },
   title: {
     fontSize: theme.textLg,
-    fontWeight: '700',
+    fontFamily: theme.fontBold,
     color: theme.text,
   },
   closeBtn: {

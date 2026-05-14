@@ -19,13 +19,20 @@ interface Props {
 
 export function AddTaskForm({ onSubmit, onCancel }: Props) {
   const [name, setName] = useState('')
+  const [nameError, setNameError] = useState('')
   const [dueDate, setDueDate] = useState('')
+  const [dueDateError, setDueDateError] = useState('')
   const [priority, setPriority] = useState<typeof PRIORITIES[number]>('medium')
   const [category, setCategory] = useState('Other')
   const [note, setNote] = useState('')
 
   function submit() {
-    if (!name.trim()) return
+    if (!name.trim()) { setNameError('O nome da tarefa é obrigatório'); return }
+    if (dueDate && !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
+      setDueDateError('Invalid date format. Use YYYY-MM-DD.')
+      return
+    }
+    setDueDateError('')
     onSubmit({
       name: name.trim(),
       done: false,
@@ -46,7 +53,7 @@ export function AddTaskForm({ onSubmit, onCancel }: Props) {
           <TextInput
             style={s.input}
             value={name}
-            onChangeText={setName}
+            onChangeText={v => { setName(v); setNameError('') }}
             placeholder="Cancel gym membership"
           />
         </View>
@@ -54,12 +61,13 @@ export function AddTaskForm({ onSubmit, onCancel }: Props) {
         <View>
           <Text style={s.label}>Due date (YYYY-MM-DD)</Text>
           <TextInput
-            style={s.input}
+            style={[s.input, dueDateError ? s.inputError : null]}
             value={dueDate}
-            onChangeText={setDueDate}
+            onChangeText={v => { setDueDate(v); setDueDateError('') }}
             placeholder="2025-12-31"
             keyboardType="numeric"
           />
+          {dueDateError ? <Text style={s.errorText}>{dueDateError}</Text> : null}
         </View>
 
         <View>
@@ -99,6 +107,7 @@ export function AddTaskForm({ onSubmit, onCancel }: Props) {
         </View>
       </View>
 
+      {nameError ? <Text style={s.nameErrorText}>{nameError}</Text> : null}
       <View style={s.actions}>
         <TouchableOpacity style={s.btnSecondary} onPress={onCancel}>
           <Text style={s.btnSecondaryText}>Cancel</Text>
@@ -115,7 +124,7 @@ const s = StyleSheet.create({
   fields: { gap: theme.sp4 },
   label: {
     fontSize: theme.textXs,
-    fontWeight: '600',
+    fontFamily: theme.fontBold,
     color: theme.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -128,8 +137,18 @@ const s = StyleSheet.create({
     borderColor: theme.border,
     borderRadius: theme.radiusMd,
     fontSize: theme.textSm,
+    fontFamily: theme.fontRegular,
     backgroundColor: theme.bg,
     color: theme.text,
+  },
+  inputError: {
+    borderColor: theme.danger,
+  },
+  errorText: {
+    fontSize: theme.textXs,
+    fontFamily: theme.fontMedium,
+    color: theme.danger,
+    marginTop: theme.sp1,
   },
   picker: {
     backgroundColor: theme.bg,
@@ -149,8 +168,9 @@ const s = StyleSheet.create({
     alignItems: 'center',
   },
   pillActive: { backgroundColor: theme.accent, borderColor: theme.accent },
-  pillText: { fontSize: theme.textXs, fontWeight: '600', color: theme.textMuted },
+  pillText: { fontSize: theme.textXs, fontFamily: theme.fontBold, color: theme.textMuted },
   pillTextActive: { color: theme.accentFg },
+  nameErrorText: { color: theme.danger, fontSize: 12, fontFamily: theme.fontMedium, marginBottom: 8 },
   actions: { flexDirection: 'row', gap: theme.sp3, marginTop: theme.sp6 },
   btnPrimary: {
     flex: 1,
@@ -159,7 +179,7 @@ const s = StyleSheet.create({
     backgroundColor: theme.accent,
     alignItems: 'center',
   },
-  btnPrimaryText: { fontSize: theme.textSm, fontWeight: '700', color: theme.accentFg },
+  btnPrimaryText: { fontSize: theme.textSm, fontFamily: theme.fontBold, color: theme.accentFg },
   btnSecondary: {
     paddingVertical: theme.sp3,
     paddingHorizontal: theme.sp5,
@@ -167,5 +187,5 @@ const s = StyleSheet.create({
     backgroundColor: theme.bg,
     alignItems: 'center',
   },
-  btnSecondaryText: { fontSize: theme.textSm, fontWeight: '600', color: theme.textMuted },
+  btnSecondaryText: { fontSize: theme.textSm, fontFamily: theme.fontMedium, color: theme.textMuted },
 })

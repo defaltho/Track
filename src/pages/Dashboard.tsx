@@ -5,7 +5,18 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
+  Platform,
 } from 'react-native'
+import Animated, {
+  FadeInDown,
+  FadeInUp,
+  ZoomIn,
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  interpolateColor,
+} from 'react-native-reanimated'
 import Svg, {
   Defs,
   LinearGradient,
@@ -14,7 +25,7 @@ import Svg, {
   Circle,
   Text as SvgText,
 } from 'react-native-svg'
-import { format, differenceInCalendarDays, parseISO } from 'date-fns'
+import { format, differenceInCalendarDays, parseISO, getDaysInMonth } from 'date-fns'
 import { useDataStore } from '../stores/data'
 import { useToastStore } from '../stores/toasts'
 import { totalMonthlySpend, coffees } from '../utils/calculations'
@@ -48,19 +59,25 @@ export function Dashboard() {
   const dueSubs = useMemo(
     () =>
       store.subscriptions.filter((s: any) => {
+        if (s.active === false) return false
+        if (!s.nextChargeDate) return false
         const diff = differenceInCalendarDays(parseISO(s.nextChargeDate), now)
         return diff >= 0 && diff <= 7
       }),
     [store.subscriptions]
   )
   const hasToday = dueSubs.length > 0 || todayTasks.length > 0
+  const activeSubs = useMemo(
+    () => store.subscriptions.filter((s: any) => s.active !== false),
+    [store.subscriptions]
+  )
 
-  const [timeRange, setTimeRange] = useState('1Y')
+  const [timeRange, setTimeRange] = useState('3M')
   const timeline = useMemo(
     () => buildSpendingTimeline(store.subscriptions, RANGE_DAYS[timeRange]),
     [store.subscriptions, timeRange]
   )
-  const path = useMemo(() => pointsToPath(timeline, 300, 80), [timeline])
+  const path = useMemo(() => pointsToPath(timeline, 300, 72), [timeline])
 
   const [showAddTrack, setShowAddTrack] = useState(false)
   const [showAddTask, setShowAddTask] = useState(false)
@@ -82,147 +99,194 @@ export function Dashboard() {
   function confirmRemove() {
     if (!confirm) return
     if (confirm.kind === 'sub') { store.removeSubscription(confirm.id); toast.push(`Removed ${confirm.name}`) }
-    else { store.removeTask(confirm.id); toast.push(`Removed ${confirm.name}`) }
+    else if (confirm.kind === 'task') { store.removeTask(confirm.id); toast.push(`Removed ${confirm.name}`) }
     setConfirm(null)
   }
 
   return (
     <ScrollView style={s.page} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
-      {/* Row 1 */}
-      <View style={s.row2}>
-        <View style={s.card}>
-          <Text style={s.dateTop}>
-            <Text style={{ fontWeight: '800' }}>{format(now, 'EEE')}</Text>
-            {'  '}
-            <Text style={{ color: theme.textMuted }}>{format(now, 'MMM')}</Text>
-          </Text>
-          <Text style={s.dateHero}>{format(now, 'd')}</Text>
+
+      {/* ── Hero spending card (inverted) ── */}
+      <Animated.View entering={FadeInDown.delay(0).duration(500).springify()} style={s.heroCard}>
+        <View style={s.heroTop}>
+          <View>
+            <Text style={s.heroLabel}>Monthly spend</Text>
+            <Text style={s.heroAmount}>
+              {symbol}{monthly.toFixed(0)}
+              <Text style={s.heroCents}>.{(monthly % 1).toFixed(2).slice(2)}</Text>
+            </Text>
+            <Text style={s.heroSub}>{activeSubs.length} active · {coffeeCount} coffees</Text>
+          </View>
+          <View style={s.heroMeta}>
+            <Text style={s.heroDateDay}>{format(now, 'd')}</Text>
+            <Text style={s.heroDateLabel}>{format(now, 'EEE, MMM')}</Text>
+          </View>
+        </View>
+
+        {/* Sparkline */}
+        <View style={s.chartWrap}>
+          <Svg width="100%" height={72} viewBox="0 0 300 72" preserveAspectRatio="none">
+            <Defs>
+              <LinearGradient id="hero-grad" x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0%" stopColor="#ffffff" stopOpacity={0.25} />
+                <Stop offset="100%" stopColor="#ffffff" stopOpacity={0} />
+              </LinearGradient>
+            </Defs>
+            {activeSubs.length > 0 ? (
+              <>
+                <Path d={path.area} fill="url(#hero-grad)" />
+                <Path d={path.line} fill="none" stroke="#ffffff" strokeWidth={2} strokeLinejoin="round" />
+                <Circle cx={path.last.x} cy={path.last.y} r={3.5} fill="#ffffff" />
+              </>
+            ) : (
+              <SvgText x={150} y={40} textAnchor="middle" fontSize={11} fill="rgba(255,255,255,0.35)">
+                Add a subscription to see trends
+              </SvgText>
+            )}
+          </Svg>
+        </View>
+
+        {/* Range filters */}
+        <View style={s.heroFilters}>
+          {Object.keys(RANGE_DAYS).map(f => (
+            <TouchableOpacity
+              key={f}
+              style={[s.heroFilter, timeRange === f && s.heroFilterActive]}
+              onPress={() => setTimeRange(f)}
+              accessibilityRole="button"
+            >
+              <Text style={[s.heroFilterText, timeRange === f && s.heroFilterTextActive]}>{f}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </Animated.View>
+
+      {/* ── Date + Events row ── */}
+      <Animated.View entering={FadeInDown.delay(120).duration(500).springify()} style={s.row2}>
+        <View style={[s.card, s.dateCard]}>
+          <Text style={s.dateWeekday}>{format(now, 'EEEE')}</Text>
+          <Text style={s.dateNum}>{format(now, 'd')}</Text>
+          <Text style={s.dateMonth}>{format(now, 'MMMM yyyy')}</Text>
         </View>
 
         <View style={[s.card, s.eventsCard]}>
-          <View style={s.badge}>
-            <Text style={s.badgeText}>{monthEvents.length}</Text>
+          <View style={s.eventsTop}>
+            <Text style={s.cardLabel}>Events</Text>
+            <Animated.View entering={ZoomIn.delay(200).duration(400)} style={s.badge}>
+              <Text style={s.badgeText}>{monthEvents.length}</Text>
+            </Animated.View>
           </View>
-          <Text style={s.cardLabel}>Events</Text>
           <View style={s.dotGrid}>
-            {Array(31).fill(null).map((_, i) => (
+            {Array(getDaysInMonth(now)).fill(null).map((_, i) => (
               <View key={i} style={[s.dot, i < monthEvents.length && s.dotFilled]} />
             ))}
           </View>
         </View>
-      </View>
+      </Animated.View>
 
-      {/* Today */}
-      <View style={s.card}>
-        <Text style={s.sectionTitle}>Today, {format(now, 'EEEE')}</Text>
+      {/* ── Today ── */}
+      <Animated.View entering={FadeInDown.delay(220).duration(500).springify()} style={s.card}>
+        <View style={s.todayHeader}>
+          <Text style={s.sectionTitle}>Due this week</Text>
+          <TouchableOpacity
+            style={s.btnAdd}
+            onPress={() => setShowAddTrack(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Add subscription or event"
+          >
+            <Text style={s.btnAddText}>＋</Text>
+          </TouchableOpacity>
+        </View>
 
-        {!hasToday && <Text style={s.empty}>Nothing due today</Text>}
+        {!hasToday && (
+          <Text style={s.empty}>Nothing due in the next 7 days</Text>
+        )}
 
-        {dueSubs.map((sub: any) => (
-          <View key={sub.id} style={s.listItem}>
-            <View style={s.bullet} />
-            <View style={s.itemBody}>
-              <Text style={s.itemName}>{sub.emoji ?? '💳'} {sub.name}</Text>
-              <Text style={s.itemMeta}>{symbol}{sub.price} · {format(parseISO(sub.nextChargeDate), 'd MMM')}</Text>
+        {dueSubs.map((sub: any) => {
+          const diff = differenceInCalendarDays(parseISO(sub.nextChargeDate), now)
+          return (
+            <View key={sub.id} style={s.listItem}>
+              <View style={s.emojiWrap}>
+                <Text style={s.itemEmoji}>{sub.emoji ?? '💳'}</Text>
+              </View>
+              <View style={s.itemBody}>
+                <Text style={s.itemName}>{sub.name}</Text>
+                <Text style={s.itemMeta}>
+                  {symbol}{sub.price} · {diff === 0 ? 'today' : diff === 1 ? 'tomorrow' : `in ${diff}d`}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={s.rowAction}
+                onPress={() => setConfirm({ kind: 'sub', id: sub.id, name: sub.name })}
+                accessibilityLabel={`Remove ${sub.name}`}
+                accessibilityRole="button"
+              >
+                <Text style={s.rowActionText}>×</Text>
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity style={s.rowAction} onPress={() => setConfirm({ kind: 'sub', id: sub.id, name: sub.name })}>
-              <Text style={s.rowActionText}>×</Text>
-            </TouchableOpacity>
-          </View>
-        ))}
+          )
+        })}
 
-        {todayTasks.map((task: any) => (
-          <View key={task.id} style={s.listItem}>
+        {todayTasks.map((task: any, idx: number) => (
+          <Animated.View key={task.id} entering={FadeInDown.delay(320 + idx * 60).duration(400)} style={s.listItem}>
             <TouchableOpacity
               style={[s.checkbox, task.done && s.checkboxChecked]}
               onPress={() => store.updateTask(task.id, { done: !task.done })}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: task.done }}
             >
-              {task.done && <Text style={s.checkmark}>✓</Text>}
+              {task.done && (
+                <Animated.Text entering={ZoomIn.duration(200)} style={s.checkmark}>✓</Animated.Text>
+              )}
             </TouchableOpacity>
             <View style={s.itemBody}>
               <Text style={[s.itemName, task.done && s.itemNameDone]}>{task.name}</Text>
               {task.note ? <Text style={s.itemMeta}>{task.note}</Text> : null}
             </View>
-            <TouchableOpacity style={s.rowAction} onPress={() => setConfirm({ kind: 'task', id: task.id, name: task.name })}>
+            <TouchableOpacity
+              style={s.rowAction}
+              onPress={() => setConfirm({ kind: 'task', id: task.id, name: task.name })}
+              accessibilityLabel={`Remove ${task.name}`}
+              accessibilityRole="button"
+            >
               <Text style={s.rowActionText}>×</Text>
             </TouchableOpacity>
-          </View>
+          </Animated.View>
         ))}
+      </Animated.View>
 
-        <View style={s.todayFooter}>
-          <TouchableOpacity style={s.btnCircleLg} onPress={() => setShowAddTrack(true)}>
-            <Text style={s.btnCircleText}>+</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Spending */}
-      <View style={s.card}>
-        <View style={s.spendingTop}>
-          <View>
-            <Text style={s.spendingAmount}>{symbol}{monthly.toFixed(0)}</Text>
-            <Text style={s.spendingSub}>Per Month = {coffeeCount} coffees</Text>
-          </View>
-          <Text style={s.cardLabel}>Your Subscriptions</Text>
-        </View>
-
-        <Svg width="100%" height={80} viewBox="0 0 300 80" preserveAspectRatio="none">
-          <Defs>
-            <LinearGradient id="g-dashboard" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0%" stopColor="#000" stopOpacity={0.14} />
-              <Stop offset="100%" stopColor="#000" stopOpacity={0} />
-            </LinearGradient>
-          </Defs>
-          {store.subscriptions.length > 0 ? (
-            <>
-              <Path d={path.area} fill="url(#g-dashboard)" />
-              <Path d={path.line} fill="none" stroke="#000" strokeWidth={1.5} strokeLinejoin="round" />
-              <Circle cx={path.last.x} cy={path.last.y} r={3} fill="#000" />
-            </>
-          ) : (
-            <SvgText x={150} y={44} textAnchor="middle" fontSize={11} fill="#888">
-              No subscriptions yet
-            </SvgText>
-          )}
-        </Svg>
-
-        <View style={s.filters}>
-          {Object.keys(RANGE_DAYS).map(f => (
-            <TouchableOpacity
-              key={f}
-              style={[s.filterPill, timeRange === f && s.filterPillActive]}
-              onPress={() => setTimeRange(f)}
-            >
-              <Text style={[s.filterPillText, timeRange === f && s.filterPillTextActive]}>{f}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-
-      {/* Quick actions */}
-      <View style={s.row2}>
-        <TouchableOpacity style={[s.card, s.actionCard]} onPress={() => setShowAddTrack(true)}>
+      {/* ── Quick actions ── */}
+      <Animated.View entering={FadeInDown.delay(320).duration(500).springify()} style={s.row2}>
+        <TouchableOpacity
+          style={[s.card, s.actionCard]}
+          onPress={() => setShowAddTrack(true)}
+          accessibilityRole="button"
+        >
           <Text style={s.actionIcon}>＋</Text>
-          <Text style={s.actionLabel}>Add Track</Text>
+          <Text style={s.actionLabel}>Track</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[s.card, s.actionCard]} onPress={() => setShowAddTask(true)}>
+        <TouchableOpacity
+          style={[s.card, s.actionCard]}
+          onPress={() => setShowAddTask(true)}
+          accessibilityRole="button"
+        >
           <Text style={s.actionIcon}>✓</Text>
-          <Text style={s.actionLabel}>Add Task</Text>
+          <Text style={s.actionLabel}>Task</Text>
         </TouchableOpacity>
-      </View>
+      </Animated.View>
 
       <Modal open={showAddTrack} title="Add Track" onClose={() => setShowAddTrack(false)}>
         <AddTrackForm onSubmit={handleAddTrack} onCancel={() => setShowAddTrack(false)} />
       </Modal>
-
       <Modal open={showAddTask} title="Add Task" onClose={() => setShowAddTask(false)}>
         <AddTaskForm onSubmit={handleAddTask} onCancel={() => setShowAddTask(false)} />
       </Modal>
-
       <Modal open={confirm !== null} title="Remove?" onClose={() => setConfirm(null)}>
         {confirm && (
           <View>
-            <Text style={s.confirmText}>Remove <Text style={{ fontWeight: '700' }}>{confirm.name}</Text>? This cannot be undone.</Text>
+            <Text style={s.confirmText}>
+              Remove <Text style={{ fontWeight: '700' }}>{confirm.name}</Text>? This cannot be undone.
+            </Text>
             <View style={s.confirmActions}>
               <TouchableOpacity style={s.btnSecondary} onPress={() => setConfirm(null)}>
                 <Text style={s.btnSecondaryText}>Cancel</Text>
@@ -240,104 +304,170 @@ export function Dashboard() {
 
 const s = StyleSheet.create({
   page: { flex: 1, backgroundColor: theme.bg },
-  content: { padding: theme.sp4, gap: theme.sp4, paddingBottom: theme.sp8 },
+  content: { padding: theme.sp4, gap: theme.sp3, paddingBottom: 110 },
 
-  row2: { flexDirection: 'row', gap: theme.sp4 },
+  row2: { flexDirection: 'row', gap: theme.sp3 },
 
+  // ── Hero card (inverted) ──
+  heroCard: {
+    backgroundColor: theme.accent,
+    borderRadius: theme.radiusXl,
+    padding: theme.sp5,
+    ...theme.shadowMd,
+  },
+  heroTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: theme.sp4,
+  },
+  heroLabel: {
+    fontSize: theme.textXs,
+    fontFamily: theme.fontBold,
+    color: 'rgba(255,255,255,0.5)',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    marginBottom: theme.sp1,
+  },
+  heroAmount: {
+    fontSize: 52,
+    fontFamily: theme.fontBlack,
+    color: theme.accentFg,
+    lineHeight: 52,
+    letterSpacing: -2,
+  },
+  heroCents: {
+    fontSize: 24,
+    fontFamily: theme.fontMedium,
+    letterSpacing: -1,
+  },
+  heroSub: {
+    fontSize: theme.textXs,
+    fontFamily: theme.fontRegular,
+    color: 'rgba(255,255,255,0.5)',
+    marginTop: theme.sp1,
+  },
+  heroMeta: { alignItems: 'flex-end' },
+  heroDateDay: {
+    fontSize: 40,
+    fontFamily: theme.fontBlack,
+    color: theme.accentFg,
+    lineHeight: 40,
+    letterSpacing: -1,
+  },
+  heroDateLabel: {
+    fontSize: theme.textXs,
+    fontFamily: theme.fontBold,
+    color: 'rgba(255,255,255,0.5)',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 2,
+  },
+  chartWrap: { marginHorizontal: -theme.sp5, marginBottom: theme.sp3 },
+  heroFilters: { flexDirection: 'row', gap: theme.sp2 },
+  heroFilter: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: theme.radiusFull,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+  },
+  heroFilterActive: { backgroundColor: theme.accentFg },
+  heroFilterText: { fontSize: theme.textXs, fontFamily: theme.fontBold, color: 'rgba(255,255,255,0.5)' },
+  heroFilterTextActive: { color: theme.accent },
+
+  // ── Cards ──
   card: {
     backgroundColor: theme.surface,
     borderRadius: theme.radiusXl,
     padding: theme.sp5,
     ...theme.shadow,
   },
+  cardLabel: { fontSize: theme.textSm, fontWeight: '700', color: theme.text },
 
-  dateTop: { fontSize: theme.textBase },
-  dateHero: { fontSize: theme.textHero, fontWeight: '800', lineHeight: theme.textHero },
+  dateCard: { width: 110, justifyContent: 'space-between' },
+  dateWeekday: { fontSize: theme.textXs, fontFamily: theme.fontBold, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
+  dateNum: { fontSize: 48, fontFamily: theme.fontBlack, color: theme.text, lineHeight: 52, letterSpacing: -2, marginVertical: theme.sp1 },
+  dateMonth: { fontSize: theme.textXs, fontFamily: theme.fontMedium, color: theme.textMuted },
 
-  eventsCard: { flex: 1, minHeight: 140 },
+  eventsCard: { flex: 1 },
+  eventsTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: theme.sp3 },
   badge: {
-    position: 'absolute',
-    top: theme.sp4,
-    right: theme.sp4,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     backgroundColor: theme.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
   badgeText: { fontSize: theme.textXs, fontWeight: '700', color: theme.accentFg },
-  cardLabel: { fontSize: theme.textBase, fontWeight: '700', marginBottom: theme.sp3, color: theme.text },
   dotGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
-  dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: theme.border },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: theme.border },
   dotFilled: { backgroundColor: theme.accent },
 
-  sectionTitle: { fontSize: theme.textSm, fontWeight: '700', marginBottom: theme.sp4, color: theme.text },
-  listItem: { flexDirection: 'row', gap: theme.sp3, marginBottom: theme.sp3, alignItems: 'flex-start' },
-  itemBody: { flex: 1, minWidth: 0 },
-  bullet: { width: 8, height: 8, borderRadius: 4, backgroundColor: theme.accent, marginTop: 6 },
-  itemName: { fontSize: theme.textSm, fontWeight: '600', color: theme.text },
-  itemNameDone: { color: theme.textMuted, textDecorationLine: 'line-through' },
-  itemMeta: { fontSize: theme.textXs, color: theme.textMuted, marginTop: 2 },
-  empty: { fontSize: theme.textSm, color: theme.textMuted, paddingVertical: theme.sp4 },
-
-  checkbox: {
-    width: 18,
-    height: 18,
-    borderRadius: 6,
-    borderWidth: 1.5,
-    borderColor: theme.border,
-    backgroundColor: theme.bg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 2,
-  },
-  checkboxChecked: { backgroundColor: theme.accent, borderColor: theme.accent },
-  checkmark: { fontSize: 12, color: theme.accentFg },
-  rowAction: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rowActionText: { fontSize: 16, color: theme.textMuted },
-  todayFooter: { alignItems: 'flex-end', marginTop: theme.sp5 },
-  btnCircleLg: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  // ── Today section ──
+  todayHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: theme.sp4 },
+  sectionTitle: { fontSize: theme.textSm, fontFamily: theme.fontBold, color: theme.text },
+  btnAdd: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: theme.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  btnCircleText: { fontSize: 22, fontWeight: '300', color: theme.accentFg },
+  btnAddText: { fontSize: 18, fontWeight: '300', color: theme.accentFg, lineHeight: 22 },
 
-  spendingTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: theme.sp4 },
-  spendingAmount: { fontSize: theme.textXl, fontWeight: '800', color: theme.text },
-  spendingSub: { fontSize: theme.textXs, color: theme.textMuted, marginTop: 2 },
-  filters: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp2, marginTop: theme.sp4 },
-  filterPill: {
-    paddingHorizontal: 14,
-    paddingVertical: 5,
-    borderRadius: 20,
-    backgroundColor: theme.bg,
+  listItem: { flexDirection: 'row', gap: theme.sp3, marginBottom: theme.sp3, alignItems: 'center' },
+  itemBody: { flex: 1, minWidth: 0 },
+  emojiWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: theme.surfaceEl,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  filterPillActive: { backgroundColor: theme.accent },
-  filterPillText: { fontSize: theme.textXs, fontWeight: '600', color: theme.text },
-  filterPillTextActive: { color: theme.accentFg },
+  itemEmoji: { fontSize: 18 },
+  itemName: { fontSize: theme.textSm, fontFamily: theme.fontMedium, color: theme.text },
+  itemNameDone: { color: theme.textMuted, textDecorationLine: 'line-through' },
+  itemMeta: { fontSize: theme.textXs, color: theme.textMuted, marginTop: 2 },
+  empty: { fontSize: theme.textSm, color: theme.textFaint, paddingVertical: theme.sp3 },
 
-  actionCard: { flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 140, gap: theme.sp3 },
-  actionIcon: { fontSize: 36, color: theme.textMuted },
-  actionLabel: { fontSize: theme.textSm, fontWeight: '600', color: theme.text },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: theme.borderStrong,
+    backgroundColor: theme.surfaceEl,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxChecked: { backgroundColor: theme.accent, borderColor: theme.accent },
+  checkmark: { fontSize: 11, color: theme.accentFg, fontWeight: '700' },
+  rowAction: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: theme.surfaceEl,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rowActionText: { fontSize: 16, color: theme.textMuted, lineHeight: 20 },
 
-  confirmText: { fontSize: theme.textSm, marginBottom: theme.sp5, color: theme.text },
+  // ── Action cards ──
+  actionCard: { flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 100, gap: theme.sp2 },
+  actionIcon: { fontSize: 28, color: theme.textMuted },
+  actionLabel: { fontSize: theme.textXs, fontFamily: theme.fontBold, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
+
+  // ── Confirm modal ──
+  confirmText: { fontSize: theme.textSm, marginBottom: theme.sp5, color: theme.text, lineHeight: 22 },
   confirmActions: { flexDirection: 'row', gap: theme.sp3 },
   btnSecondary: {
     flex: 1,
     paddingVertical: theme.sp3,
     borderRadius: theme.radiusMd,
-    backgroundColor: theme.bg,
+    backgroundColor: theme.surfaceEl,
     alignItems: 'center',
   },
   btnSecondaryText: { fontSize: theme.textSm, fontWeight: '600', color: theme.textMuted },
@@ -345,7 +475,7 @@ const s = StyleSheet.create({
     flex: 1,
     paddingVertical: theme.sp3,
     borderRadius: theme.radiusMd,
-    backgroundColor: '#b14a3a',
+    backgroundColor: theme.danger,
     alignItems: 'center',
   },
   btnDangerText: { fontSize: theme.textSm, fontWeight: '700', color: '#fff' },

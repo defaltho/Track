@@ -28,7 +28,8 @@ export function buildSpendingTimeline(subscriptions: any[], rangeDays = 365) {
 }
 
 export function pointsToPath(points: { t: Date; value: number }[], width = 300, height = 100) {
-  if (points.length === 0) {
+  // BUG M8 fix: treat length === 1 the same as length === 0
+  if (points.length <= 1) {
     return { line: '', area: '', last: { x: 0, y: height / 2 } }
   }
   const max = Math.max(...points.map(p => p.value), 1)
@@ -41,7 +42,9 @@ export function pointsToPath(points: { t: Date; value: number }[], width = 300, 
   const line = coords
     .map((c, i) => (i === 0 ? `M${c.x} ${c.y}` : `L${c.x.toFixed(1)} ${c.y.toFixed(1)}`))
     .join(' ')
-  const area = `${line} L${width} ${height} L0 ${height} Z`
+  // BUG L2 fix: close area with the last coord's x instead of hardcoded width
+  const lastX = coords[coords.length - 1].x
+  const area = `${line} L${lastX} ${height} L0 ${height} Z`
   return { line, area, last: coords[coords.length - 1] }
 }
 

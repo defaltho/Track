@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   ScrollView,
   StyleSheet,
+  Modal,
 } from 'react-native'
 import { Picker } from '@react-native-picker/picker'
 import { theme } from '../../theme'
@@ -15,6 +16,19 @@ const CURRENCIES = ['EUR', 'USD', 'GBP', 'BRL']
 const CYCLES = ['weekly', 'monthly', 'yearly']
 const CATEGORIES = ['Streaming', 'Music', 'Gaming', 'Cloud', 'Productivity', 'News', 'Fitness', 'Education', 'Other']
 const PAYMENTS = ['Card', 'PayPal', 'Apple Pay', 'Google Pay', 'Bank Transfer', 'Other']
+
+const EMOJI_SETS: Record<string, string[]> = {
+  Finance:  ['💳', '💰', '💵', '💴', '💶', '💷', '🏦', '📈', '📉', '🪙', '💎', '🏧'],
+  Tech:     ['📱', '💻', '🖥️', '⌨️', '🖱️', '🎮', '🕹️', '📡', '🔌', '🔋', '💾', '📀'],
+  Media:    ['🎬', '🎵', '🎧', '📺', '🎙️', '🎤', '📻', '🎷', '🎸', '🎹', '🎺', '🥁'],
+  Cloud:    ['☁️', '🌐', '🔐', '🔒', '🗄️', '📂', '📁', '🗃️', '📊', '📋', '🗂️', '📌'],
+  Lifestyle:['🏋️', '🧘', '🚴', '🏃', '🍎', '🥗', '🧴', '✂️', '🛍️', '👗', '🎓', '📚'],
+  Travel:   ['✈️', '🚗', '🚀', '🚂', '🛳️', '🗺️', '🏖️', '⛺', '🌍', '🏕️', '🎒', '🧳'],
+  Food:     ['☕', '🍕', '🍣', '🍔', '🥤', '🍺', '🍷', '🧃', '🍜', '🥐', '🍰', '🍫'],
+  Home:     ['🏠', '🛋️', '💡', '🔑', '🛁', '🪴', '🧹', '🔧', '🏗️', '🛏️', '📦', '🧺'],
+  Health:   ['🏥', '💊', '🩺', '🦷', '👁️', '🩻', '🩹', '🏃', '🧬', '💉', '🧪', '🫀'],
+  Other:    ['⭐', '✨', '🎯', '🎁', '🎉', '🌟', '🔔', '❤️', '🌈', '🧲', '🔮', '🪄'],
+}
 
 interface Props {
   onSubmit: (data: any) => void
@@ -32,25 +46,39 @@ export function AddTrackForm({ onSubmit, onCancel }: Props) {
   const [category, setCategory] = useState('Other')
   const [payment, setPayment] = useState('Card')
   const [note, setNote] = useState('')
+  const [error, setError] = useState('')
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false)
+  const [emojiCategory, setEmojiCategory] = useState('Finance')
 
   function submit() {
-    if (!name.trim() || !price || !nextDate) return
-    onSubmit({
+    if (!name.trim()) { setError('O nome é obrigatório'); return }
+    if (type !== 'event' && !price) { setError('O preço é obrigatório'); return }
+    if (!nextDate) { setError('A data é obrigatória'); return }
+
+    const base = {
       type,
       name: name.trim(),
       emoji,
       color: '#000000',
-      price: parseFloat(price),
       currency,
-      billingCycle,
-      nextChargeDate: nextDate,
-      purchaseDate: nextDate,
-      date: nextDate,
       category,
-      paymentMethod: payment,
       note: note.trim(),
       active: true,
-    })
+    }
+
+    if (type === 'event') {
+      onSubmit({ ...base, date: nextDate })
+    } else {
+      onSubmit({
+        ...base,
+        price: parseFloat(price),
+        billingCycle,
+        nextChargeDate: nextDate,
+        purchaseDate: nextDate,
+        date: nextDate,
+        paymentMethod: payment,
+      })
+    }
   }
 
   const dateLabel = type === 'event' ? 'Date' : type === 'app' ? 'Purchase date' : 'Next charge'
@@ -73,48 +101,55 @@ export function AddTrackForm({ onSubmit, onCancel }: Props) {
 
       <View style={s.fields}>
         <View style={s.row}>
+          {/* Emoji picker trigger */}
           <View style={s.emojiField}>
             <Text style={s.label}>Icon</Text>
-            <TextInput
+            <TouchableOpacity
               style={[s.input, s.emojiInput]}
-              value={emoji}
-              onChangeText={setEmoji}
-              maxLength={2}
-            />
+              onPress={() => setShowEmojiPicker(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Choose icon"
+            >
+              <Text style={s.emojiText}>{emoji}</Text>
+            </TouchableOpacity>
           </View>
           <View style={s.grow}>
             <Text style={s.label}>Name *</Text>
             <TextInput
               style={s.input}
               value={name}
-              onChangeText={setName}
+              onChangeText={v => { setName(v); setError('') }}
               placeholder="Netflix"
+              placeholderTextColor={theme.textFaint}
             />
           </View>
         </View>
 
-        <View style={s.row}>
-          <View style={s.grow}>
-            <Text style={s.label}>Price *</Text>
-            <TextInput
-              style={s.input}
-              value={price}
-              onChangeText={setPrice}
-              placeholder="9.99"
-              keyboardType="decimal-pad"
-            />
+        {type !== 'event' && (
+          <View style={s.row}>
+            <View style={s.grow}>
+              <Text style={s.label}>Price *</Text>
+              <TextInput
+                style={s.input}
+                value={price}
+                onChangeText={v => { setPrice(v); setError('') }}
+                placeholder="9.99"
+                placeholderTextColor={theme.textFaint}
+                keyboardType="decimal-pad"
+              />
+            </View>
+            <View style={s.pickerWrap}>
+              <Text style={s.label}>Currency</Text>
+              <Picker
+                selectedValue={currency}
+                onValueChange={setCurrency}
+                style={s.picker}
+              >
+                {CURRENCIES.map(c => <Picker.Item key={c} label={c} value={c} />)}
+              </Picker>
+            </View>
           </View>
-          <View style={s.pickerWrap}>
-            <Text style={s.label}>Currency</Text>
-            <Picker
-              selectedValue={currency}
-              onValueChange={setCurrency}
-              style={s.picker}
-            >
-              {CURRENCIES.map(c => <Picker.Item key={c} label={c} value={c} />)}
-            </Picker>
-          </View>
-        </View>
+        )}
 
         {type === 'subscription' && (
           <View>
@@ -138,8 +173,9 @@ export function AddTrackForm({ onSubmit, onCancel }: Props) {
           <TextInput
             style={s.input}
             value={nextDate}
-            onChangeText={setNextDate}
+            onChangeText={v => { setNextDate(v); setError('') }}
             placeholder="2025-12-31"
+            placeholderTextColor={theme.textFaint}
             keyboardType="numeric"
           />
         </View>
@@ -176,10 +212,12 @@ export function AddTrackForm({ onSubmit, onCancel }: Props) {
             value={note}
             onChangeText={setNote}
             placeholder="Optional"
+            placeholderTextColor={theme.textFaint}
           />
         </View>
       </View>
 
+      {error ? <Text style={s.errorText}>{error}</Text> : null}
       <View style={s.actions}>
         <TouchableOpacity style={s.btnSecondary} onPress={onCancel}>
           <Text style={s.btnSecondaryText}>Cancel</Text>
@@ -188,6 +226,42 @@ export function AddTrackForm({ onSubmit, onCancel }: Props) {
           <Text style={s.btnPrimaryText}>Add</Text>
         </TouchableOpacity>
       </View>
+
+      {/* ── Emoji Picker ── */}
+      <Modal visible={showEmojiPicker} transparent animationType="slide" onRequestClose={() => setShowEmojiPicker(false)}>
+        <TouchableOpacity style={s.pickerOverlay} activeOpacity={1} onPress={() => setShowEmojiPicker(false)}>
+          <View style={s.pickerSheet}>
+            <View style={s.pickerHandle} />
+            <Text style={s.pickerTitle}>Choose Icon</Text>
+
+            {/* Category tabs */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.catScroll} contentContainerStyle={s.catScrollContent}>
+              {Object.keys(EMOJI_SETS).map(cat => (
+                <TouchableOpacity
+                  key={cat}
+                  style={[s.catPill, emojiCategory === cat && s.catPillActive]}
+                  onPress={() => setEmojiCategory(cat)}
+                >
+                  <Text style={[s.catPillText, emojiCategory === cat && s.catPillTextActive]}>{cat}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            {/* Emoji grid */}
+            <View style={s.emojiGrid}>
+              {(EMOJI_SETS[emojiCategory] ?? []).map(e => (
+                <TouchableOpacity
+                  key={e}
+                  style={[s.emojiCell, emoji === e && s.emojiCellActive]}
+                  onPress={() => { setEmoji(e); setShowEmojiPicker(false) }}
+                >
+                  <Text style={s.emojiCellText}>{e}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   )
 }
@@ -202,11 +276,11 @@ const s = StyleSheet.create({
     flex: 1,
     paddingVertical: theme.sp2,
     borderRadius: theme.radiusMd,
-    backgroundColor: theme.bg,
+    backgroundColor: theme.surfaceEl,
     alignItems: 'center',
   },
   tabActive: { backgroundColor: theme.accent },
-  tabText: { fontSize: theme.textSm, fontWeight: '600', color: theme.textMuted },
+  tabText: { fontSize: theme.textSm, fontFamily: theme.fontBold, color: theme.textMuted },
   tabTextActive: { color: theme.accentFg },
 
   fields: { gap: theme.sp4 },
@@ -215,7 +289,7 @@ const s = StyleSheet.create({
 
   label: {
     fontSize: theme.textXs,
-    fontWeight: '600',
+    fontFamily: theme.fontBold,
     color: theme.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -228,11 +302,17 @@ const s = StyleSheet.create({
     borderColor: theme.border,
     borderRadius: theme.radiusMd,
     fontSize: theme.textSm,
+    fontFamily: theme.fontRegular,
     backgroundColor: theme.bg,
     color: theme.text,
   },
   emojiField: { width: 64 },
-  emojiInput: { textAlign: 'center', fontSize: 18 },
+  emojiInput: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 0,
+  },
+  emojiText: { fontSize: 22 },
 
   pickerWrap: { flex: 1 },
   picker: {
@@ -248,15 +328,16 @@ const s = StyleSheet.create({
     flex: 1,
     paddingVertical: theme.sp2,
     borderRadius: theme.radiusMd,
-    backgroundColor: theme.bg,
+    backgroundColor: theme.surfaceEl,
     borderWidth: 1.5,
     borderColor: theme.border,
     alignItems: 'center',
   },
   pillActive: { backgroundColor: theme.accent, borderColor: theme.accent },
-  pillText: { fontSize: theme.textXs, fontWeight: '600', color: theme.textMuted },
+  pillText: { fontSize: theme.textXs, fontFamily: theme.fontBold, color: theme.textMuted },
   pillTextActive: { color: theme.accentFg },
 
+  errorText: { color: theme.danger, fontSize: 12, fontFamily: theme.fontMedium, marginBottom: 8, marginTop: 4 },
   actions: { flexDirection: 'row', gap: theme.sp3, marginTop: theme.sp6 },
   btnPrimary: {
     flex: 1,
@@ -265,13 +346,71 @@ const s = StyleSheet.create({
     backgroundColor: theme.accent,
     alignItems: 'center',
   },
-  btnPrimaryText: { fontSize: theme.textSm, fontWeight: '700', color: theme.accentFg },
+  btnPrimaryText: { fontSize: theme.textSm, fontFamily: theme.fontBold, color: theme.accentFg },
   btnSecondary: {
     paddingVertical: theme.sp3,
     paddingHorizontal: theme.sp5,
     borderRadius: theme.radiusMd,
-    backgroundColor: theme.bg,
+    backgroundColor: theme.surfaceEl,
     alignItems: 'center',
   },
-  btnSecondaryText: { fontSize: theme.textSm, fontWeight: '600', color: theme.textMuted },
+  btnSecondaryText: { fontSize: theme.textSm, fontFamily: theme.fontMedium, color: theme.textMuted },
+
+  // ── Emoji picker sheet ──
+  pickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  pickerSheet: {
+    backgroundColor: theme.surface,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: theme.sp5,
+    paddingBottom: 36,
+  },
+  pickerHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: theme.border,
+    alignSelf: 'center',
+    marginBottom: theme.sp4,
+  },
+  pickerTitle: {
+    fontSize: theme.textBase,
+    fontFamily: theme.fontBold,
+    color: theme.text,
+    marginBottom: theme.sp4,
+    textAlign: 'center',
+  },
+  catScroll: { marginBottom: theme.sp4 },
+  catScrollContent: { gap: theme.sp2, paddingHorizontal: theme.sp1 },
+  catPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: theme.radiusFull,
+    backgroundColor: theme.surfaceEl,
+  },
+  catPillActive: { backgroundColor: theme.accent },
+  catPillText: { fontSize: theme.textXs, fontFamily: theme.fontBold, color: theme.textMuted },
+  catPillTextActive: { color: theme.accentFg },
+  emojiGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.sp2,
+    justifyContent: 'center',
+  },
+  emojiCell: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: theme.surfaceEl,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emojiCellActive: {
+    backgroundColor: theme.accent,
+  },
+  emojiCellText: { fontSize: 26 },
 })

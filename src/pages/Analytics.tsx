@@ -80,6 +80,8 @@ export function Analytics() {
                 key={f}
                 style={[s.filterPill, timeRange === f && s.filterPillActive]}
                 onPress={() => setTimeRange(f)}
+                accessibilityRole="button"
+                accessibilityLabel={`${f} time range`}
               >
                 <Text style={[s.filterPillText, timeRange === f && s.filterPillTextActive]}>{f}</Text>
               </TouchableOpacity>
@@ -121,7 +123,8 @@ export function Analytics() {
                   <Text style={s.breakdownPct}>{symbol}{sub.monthly.toFixed(2)} · {pct.toFixed(0)}%</Text>
                 </View>
                 <View style={s.barTrack}>
-                  <View style={[s.barFill, { width: `${pct}%` as any }]} />
+                  <View style={[s.barFill, { flex: pct, maxWidth: `${pct}%` as any }]} />
+                  <View style={{ flex: 100 - pct }} />
                 </View>
               </View>
             )
@@ -138,7 +141,7 @@ export function Analytics() {
 
 const s = StyleSheet.create({
   page: { flex: 1, backgroundColor: theme.bg },
-  content: { padding: theme.sp4, gap: theme.sp4, paddingBottom: theme.sp8 },
+  content: { padding: theme.sp4, gap: theme.sp4, paddingBottom: 110 },
 
   card: {
     backgroundColor: theme.surface,
@@ -170,8 +173,8 @@ const s = StyleSheet.create({
   breakdownInfo: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: theme.sp1 },
   breakdownName: { fontSize: theme.textSm, fontWeight: '500', color: theme.text },
   breakdownPct: { fontSize: theme.textSm, color: theme.textMuted },
-  barTrack: { height: 4, backgroundColor: theme.border, borderRadius: 2, overflow: 'hidden' },
-  barFill: { height: 4, backgroundColor: theme.accent, borderRadius: 2 },
+  barTrack: { height: 4, backgroundColor: theme.border, borderRadius: 2, overflow: 'hidden', flexDirection: 'row' },
+  barFill: { height: 4, backgroundColor: theme.accent },
 
   emptyCard: { alignItems: 'center', padding: theme.sp8 },
   empty: { fontSize: theme.textSm, color: theme.textMuted },
