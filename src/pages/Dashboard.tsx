@@ -4,12 +4,17 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
+  Pressable,
   StyleSheet,
 } from 'react-native'
 import Animated, {
   FadeInDown,
   FadeInRight,
+  FadeInUp,
   ZoomIn,
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
 } from 'react-native-reanimated'
 import Svg, { Circle as SvgCircle } from 'react-native-svg'
 import {
@@ -28,7 +33,32 @@ import { AddTrackForm } from '../components/forms/AddTrackForm'
 import { AddTaskForm } from '../components/forms/AddTaskForm'
 import { theme, CURRENCY_SYMBOL } from '../theme'
 
-// ── Ring badge (number inside circular progress) ─────────────────────
+// ── Press-scale wrapper ───────────────────────────────────────────────
+function PressCard({
+  style,
+  onPress,
+  children,
+}: {
+  style?: any
+  onPress?: () => void
+  children: React.ReactNode
+}) {
+  const scale = useSharedValue(1)
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }))
+  return (
+    <Pressable
+      onPressIn={() => { scale.value = withSpring(0.97, { damping: 16, stiffness: 380 }) }}
+      onPressOut={() => { scale.value = withSpring(1, { damping: 16, stiffness: 380 }) }}
+      onPress={onPress}
+    >
+      <Animated.View style={[style, animStyle]}>{children}</Animated.View>
+    </Pressable>
+  )
+}
+
+// ── Ring badge ────────────────────────────────────────────────────────
 function RingBadge({ value, max = 20, size = 56 }: { value: number; max?: number; size?: number }) {
   const stroke = 3
   const r = (size - stroke) / 2
@@ -38,16 +68,12 @@ function RingBadge({ value, max = 20, size = 56 }: { value: number; max?: number
   return (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
       <Svg width={size} height={size} style={{ position: 'absolute', transform: [{ rotate: '-90deg' }] }}>
-        <SvgCircle
-          cx={size / 2} cy={size / 2} r={r}
-          stroke="rgba(255,255,255,0.1)" strokeWidth={stroke} fill="none"
-        />
+        <SvgCircle cx={size / 2} cy={size / 2} r={r}
+          stroke="rgba(255,255,255,0.1)" strokeWidth={stroke} fill="none" />
         {pct > 0 && (
-          <SvgCircle
-            cx={size / 2} cy={size / 2} r={r}
+          <SvgCircle cx={size / 2} cy={size / 2} r={r}
             stroke="rgba(255,255,255,0.75)" strokeWidth={stroke} fill="none"
-            strokeDasharray={`${dash} ${circ - dash}`} strokeLinecap="round"
-          />
+            strokeDasharray={`${dash} ${circ - dash}`} strokeLinecap="round" />
         )}
       </Svg>
       <Text style={rb.num}>{value}</Text>
@@ -90,8 +116,8 @@ function buildHeatmap(subs: any[], events: any[]) {
 
 function dotColor(count: number) {
   if (count === 0) return 'rgba(255,255,255,0.07)'
-  if (count === 1) return 'rgba(255,255,255,0.35)'
-  if (count === 2) return 'rgba(255,255,255,0.65)'
+  if (count === 1) return 'rgba(255,255,255,0.3)'
+  if (count === 2) return 'rgba(255,255,255,0.6)'
   return '#ffffff'
 }
 
@@ -110,13 +136,11 @@ function ActivityHeatmap({ subs, events }: { subs: any[]; events: any[] }) {
     })
     return labels
   }, [cols])
-
   const totalW = cols.length * (CELL + GAP) - GAP
-
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
       <View>
-        <View style={{ height: 16, width: totalW, marginBottom: 4 }}>
+        <View style={{ height: 16, width: totalW, marginBottom: 5 }}>
           {monthLabels.map((ml, i) => (
             <Text key={i} style={[hm.monthLabel, { position: 'absolute', left: ml.col * (CELL + GAP) }]}>
               {ml.label}
@@ -136,21 +160,175 @@ function ActivityHeatmap({ subs, events }: { subs: any[]; events: any[] }) {
     </ScrollView>
   )
 }
-
 const hm = StyleSheet.create({
   cell: { width: CELL, height: CELL, borderRadius: 2 },
-  monthLabel: {
-    fontSize: 9,
-    fontFamily: 'Roboto_400Regular',
-    color: 'rgba(255,255,255,0.4)',
-    letterSpacing: 0.3,
-  },
+  monthLabel: { fontSize: 9, fontFamily: 'Roboto_400Regular', color: 'rgba(255,255,255,0.35)', letterSpacing: 0.3 },
 })
 
-// ── Dashboard ─────────────────────────────────────────────────────────
-const spring = (delay = 0) =>
-  FadeInDown.delay(delay).springify().damping(18).stiffness(220)
+// ── Subscription row ──────────────────────────────────────────────────
+function SubRow({
+  sub,
+  symbol,
+  diff,
+  onRemove,
+  delay,
+}: {
+  sub: any
+  symbol: string
+  diff: number
+  onRemove: () => void
+  delay: number
+}) {
+  const scale = useSharedValue(1)
+  const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }))
+  const dueLabel = diff === 0 ? 'Today' : diff === 1 ? 'Tomorrow' : `In ${diff}d`
+  const dueColor = diff === 0 ? theme.danger : diff <= 2 ? theme.warning : theme.textMuted
 
+  return (
+    <Animated.View
+      entering={FadeInRight.delay(delay).springify().damping(20).stiffness(220)}
+    >
+      <Pressable
+        onPressIn={() => { scale.value = withSpring(0.98, { damping: 16, stiffness: 380 }) }}
+        onPressOut={() => { scale.value = withSpring(1, { damping: 16, stiffness: 380 }) }}
+        onLongPress={onRemove}
+        delayLongPress={500}
+        accessibilityRole="button"
+      >
+        <Animated.View style={[sr.row, animStyle]}>
+          <View style={sr.badge}>
+            <Text style={sr.emoji}>{sub.emoji ?? '💳'}</Text>
+          </View>
+          <View style={sr.body}>
+            <Text style={sr.name} numberOfLines={1}>{sub.name}</Text>
+            <View style={sr.metaRow}>
+              <View style={[sr.duePill, { backgroundColor: diff === 0 ? 'rgba(239,68,68,0.15)' : 'rgba(255,255,255,0.06)' }]}>
+                <Text style={[sr.dueText, { color: dueColor }]}>{dueLabel}</Text>
+              </View>
+              <Text style={sr.category}>{sub.category ?? ''}</Text>
+            </View>
+          </View>
+          <View style={sr.right}>
+            <Text style={sr.price}>{symbol}{sub.price}</Text>
+            <Text style={sr.cycle}>{sub.billingCycle ?? 'mo'}</Text>
+          </View>
+          <TouchableOpacity style={sr.removeBtn} onPress={onRemove} hitSlop={8}>
+            <View style={sr.removeLine} />
+            <View style={[sr.removeLine, { transform: [{ rotate: '90deg' }], position: 'absolute' }]} />
+          </TouchableOpacity>
+        </Animated.View>
+      </Pressable>
+    </Animated.View>
+  )
+}
+const sr = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.sp3,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.05)',
+  },
+  badge: {
+    width: 44,
+    height: 44,
+    borderRadius: 13,
+    backgroundColor: theme.surfaceEl,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emoji: { fontSize: 22 },
+  body: { flex: 1, minWidth: 0, gap: 5 },
+  name: { fontSize: theme.textBase, fontFamily: theme.fontBold, color: theme.text, letterSpacing: -0.3 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  duePill: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 5,
+  },
+  dueText: { fontSize: 10, fontFamily: theme.fontBold, letterSpacing: 0.2 },
+  category: { fontSize: 10, fontFamily: theme.fontRegular, color: theme.textFaint },
+  right: { alignItems: 'flex-end', gap: 3 },
+  price: { fontSize: theme.textBase, fontFamily: theme.fontBlack, color: theme.text, letterSpacing: -0.5 },
+  cycle: { fontSize: 10, fontFamily: theme.fontRegular, color: theme.textMuted },
+  removeBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: theme.surfaceEl,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  removeLine: { width: 12, height: 1.5, backgroundColor: theme.textMuted, borderRadius: 1 },
+})
+
+// ── Task row ──────────────────────────────────────────────────────────
+function TaskRow({ task, delay, onToggle, onRemove }: {
+  task: any; delay: number; onToggle: () => void; onRemove: () => void
+}) {
+  return (
+    <Animated.View
+      entering={FadeInRight.delay(delay).springify().damping(20).stiffness(220)}
+      style={[sr.row, { borderBottomColor: 'rgba(255,255,255,0.05)' }]}
+    >
+      <TouchableOpacity
+        style={[tr.checkbox, task.done && tr.checkboxDone]}
+        onPress={onToggle}
+        accessibilityRole="checkbox"
+      >
+        {task.done && (
+          <Animated.Text entering={ZoomIn.springify().damping(12).stiffness(300)} style={tr.checkmark}>
+            ✓
+          </Animated.Text>
+        )}
+      </TouchableOpacity>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={[sr.name, task.done && tr.done]}>{task.name}</Text>
+        {task.note ? <Text style={sr.category}>{task.note}</Text> : null}
+      </View>
+      <TouchableOpacity style={sr.removeBtn} onPress={onRemove}>
+        <View style={sr.removeLine} />
+        <View style={[sr.removeLine, { transform: [{ rotate: '90deg' }], position: 'absolute' }]} />
+      </TouchableOpacity>
+    </Animated.View>
+  )
+}
+const tr = StyleSheet.create({
+  checkbox: {
+    width: 22, height: 22, borderRadius: 7,
+    borderWidth: 1.5, borderColor: theme.borderStrong,
+    backgroundColor: theme.surfaceEl,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  checkboxDone: { backgroundColor: theme.accent, borderColor: theme.accent },
+  checkmark: { fontSize: 12, color: theme.accentFg, fontFamily: theme.fontBold },
+  done: { color: theme.textMuted, textDecorationLine: 'line-through' },
+})
+
+// ── Adjust icon ───────────────────────────────────────────────────────
+function AdjustIcon() {
+  return (
+    <View style={adj.wrap}>
+      <View style={adj.bar} />
+      <View style={[adj.bar, adj.barMid]} />
+      <View style={adj.bar} />
+    </View>
+  )
+}
+const adj = StyleSheet.create({
+  wrap: { gap: 3, alignItems: 'center', justifyContent: 'center' },
+  bar: { width: 14, height: 1.5, backgroundColor: 'rgba(255,255,255,0.5)', borderRadius: 1 },
+  barMid: { width: 10 },
+})
+
+// ── Entering helpers ──────────────────────────────────────────────────
+const fadeDown = (delay = 0) =>
+  FadeInDown.delay(delay).springify().damping(20).stiffness(210)
+const fadeUp = (delay = 0) =>
+  FadeInUp.delay(delay).springify().damping(20).stiffness(210)
+
+// ── Dashboard ─────────────────────────────────────────────────────────
 export function Dashboard() {
   const store = useDataStore()
   const toast = useToastStore()
@@ -216,68 +394,62 @@ export function Dashboard() {
     <ScrollView style={s.page} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
 
       {/* ── Header ── */}
-      <Animated.View entering={spring(0)} style={s.header}>
+      <Animated.View entering={fadeDown(0)} style={s.header}>
         <Text style={s.pageTitle}>Track</Text>
         <View style={s.headerBtns}>
-          <TouchableOpacity style={s.iconBtn} onPress={() => setShowAddTask(true)} accessibilityRole="button">
+          <PressCard style={s.iconBtn} onPress={() => setShowAddTask(true)}>
             <View style={s.iconBtnLine} />
             <View style={[s.iconBtnLine, { width: 10 }]} />
             <View style={s.iconBtnLine} />
-          </TouchableOpacity>
-          <TouchableOpacity style={s.iconBtn} onPress={() => setShowAddTrack(true)} accessibilityRole="button">
+          </PressCard>
+          <PressCard style={s.iconBtn} onPress={() => setShowAddTrack(true)}>
             <Text style={s.iconBtnPlus}>+</Text>
-          </TouchableOpacity>
+          </PressCard>
         </View>
       </Animated.View>
 
       {/* ── 2-col KPI cards ── */}
-      <Animated.View entering={spring(60)} style={s.row2}>
+      <Animated.View entering={fadeDown(55)} style={s.row2}>
 
-        {/* Active subscriptions */}
-        <View style={[s.card, s.kpiCard]}>
+        <PressCard style={[s.card, s.kpiCard]}>
           <View style={s.kpiTopRow}>
             <RingBadge value={activeSubs.length} max={Math.max(activeSubs.length + 4, 10)} />
-            <TouchableOpacity style={s.adjustBtn} accessibilityRole="button">
-              <AdjustIcon />
-            </TouchableOpacity>
+            <View style={s.adjustBtn}><AdjustIcon /></View>
           </View>
           <View style={s.kpiBottom}>
             <Text style={s.kpiName}>Active</Text>
             <Text style={s.kpiSub}>subscriptions</Text>
           </View>
-        </View>
+        </PressCard>
 
-        {/* Monthly spend */}
-        <View style={[s.card, s.kpiCard]}>
+        <PressCard style={[s.card, s.kpiCard]}>
           <View style={s.kpiTopRow}>
             <View style={s.spendBlock}>
               <Text style={s.spendMain}>{monthly.toFixed(0)}</Text>
               <Text style={s.spendUnit}>{symbol}</Text>
             </View>
-            <TouchableOpacity style={s.adjustBtn} accessibilityRole="button">
-              <AdjustIcon />
-            </TouchableOpacity>
+            <View style={s.adjustBtn}><AdjustIcon /></View>
           </View>
           <View style={s.kpiBottom}>
             <Text style={s.kpiName}>Monthly</Text>
             <Text style={s.kpiSub}>spend</Text>
           </View>
-        </View>
+        </PressCard>
 
       </Animated.View>
 
-      {/* ── Activity heatmap ── */}
-      <Animated.View entering={spring(120)} style={s.card}>
+      {/* ── Heatmap ── */}
+      <Animated.View entering={fadeDown(110)} style={s.card}>
         <ActivityHeatmap subs={store.subscriptions} events={store.events} />
       </Animated.View>
 
       {/* ── Due this week ── */}
-      <Animated.View entering={spring(180)} style={s.card}>
+      <Animated.View entering={fadeDown(165)} style={s.card}>
         <View style={s.sectionHeader}>
           <Text style={s.sectionTitle}>Due this week</Text>
-          <TouchableOpacity style={s.adjustBtn} onPress={() => setShowAddTrack(true)} accessibilityRole="button">
-            <Text style={s.iconBtnPlus}>+</Text>
-          </TouchableOpacity>
+          <PressCard style={s.addPill} onPress={() => setShowAddTrack(true)}>
+            <Text style={s.addPillText}>+ Add</Text>
+          </PressCard>
         </View>
 
         {!hasItems && (
@@ -286,97 +458,50 @@ export function Dashboard() {
 
         {dueSubs.map((sub: any, idx: number) => {
           const diff = differenceInCalendarDays(parseISO(sub.nextChargeDate), now)
-          const dueLabel = diff === 0 ? 'Today' : diff === 1 ? 'Tomorrow' : `In ${diff}d`
           return (
-            <Animated.View
+            <SubRow
               key={sub.id}
-              entering={FadeInRight.delay(200 + idx * 45).springify().damping(18).stiffness(220)}
-              style={s.listRow}
-            >
-              <View style={s.listBadge}>
-                <Text style={s.listEmoji}>{sub.emoji ?? '💳'}</Text>
-              </View>
-              <View style={s.listBody}>
-                <Text style={s.listName}>{sub.name}</Text>
-                <Text style={s.listMeta}>{dueLabel}</Text>
-              </View>
-              <View style={s.listRight}>
-                <Text style={s.listPrice}>{symbol}{sub.price}</Text>
-                <TouchableOpacity
-                  style={s.adjustBtn}
-                  onPress={() => setConfirm({ kind: 'sub', id: sub.id, name: sub.name })}
-                  accessibilityRole="button"
-                >
-                  <AdjustIcon />
-                </TouchableOpacity>
-              </View>
-            </Animated.View>
+              sub={sub}
+              symbol={symbol}
+              diff={diff}
+              delay={200 + idx * 40}
+              onRemove={() => setConfirm({ kind: 'sub', id: sub.id, name: sub.name })}
+            />
           )
         })}
 
         {todayTasks.map((task: any, idx: number) => (
-          <Animated.View
+          <TaskRow
             key={task.id}
-            entering={FadeInRight.delay(300 + idx * 45).springify().damping(18).stiffness(220)}
-            style={s.listRow}
-          >
-            <TouchableOpacity
-              style={[s.checkbox, task.done && s.checkboxDone]}
-              onPress={() => store.updateTask(task.id, { done: !task.done })}
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: task.done }}
-            >
-              {task.done && (
-                <Animated.Text entering={ZoomIn.springify().damping(14).stiffness(280)} style={s.checkmark}>
-                  ✓
-                </Animated.Text>
-              )}
-            </TouchableOpacity>
-            <View style={s.listBody}>
-              <Text style={[s.listName, task.done && s.listNameDone]}>{task.name}</Text>
-              {task.note ? <Text style={s.listMeta}>{task.note}</Text> : null}
-            </View>
-            <TouchableOpacity
-              style={s.adjustBtn}
-              onPress={() => setConfirm({ kind: 'task', id: task.id, name: task.name })}
-              accessibilityRole="button"
-            >
-              <AdjustIcon />
-            </TouchableOpacity>
-          </Animated.View>
+            task={task}
+            delay={300 + idx * 40}
+            onToggle={() => store.updateTask(task.id, { done: !task.done })}
+            onRemove={() => setConfirm({ kind: 'task', id: task.id, name: task.name })}
+          />
         ))}
       </Animated.View>
 
-      {/* ── Bottom stat: coffee equivalent ── */}
-      <Animated.View entering={spring(240)} style={[s.card, s.statRow]}>
-        <View>
-          <Text style={s.statLabel}>Coffee equivalent</Text>
-          <Text style={s.statSub}>at {symbol}{store.settings.coffeePrice?.toFixed(2)}/cup</Text>
-        </View>
-        <View style={s.statRight}>
-          <Text style={s.statNum}>{coffeeCount.toLocaleString()}</Text>
-          <Text style={s.statUnit}>cups</Text>
-          <TouchableOpacity style={s.adjustBtn} accessibilityRole="button">
-            <AdjustIcon />
-          </TouchableOpacity>
-        </View>
-      </Animated.View>
+      {/* ── Stats row ── */}
+      <Animated.View entering={fadeUp(220)} style={s.row2}>
 
-      {/* ── Events count stat ── */}
-      {monthEvents.length > 0 && (
-        <Animated.View entering={spring(280)} style={[s.card, s.statRow]}>
-          <View>
-            <Text style={s.statLabel}>Events this month</Text>
-            <Text style={s.statSub}>{format(now, 'MMMM yyyy')}</Text>
-          </View>
-          <View style={s.statRight}>
-            <Animated.Text entering={ZoomIn.delay(300).springify().damping(14).stiffness(280)} style={s.statNum}>
-              {monthEvents.length}
-            </Animated.Text>
-            <Text style={s.statUnit}>events</Text>
-          </View>
-        </Animated.View>
-      )}
+        <PressCard style={[s.card, s.statCard]}>
+          <Text style={s.statNum}>{coffeeCount}</Text>
+          <Text style={s.statLabel}>coffees / mo</Text>
+          <Text style={s.statSub}>at {symbol}{store.settings.coffeePrice?.toFixed(2)}</Text>
+        </PressCard>
+
+        <PressCard style={[s.card, s.statCard]}>
+          <Animated.Text
+            entering={ZoomIn.delay(280).springify().damping(12).stiffness(260)}
+            style={s.statNum}
+          >
+            {monthEvents.length}
+          </Animated.Text>
+          <Text style={s.statLabel}>events</Text>
+          <Text style={s.statSub}>{format(now, 'MMMM')}</Text>
+        </PressCard>
+
+      </Animated.View>
 
       {/* ── Modals ── */}
       <Modal open={showAddTrack} title="Add Track" onClose={() => setShowAddTrack(false)}>
@@ -406,28 +531,11 @@ export function Dashboard() {
   )
 }
 
-// ── Adjust icon (3-bar sliders) ────────────────────────────────────
-function AdjustIcon() {
-  return (
-    <View style={adj.wrap}>
-      <View style={adj.bar} />
-      <View style={[adj.bar, adj.barMid]} />
-      <View style={adj.bar} />
-    </View>
-  )
-}
-const adj = StyleSheet.create({
-  wrap: { gap: 3, alignItems: 'center', justifyContent: 'center' },
-  bar: { width: 14, height: 1.5, backgroundColor: 'rgba(255,255,255,0.5)', borderRadius: 1 },
-  barMid: { width: 10 },
-})
-
 // ── Styles ─────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   page: { flex: 1, backgroundColor: theme.bg },
   content: { padding: theme.sp4, gap: theme.sp3, paddingBottom: 110 },
 
-  // Header
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -453,28 +561,13 @@ const s = StyleSheet.create({
     gap: 3,
   },
   iconBtnLine: { width: 14, height: 1.5, backgroundColor: theme.text, borderRadius: 1 },
-  iconBtnPlus: {
-    fontSize: 22,
-    fontFamily: theme.fontLight,
-    color: theme.text,
-    lineHeight: 26,
-  },
+  iconBtnPlus: { fontSize: 22, fontFamily: theme.fontLight, color: theme.text, lineHeight: 26 },
 
-  // Cards
-  card: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.radiusXl,
-    padding: theme.sp5,
-  },
+  card: { backgroundColor: theme.surface, borderRadius: theme.radiusXl, padding: theme.sp5 },
   row2: { flexDirection: 'row', gap: theme.sp3 },
 
-  // KPI cards
   kpiCard: { flex: 1, justifyContent: 'space-between', minHeight: 140 },
-  kpiTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
+  kpiTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   kpiBottom: { marginTop: theme.sp3 },
   kpiName: { fontSize: theme.textBase, fontFamily: theme.fontBold, color: theme.text, letterSpacing: -0.3 },
   kpiSub: { fontSize: theme.textXs, fontFamily: theme.fontRegular, color: theme.textMuted, marginTop: 2 },
@@ -483,104 +576,40 @@ const s = StyleSheet.create({
   spendMain: { fontSize: 40, fontFamily: theme.fontBlack, color: theme.text, letterSpacing: -2, lineHeight: 44 },
   spendUnit: { fontSize: 18, fontFamily: theme.fontBold, color: theme.textMuted, marginBottom: 4 },
 
-  // Adjust button
   adjustBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 30, height: 30, borderRadius: 15,
     backgroundColor: theme.surfaceEl,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: 'center', justifyContent: 'center',
   },
 
-  // Section header
   sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     marginBottom: theme.sp4,
   },
-  sectionTitle: {
-    fontSize: theme.textBase,
-    fontFamily: theme.fontBold,
-    color: theme.text,
-    letterSpacing: -0.3,
-  },
-  empty: {
-    fontSize: theme.textSm,
-    fontFamily: theme.fontRegular,
-    color: theme.textFaint,
-    paddingVertical: theme.sp3,
-  },
-
-  // List rows
-  listRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.sp3,
-    paddingVertical: theme.sp3,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.border,
-  },
-  listBadge: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+  sectionTitle: { fontSize: theme.textBase, fontFamily: theme.fontBold, color: theme.text, letterSpacing: -0.3 },
+  addPill: {
+    paddingHorizontal: 12, paddingVertical: 6,
+    borderRadius: theme.radiusFull,
     backgroundColor: theme.surfaceEl,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
-  listEmoji: { fontSize: 20 },
-  listBody: { flex: 1, minWidth: 0 },
-  listName: { fontSize: theme.textBase, fontFamily: theme.fontBold, color: theme.text, letterSpacing: -0.2 },
-  listNameDone: { color: theme.textMuted, textDecorationLine: 'line-through' },
-  listMeta: { fontSize: theme.textXs, fontFamily: theme.fontRegular, color: theme.textMuted, marginTop: 2 },
-  listRight: { flexDirection: 'row', alignItems: 'center', gap: theme.sp2 },
-  listPrice: { fontSize: theme.textSm, fontFamily: theme.fontBold, color: theme.text },
+  addPillText: { fontSize: theme.textXs, fontFamily: theme.fontBold, color: theme.textMuted },
+  empty: { fontSize: theme.textSm, fontFamily: theme.fontRegular, color: theme.textFaint, paddingVertical: theme.sp3 },
 
-  // Checkbox (for tasks)
-  checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 7,
-    borderWidth: 1.5,
-    borderColor: theme.borderStrong,
-    backgroundColor: theme.surfaceEl,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkboxDone: { backgroundColor: theme.accent, borderColor: theme.accent },
-  checkmark: { fontSize: 12, color: theme.accentFg, fontFamily: theme.fontBold },
-
-  // Bottom stat row
-  statRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  statLabel: { fontSize: theme.textBase, fontFamily: theme.fontBold, color: theme.text, letterSpacing: -0.2 },
-  statSub: { fontSize: theme.textXs, fontFamily: theme.fontRegular, color: theme.textMuted, marginTop: 2 },
-  statRight: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
+  statCard: { flex: 1, gap: 4 },
   statNum: { fontSize: 32, fontFamily: theme.fontBlack, color: theme.text, letterSpacing: -1.5 },
-  statUnit: { fontSize: theme.textSm, fontFamily: theme.fontRegular, color: theme.textMuted, marginRight: theme.sp2 },
+  statLabel: { fontSize: theme.textSm, fontFamily: theme.fontBold, color: theme.text },
+  statSub: { fontSize: theme.textXs, fontFamily: theme.fontRegular, color: theme.textMuted },
 
-  // Confirm modal
   confirmText: { fontSize: theme.textSm, marginBottom: theme.sp5, color: theme.text, lineHeight: 22 },
   confirmActions: { flexDirection: 'row', gap: theme.sp3 },
   btnSecondary: {
-    flex: 1,
-    paddingVertical: theme.sp3,
-    borderRadius: theme.radiusMd,
-    backgroundColor: theme.surfaceEl,
-    alignItems: 'center',
+    flex: 1, paddingVertical: theme.sp3, borderRadius: theme.radiusMd,
+    backgroundColor: theme.surfaceEl, alignItems: 'center',
   },
   btnSecondaryText: { fontSize: theme.textSm, fontFamily: theme.fontBold, color: theme.textMuted },
   btnDanger: {
-    flex: 1,
-    paddingVertical: theme.sp3,
-    borderRadius: theme.radiusMd,
-    backgroundColor: theme.danger,
-    alignItems: 'center',
+    flex: 1, paddingVertical: theme.sp3, borderRadius: theme.radiusMd,
+    backgroundColor: theme.danger, alignItems: 'center',
   },
   btnDangerText: { fontSize: theme.textSm, fontFamily: theme.fontBold, color: '#fff' },
 })

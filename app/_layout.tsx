@@ -69,7 +69,6 @@ const styles = StyleSheet.create({
   phoneShell: {
     width: SHELL_W,
     height: '100vh' as any,
-    maxHeight: 896,
     backgroundColor: theme.bg,
     overflow: 'hidden',
   },
