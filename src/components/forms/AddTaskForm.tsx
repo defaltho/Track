@@ -181,24 +181,22 @@ const s = StyleSheet.create({
     flex: 1,
     paddingVertical: 14,
     borderRadius: 14,
-    backgroundColor: '#252230',
-    borderWidth: 1,
-    borderColor: '#3E3C43',
+    backgroundColor: theme.accent,
     alignItems: 'center',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.15,
+        shadowOpacity: 0.12,
         shadowRadius: 4,
       },
       android: { elevation: 3 },
       web: {
-        boxShadow: '0 2px 4px rgba(0,0,0,0.15), 0 0 0 1px #0D0D0D',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
       },
     }),
   },
-  btnPrimaryText: { fontSize: 15, fontFamily: theme.fontBold, color: '#FFFFFF' },
+  btnPrimaryText: { fontSize: 15, fontFamily: theme.fontBold, color: theme.accentFg },
   btnSecondary: {
     paddingVertical: 14,
     paddingHorizontal: theme.sp5,

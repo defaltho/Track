@@ -69,10 +69,10 @@ function RingBadge({ value, max = 20, size = 56 }: { value: number; max?: number
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
       <Svg width={size} height={size} style={{ position: 'absolute', transform: [{ rotate: '-90deg' }] }}>
         <SvgCircle cx={size / 2} cy={size / 2} r={r}
-          stroke="rgba(255,255,255,0.1)" strokeWidth={stroke} fill="none" />
+          stroke="rgba(0,0,0,0.08)" strokeWidth={stroke} fill="none" />
         {pct > 0 && (
           <SvgCircle cx={size / 2} cy={size / 2} r={r}
-            stroke="rgba(255,255,255,0.75)" strokeWidth={stroke} fill="none"
+            stroke="rgba(0,0,0,0.7)" strokeWidth={stroke} fill="none"
             strokeDasharray={`${dash} ${circ - dash}`} strokeLinecap="round" />
         )}
       </Svg>
@@ -81,7 +81,7 @@ function RingBadge({ value, max = 20, size = 56 }: { value: number; max?: number
   )
 }
 const rb = StyleSheet.create({
-  num: { fontSize: 20, fontFamily: 'Roboto_700Bold', color: '#fff', letterSpacing: -0.5 },
+  num: { fontSize: 20, fontFamily: 'Roboto_700Bold', color: '#111111', letterSpacing: -0.5 },
 })
 
 // ── Activity heatmap ──────────────────────────────────────────────────
@@ -115,10 +115,10 @@ function buildHeatmap(subs: any[], events: any[]) {
 }
 
 function dotColor(count: number) {
-  if (count === 0) return 'rgba(255,255,255,0.07)'
-  if (count === 1) return 'rgba(255,255,255,0.3)'
-  if (count === 2) return 'rgba(255,255,255,0.6)'
-  return '#ffffff'
+  if (count === 0) return 'rgba(0,0,0,0.07)'
+  if (count === 1) return 'rgba(0,0,0,0.28)'
+  if (count === 2) return 'rgba(0,0,0,0.55)'
+  return '#111111'
 }
 
 function ActivityHeatmap({ subs, events }: { subs: any[]; events: any[] }) {
@@ -162,7 +162,7 @@ function ActivityHeatmap({ subs, events }: { subs: any[]; events: any[] }) {
 }
 const hm = StyleSheet.create({
   cell: { width: CELL, height: CELL, borderRadius: 2 },
-  monthLabel: { fontSize: 9, fontFamily: 'Roboto_400Regular', color: 'rgba(255,255,255,0.35)', letterSpacing: 0.3 },
+  monthLabel: { fontSize: 9, fontFamily: 'Roboto_400Regular', color: 'rgba(0,0,0,0.35)', letterSpacing: 0.3 },
 })
 
 // ── Subscription row ──────────────────────────────────────────────────
@@ -202,7 +202,7 @@ function SubRow({
           <View style={sr.body}>
             <Text style={sr.name} numberOfLines={1}>{sub.name}</Text>
             <View style={sr.metaRow}>
-              <View style={[sr.duePill, { backgroundColor: diff === 0 ? 'rgba(239,68,68,0.15)' : 'rgba(255,255,255,0.06)' }]}>
+              <View style={[sr.duePill, { backgroundColor: diff === 0 ? 'rgba(220,38,38,0.1)' : 'rgba(0,0,0,0.05)' }]}>
                 <Text style={[sr.dueText, { color: dueColor }]}>{dueLabel}</Text>
               </View>
               <Text style={sr.category}>{sub.category ?? ''}</Text>
@@ -228,7 +228,7 @@ const sr = StyleSheet.create({
     gap: theme.sp3,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.05)',
+    borderBottomColor: theme.border,
   },
   badge: {
     width: 44,
@@ -270,7 +270,7 @@ function TaskRow({ task, delay, onToggle, onRemove }: {
   return (
     <Animated.View
       entering={FadeInRight.delay(delay).springify().damping(20).stiffness(220)}
-      style={[sr.row, { borderBottomColor: 'rgba(255,255,255,0.05)' }]}
+      style={sr.row}
     >
       <TouchableOpacity
         style={[tr.checkbox, task.done && tr.checkboxDone]}
@@ -318,7 +318,7 @@ function AdjustIcon() {
 }
 const adj = StyleSheet.create({
   wrap: { gap: 3, alignItems: 'center', justifyContent: 'center' },
-  bar: { width: 14, height: 1.5, backgroundColor: 'rgba(255,255,255,0.5)', borderRadius: 1 },
+  bar: { width: 14, height: 1.5, backgroundColor: 'rgba(0,0,0,0.35)', borderRadius: 1 },
   barMid: { width: 10 },
 })
 

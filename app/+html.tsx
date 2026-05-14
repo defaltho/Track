@@ -17,7 +17,7 @@ export default function Root({ children }: PropsWithChildren) {
             *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
             html, body {
               width: 100%; height: 100%;
-              background: #0D0D0D;
+              background: #F2F1EE;
               overflow: hidden;
             }
             #root {

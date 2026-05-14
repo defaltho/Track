@@ -1,32 +1,32 @@
 import { Platform } from 'react-native'
 
 export const theme = {
-  // Dark backgrounds
-  bg: '#0D0D0D',
-  surface: '#1A1A1A',
-  surfaceEl: '#242424',
-  surfaceHigh: '#2E2E2E',
+  // Light backgrounds
+  bg: '#F2F1EE',
+  surface: '#FFFFFF',
+  surfaceEl: '#F0EFEC',
+  surfaceHigh: '#E8E6E2',
 
-  // Borders (subtle on dark)
-  border: '#2A2A2A',
-  borderStrong: '#3A3A3A',
+  // Borders
+  border: '#E4E2DC',
+  borderStrong: '#C8C4BC',
 
   // Text
-  text: '#FFFFFF',
-  textMuted: '#666666',
-  textFaint: '#333333',
+  text: '#111111',
+  textMuted: '#888880',
+  textFaint: '#B5B3AD',
 
-  // Accent — white on dark
-  accent: '#FFFFFF',
-  accentFg: '#000000',
-  accentSoft: '#1E1E1E',
+  // Accent — black on white
+  accent: '#111111',
+  accentFg: '#FFFFFF',
+  accentSoft: '#F0EFEC',
 
   // Semantic
-  success: '#22C55E',
-  successBg: '#0A1F0F',
-  danger: '#EF4444',
-  dangerBg: '#1F0707',
-  warning: '#F59E0B',
+  success: '#16A34A',
+  successBg: '#F0FDF4',
+  danger: '#DC2626',
+  dangerBg: '#FEF2F2',
+  warning: '#D97706',
 
   // Typography — Roboto family
   fontLight: 'Roboto_300Light',
@@ -63,12 +63,12 @@ export const theme = {
     ios: {
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.4,
+      shadowOpacity: 0.06,
       shadowRadius: 8,
     },
-    android: { elevation: 4 },
+    android: { elevation: 2 },
     web: {
-      boxShadow: '0 2px 16px rgba(0,0,0,0.4)',
+      boxShadow: '0 2px 12px rgba(0,0,0,0.07), 0 1px 3px rgba(0,0,0,0.04)',
     },
     default: {},
   }) as object,
@@ -77,12 +77,12 @@ export const theme = {
     ios: {
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.5,
+      shadowOpacity: 0.09,
       shadowRadius: 16,
     },
-    android: { elevation: 8 },
+    android: { elevation: 6 },
     web: {
-      boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+      boxShadow: '0 8px 32px rgba(0,0,0,0.09), 0 2px 8px rgba(0,0,0,0.05)',
     },
     default: {},
   }) as object,
