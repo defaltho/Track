@@ -5,35 +5,151 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  Platform,
 } from 'react-native'
 import Animated, {
   FadeInDown,
-  FadeInUp,
+  FadeInRight,
   ZoomIn,
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withTiming,
-  interpolateColor,
 } from 'react-native-reanimated'
-import Svg, {
-  Defs,
-  LinearGradient,
-  Stop,
-  Path,
-  Circle,
-  Text as SvgText,
-} from 'react-native-svg'
-import { format, differenceInCalendarDays, parseISO, getDaysInMonth } from 'date-fns'
+import Svg, { Circle as SvgCircle } from 'react-native-svg'
+import {
+  format,
+  differenceInCalendarDays,
+  parseISO,
+  subDays,
+  eachDayOfInterval,
+  getMonth,
+} from 'date-fns'
 import { useDataStore } from '../stores/data'
 import { useToastStore } from '../stores/toasts'
 import { totalMonthlySpend, coffees } from '../utils/calculations'
-import { buildSpendingTimeline, pointsToPath, RANGE_DAYS } from '../utils/chart'
 import { Modal } from '../components/ui/Modal'
 import { AddTrackForm } from '../components/forms/AddTrackForm'
 import { AddTaskForm } from '../components/forms/AddTaskForm'
 import { theme, CURRENCY_SYMBOL } from '../theme'
+
+// ── Ring badge (number inside circular progress) ─────────────────────
+function RingBadge({ value, max = 20, size = 56 }: { value: number; max?: number; size?: number }) {
+  const stroke = 3
+  const r = (size - stroke) / 2
+  const circ = 2 * Math.PI * r
+  const pct = max > 0 ? Math.min(value / max, 1) : 0
+  const dash = circ * pct
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <Svg width={size} height={size} style={{ position: 'absolute', transform: [{ rotate: '-90deg' }] }}>
+        <SvgCircle
+          cx={size / 2} cy={size / 2} r={r}
+          stroke="rgba(255,255,255,0.1)" strokeWidth={stroke} fill="none"
+        />
+        {pct > 0 && (
+          <SvgCircle
+            cx={size / 2} cy={size / 2} r={r}
+            stroke="rgba(255,255,255,0.75)" strokeWidth={stroke} fill="none"
+            strokeDasharray={`${dash} ${circ - dash}`} strokeLinecap="round"
+          />
+        )}
+      </Svg>
+      <Text style={rb.num}>{value}</Text>
+    </View>
+  )
+}
+const rb = StyleSheet.create({
+  num: { fontSize: 20, fontFamily: 'Roboto_700Bold', color: '#fff', letterSpacing: -0.5 },
+})
+
+// ── Activity heatmap ──────────────────────────────────────────────────
+const CELL = 9
+const GAP = 2
+const WEEKS = 26
+
+function buildHeatmap(subs: any[], events: any[]) {
+  const today = new Date()
+  const start = subDays(today, WEEKS * 7 - 1)
+  const days = eachDayOfInterval({ start, end: today })
+  const map: Record<string, number> = {}
+  for (const s of subs) {
+    if (s.nextChargeDate) map[s.nextChargeDate] = (map[s.nextChargeDate] || 0) + 1
+  }
+  for (const e of events) {
+    if (e.date) map[e.date] = (map[e.date] || 0) + 1
+  }
+  const cols: { date: string; count: number }[][] = []
+  let week: { date: string; count: number }[] = []
+  for (const d of days) {
+    const ds = format(d, 'yyyy-MM-dd')
+    week.push({ date: ds, count: map[ds] || 0 })
+    if (week.length === 7) { cols.push(week); week = [] }
+  }
+  if (week.length > 0) {
+    while (week.length < 7) week.push({ date: '', count: 0 })
+    cols.push(week)
+  }
+  return cols
+}
+
+function dotColor(count: number) {
+  if (count === 0) return 'rgba(255,255,255,0.07)'
+  if (count === 1) return 'rgba(255,255,255,0.35)'
+  if (count === 2) return 'rgba(255,255,255,0.65)'
+  return '#ffffff'
+}
+
+function ActivityHeatmap({ subs, events }: { subs: any[]; events: any[] }) {
+  const cols = useMemo(() => buildHeatmap(subs, events), [subs, events])
+  const monthLabels = useMemo(() => {
+    const labels: { col: number; label: string }[] = []
+    let last = -1
+    cols.forEach((week, ci) => {
+      if (!week[0]?.date) return
+      const m = getMonth(parseISO(week[0].date))
+      if (m !== last) {
+        labels.push({ col: ci, label: format(parseISO(week[0].date), 'MMM') })
+        last = m
+      }
+    })
+    return labels
+  }, [cols])
+
+  const totalW = cols.length * (CELL + GAP) - GAP
+
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+      <View>
+        <View style={{ height: 16, width: totalW, marginBottom: 4 }}>
+          {monthLabels.map((ml, i) => (
+            <Text key={i} style={[hm.monthLabel, { position: 'absolute', left: ml.col * (CELL + GAP) }]}>
+              {ml.label}
+            </Text>
+          ))}
+        </View>
+        <View style={{ flexDirection: 'row', gap: GAP }}>
+          {cols.map((week, ci) => (
+            <View key={ci} style={{ gap: GAP }}>
+              {week.map((cell, ri) => (
+                <View key={ri} style={[hm.cell, { backgroundColor: dotColor(cell.count) }]} />
+              ))}
+            </View>
+          ))}
+        </View>
+      </View>
+    </ScrollView>
+  )
+}
+
+const hm = StyleSheet.create({
+  cell: { width: CELL, height: CELL, borderRadius: 2 },
+  monthLabel: {
+    fontSize: 9,
+    fontFamily: 'Roboto_400Regular',
+    color: 'rgba(255,255,255,0.4)',
+    letterSpacing: 0.3,
+  },
+})
+
+// ── Dashboard ─────────────────────────────────────────────────────────
+const spring = (delay = 0) =>
+  FadeInDown.delay(delay).springify().damping(18).stiffness(220)
 
 export function Dashboard() {
   const store = useDataStore()
@@ -59,25 +175,16 @@ export function Dashboard() {
   const dueSubs = useMemo(
     () =>
       store.subscriptions.filter((s: any) => {
-        if (s.active === false) return false
-        if (!s.nextChargeDate) return false
+        if (s.active === false || !s.nextChargeDate) return false
         const diff = differenceInCalendarDays(parseISO(s.nextChargeDate), now)
         return diff >= 0 && diff <= 7
       }),
     [store.subscriptions]
   )
-  const hasToday = dueSubs.length > 0 || todayTasks.length > 0
   const activeSubs = useMemo(
     () => store.subscriptions.filter((s: any) => s.active !== false),
     [store.subscriptions]
   )
-
-  const [timeRange, setTimeRange] = useState('3M')
-  const timeline = useMemo(
-    () => buildSpendingTimeline(store.subscriptions, RANGE_DAYS[timeRange]),
-    [store.subscriptions, timeRange]
-  )
-  const path = useMemo(() => pointsToPath(timeline, 300, 72), [timeline])
 
   const [showAddTrack, setShowAddTrack] = useState(false)
   const [showAddTask, setShowAddTask] = useState(false)
@@ -103,178 +210,175 @@ export function Dashboard() {
     setConfirm(null)
   }
 
+  const hasItems = dueSubs.length > 0 || todayTasks.length > 0
+
   return (
     <ScrollView style={s.page} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
 
-      {/* ── Hero spending card (inverted) ── */}
-      <Animated.View entering={FadeInDown.delay(0).duration(500).springify()} style={s.heroCard}>
-        <View style={s.heroTop}>
-          <View>
-            <Text style={s.heroLabel}>Monthly spend</Text>
-            <Text style={s.heroAmount}>
-              {symbol}{monthly.toFixed(0)}
-              <Text style={s.heroCents}>.{(monthly % 1).toFixed(2).slice(2)}</Text>
-            </Text>
-            <Text style={s.heroSub}>{activeSubs.length} active · {coffeeCount} coffees</Text>
-          </View>
-          <View style={s.heroMeta}>
-            <Text style={s.heroDateDay}>{format(now, 'd')}</Text>
-            <Text style={s.heroDateLabel}>{format(now, 'EEE, MMM')}</Text>
-          </View>
+      {/* ── Header ── */}
+      <Animated.View entering={spring(0)} style={s.header}>
+        <Text style={s.pageTitle}>Track</Text>
+        <View style={s.headerBtns}>
+          <TouchableOpacity style={s.iconBtn} onPress={() => setShowAddTask(true)} accessibilityRole="button">
+            <View style={s.iconBtnLine} />
+            <View style={[s.iconBtnLine, { width: 10 }]} />
+            <View style={s.iconBtnLine} />
+          </TouchableOpacity>
+          <TouchableOpacity style={s.iconBtn} onPress={() => setShowAddTrack(true)} accessibilityRole="button">
+            <Text style={s.iconBtnPlus}>+</Text>
+          </TouchableOpacity>
         </View>
+      </Animated.View>
 
-        {/* Sparkline */}
-        <View style={s.chartWrap}>
-          <Svg width="100%" height={72} viewBox="0 0 300 72" preserveAspectRatio="none">
-            <Defs>
-              <LinearGradient id="hero-grad" x1="0" y1="0" x2="0" y2="1">
-                <Stop offset="0%" stopColor="#ffffff" stopOpacity={0.25} />
-                <Stop offset="100%" stopColor="#ffffff" stopOpacity={0} />
-              </LinearGradient>
-            </Defs>
-            {activeSubs.length > 0 ? (
-              <>
-                <Path d={path.area} fill="url(#hero-grad)" />
-                <Path d={path.line} fill="none" stroke="#ffffff" strokeWidth={2} strokeLinejoin="round" />
-                <Circle cx={path.last.x} cy={path.last.y} r={3.5} fill="#ffffff" />
-              </>
-            ) : (
-              <SvgText x={150} y={40} textAnchor="middle" fontSize={11} fill="rgba(255,255,255,0.35)">
-                Add a subscription to see trends
-              </SvgText>
-            )}
-          </Svg>
-        </View>
+      {/* ── 2-col KPI cards ── */}
+      <Animated.View entering={spring(60)} style={s.row2}>
 
-        {/* Range filters */}
-        <View style={s.heroFilters}>
-          {Object.keys(RANGE_DAYS).map(f => (
-            <TouchableOpacity
-              key={f}
-              style={[s.heroFilter, timeRange === f && s.heroFilterActive]}
-              onPress={() => setTimeRange(f)}
-              accessibilityRole="button"
-            >
-              <Text style={[s.heroFilterText, timeRange === f && s.heroFilterTextActive]}>{f}</Text>
+        {/* Active subscriptions */}
+        <View style={[s.card, s.kpiCard]}>
+          <View style={s.kpiTopRow}>
+            <RingBadge value={activeSubs.length} max={Math.max(activeSubs.length + 4, 10)} />
+            <TouchableOpacity style={s.adjustBtn} accessibilityRole="button">
+              <AdjustIcon />
             </TouchableOpacity>
-          ))}
-        </View>
-      </Animated.View>
-
-      {/* ── Date + Events row ── */}
-      <Animated.View entering={FadeInDown.delay(120).duration(500).springify()} style={s.row2}>
-        <View style={[s.card, s.dateCard]}>
-          <Text style={s.dateWeekday}>{format(now, 'EEEE')}</Text>
-          <Text style={s.dateNum}>{format(now, 'd')}</Text>
-          <Text style={s.dateMonth}>{format(now, 'MMMM yyyy')}</Text>
-        </View>
-
-        <View style={[s.card, s.eventsCard]}>
-          <View style={s.eventsTop}>
-            <Text style={s.cardLabel}>Events</Text>
-            <Animated.View entering={ZoomIn.delay(200).duration(400)} style={s.badge}>
-              <Text style={s.badgeText}>{monthEvents.length}</Text>
-            </Animated.View>
           </View>
-          <View style={s.dotGrid}>
-            {Array(getDaysInMonth(now)).fill(null).map((_, i) => (
-              <View key={i} style={[s.dot, i < monthEvents.length && s.dotFilled]} />
-            ))}
+          <View style={s.kpiBottom}>
+            <Text style={s.kpiName}>Active</Text>
+            <Text style={s.kpiSub}>subscriptions</Text>
           </View>
         </View>
+
+        {/* Monthly spend */}
+        <View style={[s.card, s.kpiCard]}>
+          <View style={s.kpiTopRow}>
+            <View style={s.spendBlock}>
+              <Text style={s.spendMain}>{monthly.toFixed(0)}</Text>
+              <Text style={s.spendUnit}>{symbol}</Text>
+            </View>
+            <TouchableOpacity style={s.adjustBtn} accessibilityRole="button">
+              <AdjustIcon />
+            </TouchableOpacity>
+          </View>
+          <View style={s.kpiBottom}>
+            <Text style={s.kpiName}>Monthly</Text>
+            <Text style={s.kpiSub}>spend</Text>
+          </View>
+        </View>
+
       </Animated.View>
 
-      {/* ── Today ── */}
-      <Animated.View entering={FadeInDown.delay(220).duration(500).springify()} style={s.card}>
-        <View style={s.todayHeader}>
+      {/* ── Activity heatmap ── */}
+      <Animated.View entering={spring(120)} style={s.card}>
+        <ActivityHeatmap subs={store.subscriptions} events={store.events} />
+      </Animated.View>
+
+      {/* ── Due this week ── */}
+      <Animated.View entering={spring(180)} style={s.card}>
+        <View style={s.sectionHeader}>
           <Text style={s.sectionTitle}>Due this week</Text>
-          <TouchableOpacity
-            style={s.btnAdd}
-            onPress={() => setShowAddTrack(true)}
-            accessibilityRole="button"
-            accessibilityLabel="Add subscription or event"
-          >
-            <Text style={s.btnAddText}>＋</Text>
+          <TouchableOpacity style={s.adjustBtn} onPress={() => setShowAddTrack(true)} accessibilityRole="button">
+            <Text style={s.iconBtnPlus}>+</Text>
           </TouchableOpacity>
         </View>
 
-        {!hasToday && (
+        {!hasItems && (
           <Text style={s.empty}>Nothing due in the next 7 days</Text>
         )}
 
-        {dueSubs.map((sub: any) => {
+        {dueSubs.map((sub: any, idx: number) => {
           const diff = differenceInCalendarDays(parseISO(sub.nextChargeDate), now)
+          const dueLabel = diff === 0 ? 'Today' : diff === 1 ? 'Tomorrow' : `In ${diff}d`
           return (
-            <View key={sub.id} style={s.listItem}>
-              <View style={s.emojiWrap}>
-                <Text style={s.itemEmoji}>{sub.emoji ?? '💳'}</Text>
+            <Animated.View
+              key={sub.id}
+              entering={FadeInRight.delay(200 + idx * 45).springify().damping(18).stiffness(220)}
+              style={s.listRow}
+            >
+              <View style={s.listBadge}>
+                <Text style={s.listEmoji}>{sub.emoji ?? '💳'}</Text>
               </View>
-              <View style={s.itemBody}>
-                <Text style={s.itemName}>{sub.name}</Text>
-                <Text style={s.itemMeta}>
-                  {symbol}{sub.price} · {diff === 0 ? 'today' : diff === 1 ? 'tomorrow' : `in ${diff}d`}
-                </Text>
+              <View style={s.listBody}>
+                <Text style={s.listName}>{sub.name}</Text>
+                <Text style={s.listMeta}>{dueLabel}</Text>
               </View>
-              <TouchableOpacity
-                style={s.rowAction}
-                onPress={() => setConfirm({ kind: 'sub', id: sub.id, name: sub.name })}
-                accessibilityLabel={`Remove ${sub.name}`}
-                accessibilityRole="button"
-              >
-                <Text style={s.rowActionText}>×</Text>
-              </TouchableOpacity>
-            </View>
+              <View style={s.listRight}>
+                <Text style={s.listPrice}>{symbol}{sub.price}</Text>
+                <TouchableOpacity
+                  style={s.adjustBtn}
+                  onPress={() => setConfirm({ kind: 'sub', id: sub.id, name: sub.name })}
+                  accessibilityRole="button"
+                >
+                  <AdjustIcon />
+                </TouchableOpacity>
+              </View>
+            </Animated.View>
           )
         })}
 
         {todayTasks.map((task: any, idx: number) => (
-          <Animated.View key={task.id} entering={FadeInDown.delay(320 + idx * 60).duration(400)} style={s.listItem}>
+          <Animated.View
+            key={task.id}
+            entering={FadeInRight.delay(300 + idx * 45).springify().damping(18).stiffness(220)}
+            style={s.listRow}
+          >
             <TouchableOpacity
-              style={[s.checkbox, task.done && s.checkboxChecked]}
+              style={[s.checkbox, task.done && s.checkboxDone]}
               onPress={() => store.updateTask(task.id, { done: !task.done })}
               accessibilityRole="checkbox"
               accessibilityState={{ checked: task.done }}
             >
               {task.done && (
-                <Animated.Text entering={ZoomIn.duration(200)} style={s.checkmark}>✓</Animated.Text>
+                <Animated.Text entering={ZoomIn.springify().damping(14).stiffness(280)} style={s.checkmark}>
+                  ✓
+                </Animated.Text>
               )}
             </TouchableOpacity>
-            <View style={s.itemBody}>
-              <Text style={[s.itemName, task.done && s.itemNameDone]}>{task.name}</Text>
-              {task.note ? <Text style={s.itemMeta}>{task.note}</Text> : null}
+            <View style={s.listBody}>
+              <Text style={[s.listName, task.done && s.listNameDone]}>{task.name}</Text>
+              {task.note ? <Text style={s.listMeta}>{task.note}</Text> : null}
             </View>
             <TouchableOpacity
-              style={s.rowAction}
+              style={s.adjustBtn}
               onPress={() => setConfirm({ kind: 'task', id: task.id, name: task.name })}
-              accessibilityLabel={`Remove ${task.name}`}
               accessibilityRole="button"
             >
-              <Text style={s.rowActionText}>×</Text>
+              <AdjustIcon />
             </TouchableOpacity>
           </Animated.View>
         ))}
       </Animated.View>
 
-      {/* ── Quick actions ── */}
-      <Animated.View entering={FadeInDown.delay(320).duration(500).springify()} style={s.row2}>
-        <TouchableOpacity
-          style={[s.card, s.actionCard]}
-          onPress={() => setShowAddTrack(true)}
-          accessibilityRole="button"
-        >
-          <Text style={s.actionIcon}>＋</Text>
-          <Text style={s.actionLabel}>Track</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[s.card, s.actionCard]}
-          onPress={() => setShowAddTask(true)}
-          accessibilityRole="button"
-        >
-          <Text style={s.actionIcon}>✓</Text>
-          <Text style={s.actionLabel}>Task</Text>
-        </TouchableOpacity>
+      {/* ── Bottom stat: coffee equivalent ── */}
+      <Animated.View entering={spring(240)} style={[s.card, s.statRow]}>
+        <View>
+          <Text style={s.statLabel}>Coffee equivalent</Text>
+          <Text style={s.statSub}>at {symbol}{store.settings.coffeePrice?.toFixed(2)}/cup</Text>
+        </View>
+        <View style={s.statRight}>
+          <Text style={s.statNum}>{coffeeCount.toLocaleString()}</Text>
+          <Text style={s.statUnit}>cups</Text>
+          <TouchableOpacity style={s.adjustBtn} accessibilityRole="button">
+            <AdjustIcon />
+          </TouchableOpacity>
+        </View>
       </Animated.View>
 
+      {/* ── Events count stat ── */}
+      {monthEvents.length > 0 && (
+        <Animated.View entering={spring(280)} style={[s.card, s.statRow]}>
+          <View>
+            <Text style={s.statLabel}>Events this month</Text>
+            <Text style={s.statSub}>{format(now, 'MMMM yyyy')}</Text>
+          </View>
+          <View style={s.statRight}>
+            <Animated.Text entering={ZoomIn.delay(300).springify().damping(14).stiffness(280)} style={s.statNum}>
+              {monthEvents.length}
+            </Animated.Text>
+            <Text style={s.statUnit}>events</Text>
+          </View>
+        </Animated.View>
+      )}
+
+      {/* ── Modals ── */}
       <Modal open={showAddTrack} title="Add Track" onClose={() => setShowAddTrack(false)}>
         <AddTrackForm onSubmit={handleAddTrack} onCancel={() => setShowAddTrack(false)} />
       </Modal>
@@ -285,7 +389,7 @@ export function Dashboard() {
         {confirm && (
           <View>
             <Text style={s.confirmText}>
-              Remove <Text style={{ fontWeight: '700' }}>{confirm.name}</Text>? This cannot be undone.
+              Remove <Text style={{ fontFamily: theme.fontBold }}>{confirm.name}</Text>? This cannot be undone.
             </Text>
             <View style={s.confirmActions}>
               <TouchableOpacity style={s.btnSecondary} onPress={() => setConfirm(null)}>
@@ -302,165 +406,165 @@ export function Dashboard() {
   )
 }
 
+// ── Adjust icon (3-bar sliders) ────────────────────────────────────
+function AdjustIcon() {
+  return (
+    <View style={adj.wrap}>
+      <View style={adj.bar} />
+      <View style={[adj.bar, adj.barMid]} />
+      <View style={adj.bar} />
+    </View>
+  )
+}
+const adj = StyleSheet.create({
+  wrap: { gap: 3, alignItems: 'center', justifyContent: 'center' },
+  bar: { width: 14, height: 1.5, backgroundColor: 'rgba(255,255,255,0.5)', borderRadius: 1 },
+  barMid: { width: 10 },
+})
+
+// ── Styles ─────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   page: { flex: 1, backgroundColor: theme.bg },
   content: { padding: theme.sp4, gap: theme.sp3, paddingBottom: 110 },
 
-  row2: { flexDirection: 'row', gap: theme.sp3 },
-
-  // ── Hero card (inverted) ──
-  heroCard: {
-    backgroundColor: theme.accent,
-    borderRadius: theme.radiusXl,
-    padding: theme.sp5,
-    ...theme.shadowMd,
-  },
-  heroTop: {
+  // Header
+  header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: theme.sp4,
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    paddingTop: theme.sp2,
+    marginBottom: theme.sp2,
   },
-  heroLabel: {
-    fontSize: theme.textXs,
-    fontFamily: theme.fontBold,
-    color: 'rgba(255,255,255,0.5)',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    marginBottom: theme.sp1,
-  },
-  heroAmount: {
-    fontSize: 52,
+  pageTitle: {
+    fontSize: 34,
     fontFamily: theme.fontBlack,
-    color: theme.accentFg,
-    lineHeight: 52,
-    letterSpacing: -2,
-  },
-  heroCents: {
-    fontSize: 24,
-    fontFamily: theme.fontMedium,
+    color: theme.text,
     letterSpacing: -1,
   },
-  heroSub: {
-    fontSize: theme.textXs,
-    fontFamily: theme.fontRegular,
-    color: 'rgba(255,255,255,0.5)',
-    marginTop: theme.sp1,
+  headerBtns: { flexDirection: 'row', gap: theme.sp2 },
+  iconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: theme.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
   },
-  heroMeta: { alignItems: 'flex-end' },
-  heroDateDay: {
-    fontSize: 40,
-    fontFamily: theme.fontBlack,
-    color: theme.accentFg,
-    lineHeight: 40,
-    letterSpacing: -1,
+  iconBtnLine: { width: 14, height: 1.5, backgroundColor: theme.text, borderRadius: 1 },
+  iconBtnPlus: {
+    fontSize: 22,
+    fontFamily: theme.fontLight,
+    color: theme.text,
+    lineHeight: 26,
   },
-  heroDateLabel: {
-    fontSize: theme.textXs,
-    fontFamily: theme.fontBold,
-    color: 'rgba(255,255,255,0.5)',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginTop: 2,
-  },
-  chartWrap: { marginHorizontal: -theme.sp5, marginBottom: theme.sp3 },
-  heroFilters: { flexDirection: 'row', gap: theme.sp2 },
-  heroFilter: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: theme.radiusFull,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-  },
-  heroFilterActive: { backgroundColor: theme.accentFg },
-  heroFilterText: { fontSize: theme.textXs, fontFamily: theme.fontBold, color: 'rgba(255,255,255,0.5)' },
-  heroFilterTextActive: { color: theme.accent },
 
-  // ── Cards ──
+  // Cards
   card: {
     backgroundColor: theme.surface,
     borderRadius: theme.radiusXl,
     padding: theme.sp5,
-    ...theme.shadow,
   },
-  cardLabel: { fontSize: theme.textSm, fontWeight: '700', color: theme.text },
+  row2: { flexDirection: 'row', gap: theme.sp3 },
 
-  dateCard: { width: 110, justifyContent: 'space-between' },
-  dateWeekday: { fontSize: theme.textXs, fontFamily: theme.fontBold, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
-  dateNum: { fontSize: 48, fontFamily: theme.fontBlack, color: theme.text, lineHeight: 52, letterSpacing: -2, marginVertical: theme.sp1 },
-  dateMonth: { fontSize: theme.textXs, fontFamily: theme.fontMedium, color: theme.textMuted },
-
-  eventsCard: { flex: 1 },
-  eventsTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: theme.sp3 },
-  badge: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: theme.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
+  // KPI cards
+  kpiCard: { flex: 1, justifyContent: 'space-between', minHeight: 140 },
+  kpiTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
   },
-  badgeText: { fontSize: theme.textXs, fontWeight: '700', color: theme.accentFg },
-  dotGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: theme.border },
-  dotFilled: { backgroundColor: theme.accent },
+  kpiBottom: { marginTop: theme.sp3 },
+  kpiName: { fontSize: theme.textBase, fontFamily: theme.fontBold, color: theme.text, letterSpacing: -0.3 },
+  kpiSub: { fontSize: theme.textXs, fontFamily: theme.fontRegular, color: theme.textMuted, marginTop: 2 },
 
-  // ── Today section ──
-  todayHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: theme.sp4 },
-  sectionTitle: { fontSize: theme.textSm, fontFamily: theme.fontBold, color: theme.text },
-  btnAdd: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: theme.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  btnAddText: { fontSize: 18, fontWeight: '300', color: theme.accentFg, lineHeight: 22 },
+  spendBlock: { flexDirection: 'row', alignItems: 'flex-end', gap: 3 },
+  spendMain: { fontSize: 40, fontFamily: theme.fontBlack, color: theme.text, letterSpacing: -2, lineHeight: 44 },
+  spendUnit: { fontSize: 18, fontFamily: theme.fontBold, color: theme.textMuted, marginBottom: 4 },
 
-  listItem: { flexDirection: 'row', gap: theme.sp3, marginBottom: theme.sp3, alignItems: 'center' },
-  itemBody: { flex: 1, minWidth: 0 },
-  emojiWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+  // Adjust button
+  adjustBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     backgroundColor: theme.surfaceEl,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  itemEmoji: { fontSize: 18 },
-  itemName: { fontSize: theme.textSm, fontFamily: theme.fontMedium, color: theme.text },
-  itemNameDone: { color: theme.textMuted, textDecorationLine: 'line-through' },
-  itemMeta: { fontSize: theme.textXs, color: theme.textMuted, marginTop: 2 },
-  empty: { fontSize: theme.textSm, color: theme.textFaint, paddingVertical: theme.sp3 },
 
+  // Section header
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: theme.sp4,
+  },
+  sectionTitle: {
+    fontSize: theme.textBase,
+    fontFamily: theme.fontBold,
+    color: theme.text,
+    letterSpacing: -0.3,
+  },
+  empty: {
+    fontSize: theme.textSm,
+    fontFamily: theme.fontRegular,
+    color: theme.textFaint,
+    paddingVertical: theme.sp3,
+  },
+
+  // List rows
+  listRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.sp3,
+    paddingVertical: theme.sp3,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
+  },
+  listBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: theme.surfaceEl,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  listEmoji: { fontSize: 20 },
+  listBody: { flex: 1, minWidth: 0 },
+  listName: { fontSize: theme.textBase, fontFamily: theme.fontBold, color: theme.text, letterSpacing: -0.2 },
+  listNameDone: { color: theme.textMuted, textDecorationLine: 'line-through' },
+  listMeta: { fontSize: theme.textXs, fontFamily: theme.fontRegular, color: theme.textMuted, marginTop: 2 },
+  listRight: { flexDirection: 'row', alignItems: 'center', gap: theme.sp2 },
+  listPrice: { fontSize: theme.textSm, fontFamily: theme.fontBold, color: theme.text },
+
+  // Checkbox (for tasks)
   checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 6,
+    width: 22,
+    height: 22,
+    borderRadius: 7,
     borderWidth: 1.5,
     borderColor: theme.borderStrong,
     backgroundColor: theme.surfaceEl,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  checkboxChecked: { backgroundColor: theme.accent, borderColor: theme.accent },
-  checkmark: { fontSize: 11, color: theme.accentFg, fontWeight: '700' },
-  rowAction: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: theme.surfaceEl,
+  checkboxDone: { backgroundColor: theme.accent, borderColor: theme.accent },
+  checkmark: { fontSize: 12, color: theme.accentFg, fontFamily: theme.fontBold },
+
+  // Bottom stat row
+  statRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
   },
-  rowActionText: { fontSize: 16, color: theme.textMuted, lineHeight: 20 },
+  statLabel: { fontSize: theme.textBase, fontFamily: theme.fontBold, color: theme.text, letterSpacing: -0.2 },
+  statSub: { fontSize: theme.textXs, fontFamily: theme.fontRegular, color: theme.textMuted, marginTop: 2 },
+  statRight: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
+  statNum: { fontSize: 32, fontFamily: theme.fontBlack, color: theme.text, letterSpacing: -1.5 },
+  statUnit: { fontSize: theme.textSm, fontFamily: theme.fontRegular, color: theme.textMuted, marginRight: theme.sp2 },
 
-  // ── Action cards ──
-  actionCard: { flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 100, gap: theme.sp2 },
-  actionIcon: { fontSize: 28, color: theme.textMuted },
-  actionLabel: { fontSize: theme.textXs, fontFamily: theme.fontBold, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
-
-  // ── Confirm modal ──
+  // Confirm modal
   confirmText: { fontSize: theme.textSm, marginBottom: theme.sp5, color: theme.text, lineHeight: 22 },
   confirmActions: { flexDirection: 'row', gap: theme.sp3 },
   btnSecondary: {
@@ -470,7 +574,7 @@ const s = StyleSheet.create({
     backgroundColor: theme.surfaceEl,
     alignItems: 'center',
   },
-  btnSecondaryText: { fontSize: theme.textSm, fontWeight: '600', color: theme.textMuted },
+  btnSecondaryText: { fontSize: theme.textSm, fontFamily: theme.fontBold, color: theme.textMuted },
   btnDanger: {
     flex: 1,
     paddingVertical: theme.sp3,
@@ -478,5 +582,5 @@ const s = StyleSheet.create({
     backgroundColor: theme.danger,
     alignItems: 'center',
   },
-  btnDangerText: { fontSize: theme.textSm, fontWeight: '700', color: '#fff' },
+  btnDangerText: { fontSize: theme.textSm, fontFamily: theme.fontBold, color: '#fff' },
 })

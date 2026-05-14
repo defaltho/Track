@@ -54,7 +54,7 @@ export function Modal({ open, title, onClose, children }: Props) {
 const s = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.25)',
+    backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'flex-end',
     alignItems: 'center',
   },
@@ -87,7 +87,7 @@ const s = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: theme.bg,
+    backgroundColor: theme.surfaceEl,
     alignItems: 'center',
     justifyContent: 'center',
   },

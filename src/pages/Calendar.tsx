@@ -73,6 +73,7 @@ export function Calendar() {
 
   return (
     <ScrollView style={s.page} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
+      <Text style={s.pageTitle}>Calendar</Text>
       <View style={s.card}>
         <View style={s.calHeader}>
           <TouchableOpacity style={s.navBtn} onPress={prev} accessibilityLabel="Previous month" accessibilityRole="button">
@@ -179,26 +180,35 @@ const s = StyleSheet.create({
   page: { flex: 1, backgroundColor: theme.bg },
   content: { padding: theme.sp4, gap: theme.sp4, paddingBottom: 110 },
 
+  pageTitle: {
+    fontSize: 34,
+    fontFamily: theme.fontBlack,
+    color: theme.text,
+    letterSpacing: -1,
+    marginBottom: theme.sp4,
+  },
+
   card: {
     backgroundColor: theme.surface,
     borderRadius: theme.radiusXl,
+    borderWidth: 0,
     padding: theme.sp5,
     ...theme.shadow,
   },
 
   calHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: theme.sp5 },
-  monthLabel: { fontSize: theme.textLg, fontWeight: '700', color: theme.text },
-  navBtn: { padding: theme.sp2, borderRadius: theme.radiusSm },
-  navText: { fontSize: 22, color: theme.text },
+  monthLabel: { fontSize: theme.textLg, fontFamily: theme.fontBold, color: theme.text },
+  navBtn: { padding: theme.sp2, borderRadius: theme.radiusFull, backgroundColor: theme.surfaceEl },
+  navText: { fontSize: 22, color: theme.text, fontFamily: theme.fontBold },
 
   calGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   cell: { alignItems: 'center', paddingBottom: theme.sp2 },
-  weekday: { fontSize: theme.textXs, color: theme.textMuted, fontWeight: '600' },
+  weekday: { fontSize: theme.textXs, color: theme.textMuted, fontFamily: theme.fontMedium },
 
   dayCell: { alignItems: 'center', paddingVertical: theme.sp2, minHeight: 38 },
   dayNum: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   dayNumToday: { backgroundColor: theme.accent },
-  dayNumText: { fontSize: theme.textXs, fontWeight: '500', color: theme.text },
+  dayNumText: { fontSize: theme.textXs, fontFamily: theme.fontMedium, color: theme.text },
   dayNumTextToday: { color: theme.accentFg },
   dayDots: { flexDirection: 'row', gap: 2, minHeight: 6 },
   dayDot: { width: 5, height: 5, borderRadius: 3 },
@@ -206,9 +216,9 @@ const s = StyleSheet.create({
   dayDotSub: { backgroundColor: theme.textMuted },
 
   sectionRow: { flexDirection: 'row', alignItems: 'center', gap: theme.sp2, marginBottom: theme.sp4 },
-  sectionTitle: { fontSize: theme.textSm, fontWeight: '700', color: theme.text },
+  sectionTitle: { fontSize: theme.textSm, fontFamily: theme.fontBold, color: theme.text },
   countBadge: { backgroundColor: theme.accent, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
-  countText: { fontSize: theme.textXs, color: theme.accentFg },
+  countText: { fontSize: theme.textXs, color: theme.accentFg, fontFamily: theme.fontBold },
 
   eventItem: {
     flexDirection: 'row',
@@ -218,12 +228,12 @@ const s = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: theme.border,
   },
-  eventDate: { fontSize: theme.textXs, color: theme.textMuted, width: 40 },
-  eventName: { fontSize: theme.textSm, fontWeight: '500', color: theme.text },
+  eventDate: { fontSize: theme.textXs, color: theme.textMuted, width: 40, fontFamily: theme.fontRegular },
+  eventName: { fontSize: theme.textSm, fontFamily: theme.fontMedium, color: theme.text },
 
-  dayEmpty: { fontSize: theme.textSm, color: theme.textMuted, paddingVertical: theme.sp2 },
+  dayEmpty: { fontSize: theme.textSm, color: theme.textMuted, paddingVertical: theme.sp2, fontFamily: theme.fontRegular },
   emptyCard: { alignItems: 'center', padding: theme.sp8 },
-  emptyText: { fontSize: theme.textSm, color: theme.textMuted },
+  emptyText: { fontSize: theme.textSm, color: theme.textMuted, fontFamily: theme.fontRegular },
   dayRow: {
     flexDirection: 'row',
     gap: theme.sp3,
@@ -236,9 +246,9 @@ const s = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
-    backgroundColor: theme.bg,
+    backgroundColor: theme.surfaceEl,
   },
   dayTagEvent: { backgroundColor: theme.accent },
-  dayTagText: { fontSize: theme.textXs, fontWeight: '700', color: theme.textMuted, textTransform: 'uppercase' },
-  dayName: { fontSize: theme.textSm, fontWeight: '500', color: theme.text, flex: 1 },
+  dayTagText: { fontSize: theme.textXs, fontFamily: theme.fontBold, color: theme.textMuted, textTransform: 'uppercase' },
+  dayName: { fontSize: theme.textSm, fontFamily: theme.fontMedium, color: theme.text, flex: 1 },
 })

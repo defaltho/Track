@@ -52,6 +52,7 @@ export function Analytics() {
 
   return (
     <ScrollView style={s.page} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
+      <Text style={s.pageTitle}>Analytics</Text>
       {/* Summary */}
       <View style={s.card}>
         <View style={s.summaryGrid}>
@@ -92,18 +93,18 @@ export function Analytics() {
         <Svg width="100%" height={100} viewBox="0 0 300 100" preserveAspectRatio="none">
           <Defs>
             <LinearGradient id="g-analytics" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0%" stopColor="#000" stopOpacity={0.14} />
-              <Stop offset="100%" stopColor="#000" stopOpacity={0} />
+              <Stop offset="0%" stopColor="#FFFFFF" stopOpacity={0.18} />
+              <Stop offset="100%" stopColor="#FFFFFF" stopOpacity={0} />
             </LinearGradient>
           </Defs>
           {store.subscriptions.length > 0 ? (
             <>
               <Path d={path.area} fill="url(#g-analytics)" />
-              <Path d={path.line} fill="none" stroke="#000" strokeWidth={1.5} strokeLinejoin="round" />
-              <Circle cx={path.last.x} cy={path.last.y} r={3} fill="#000" />
+              <Path d={path.line} fill="none" stroke="#FFFFFF" strokeWidth={1.5} strokeLinejoin="round" />
+              <Circle cx={path.last.x} cy={path.last.y} r={3} fill="#FFFFFF" />
             </>
           ) : (
-            <SvgText x={150} y={54} textAnchor="middle" fontSize={12} fill="#888">
+            <SvgText x={150} y={54} textAnchor="middle" fontSize={12} fill={theme.textMuted}>
               Add a subscription to see the chart
             </SvgText>
           )}
@@ -143,39 +144,48 @@ const s = StyleSheet.create({
   page: { flex: 1, backgroundColor: theme.bg },
   content: { padding: theme.sp4, gap: theme.sp4, paddingBottom: 110 },
 
+  pageTitle: {
+    fontSize: 34,
+    fontFamily: theme.fontBlack,
+    color: theme.text,
+    letterSpacing: -1,
+    marginBottom: theme.sp4,
+  },
+
   card: {
     backgroundColor: theme.surface,
     borderRadius: theme.radiusXl,
+    borderWidth: 0,
     padding: theme.sp5,
     ...theme.shadow,
   },
 
   summaryGrid: { flexDirection: 'row', justifyContent: 'space-between', gap: theme.sp3 },
   stat: { flex: 1 },
-  statNum: { fontSize: theme.textXl, fontWeight: '800', color: theme.text },
-  statLabel: { fontSize: theme.textXs, color: theme.textMuted, marginTop: 2 },
+  statNum: { fontSize: theme.textXl, fontFamily: theme.fontBlack, color: theme.text },
+  statLabel: { fontSize: theme.textXs, fontFamily: theme.fontRegular, color: theme.textMuted, marginTop: 2 },
 
   chartHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: theme.sp4, flexWrap: 'wrap', gap: theme.sp2 },
-  cardTitle: { fontSize: theme.textBase, fontWeight: '700', color: theme.text },
+  cardTitle: { fontSize: theme.textBase, fontFamily: theme.fontBold, color: theme.text },
 
   filters: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp2 },
   filterPill: {
     paddingHorizontal: 12,
     paddingVertical: 5,
     borderRadius: 20,
-    backgroundColor: theme.bg,
+    backgroundColor: theme.surfaceEl,
   },
   filterPillActive: { backgroundColor: theme.accent },
-  filterPillText: { fontSize: theme.textXs, fontWeight: '600', color: theme.text },
+  filterPillText: { fontSize: theme.textXs, fontFamily: theme.fontMedium, color: theme.text },
   filterPillTextActive: { color: theme.accentFg },
 
   breakdownRow: { marginBottom: theme.sp4 },
   breakdownInfo: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: theme.sp1 },
-  breakdownName: { fontSize: theme.textSm, fontWeight: '500', color: theme.text },
-  breakdownPct: { fontSize: theme.textSm, color: theme.textMuted },
-  barTrack: { height: 4, backgroundColor: theme.border, borderRadius: 2, overflow: 'hidden', flexDirection: 'row' },
+  breakdownName: { fontSize: theme.textSm, fontFamily: theme.fontMedium, color: theme.text },
+  breakdownPct: { fontSize: theme.textSm, fontFamily: theme.fontRegular, color: theme.textMuted },
+  barTrack: { height: 4, backgroundColor: theme.surfaceHigh, borderRadius: 2, overflow: 'hidden', flexDirection: 'row' },
   barFill: { height: 4, backgroundColor: theme.accent },
 
   emptyCard: { alignItems: 'center', padding: theme.sp8 },
-  empty: { fontSize: theme.textSm, color: theme.textMuted },
+  empty: { fontSize: theme.textSm, fontFamily: theme.fontRegular, color: theme.textFaint },
 })

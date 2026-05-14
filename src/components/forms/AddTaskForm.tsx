@@ -5,6 +5,7 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
+  Platform,
 } from 'react-native'
 import { Picker } from '@react-native-picker/picker'
 import { theme } from '../../theme'
@@ -55,6 +56,7 @@ export function AddTaskForm({ onSubmit, onCancel }: Props) {
             value={name}
             onChangeText={v => { setName(v); setNameError('') }}
             placeholder="Cancel gym membership"
+            placeholderTextColor={theme.textFaint}
           />
         </View>
 
@@ -65,6 +67,7 @@ export function AddTaskForm({ onSubmit, onCancel }: Props) {
             value={dueDate}
             onChangeText={v => { setDueDate(v); setDueDateError('') }}
             placeholder="2025-12-31"
+            placeholderTextColor={theme.textFaint}
             keyboardType="numeric"
           />
           {dueDateError ? <Text style={s.errorText}>{dueDateError}</Text> : null}
@@ -103,6 +106,7 @@ export function AddTaskForm({ onSubmit, onCancel }: Props) {
             value={note}
             onChangeText={setNote}
             placeholder="Optional"
+            placeholderTextColor={theme.textFaint}
           />
         </View>
       </View>
@@ -125,7 +129,7 @@ const s = StyleSheet.create({
   label: {
     fontSize: theme.textXs,
     fontFamily: theme.fontBold,
-    color: theme.textMuted,
+    color: theme.text,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: theme.sp1,
@@ -133,12 +137,12 @@ const s = StyleSheet.create({
   input: {
     paddingHorizontal: theme.sp3,
     paddingVertical: theme.sp3,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: theme.border,
     borderRadius: theme.radiusMd,
     fontSize: theme.textSm,
     fontFamily: theme.fontRegular,
-    backgroundColor: theme.bg,
+    backgroundColor: theme.surfaceEl,
     color: theme.text,
   },
   inputError: {
@@ -151,19 +155,20 @@ const s = StyleSheet.create({
     marginTop: theme.sp1,
   },
   picker: {
-    backgroundColor: theme.bg,
-    borderWidth: 1.5,
+    backgroundColor: theme.surfaceEl,
+    borderWidth: 1,
     borderColor: theme.border,
     borderRadius: theme.radiusMd,
     height: 44,
+    color: theme.text,
   },
   pills: { flexDirection: 'row', gap: theme.sp2 },
   pill: {
     flex: 1,
     paddingVertical: theme.sp2,
     borderRadius: theme.radiusMd,
-    backgroundColor: theme.bg,
-    borderWidth: 1.5,
+    backgroundColor: theme.surfaceEl,
+    borderWidth: 1,
     borderColor: theme.border,
     alignItems: 'center',
   },
@@ -174,18 +179,34 @@ const s = StyleSheet.create({
   actions: { flexDirection: 'row', gap: theme.sp3, marginTop: theme.sp6 },
   btnPrimary: {
     flex: 1,
-    paddingVertical: theme.sp3,
-    borderRadius: theme.radiusMd,
-    backgroundColor: theme.accent,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: '#252230',
+    borderWidth: 1,
+    borderColor: '#3E3C43',
     alignItems: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+      },
+      android: { elevation: 3 },
+      web: {
+        boxShadow: '0 2px 4px rgba(0,0,0,0.15), 0 0 0 1px #0D0D0D',
+      },
+    }),
   },
-  btnPrimaryText: { fontSize: theme.textSm, fontFamily: theme.fontBold, color: theme.accentFg },
+  btnPrimaryText: { fontSize: 15, fontFamily: theme.fontBold, color: '#FFFFFF' },
   btnSecondary: {
-    paddingVertical: theme.sp3,
+    paddingVertical: 14,
     paddingHorizontal: theme.sp5,
-    borderRadius: theme.radiusMd,
-    backgroundColor: theme.bg,
+    borderRadius: 14,
+    backgroundColor: theme.surfaceEl,
+    borderWidth: 1,
+    borderColor: theme.border,
     alignItems: 'center',
   },
-  btnSecondaryText: { fontSize: theme.textSm, fontFamily: theme.fontMedium, color: theme.textMuted },
+  btnSecondaryText: { fontSize: theme.textSm, fontFamily: theme.fontBold, color: theme.textMuted },
 })
