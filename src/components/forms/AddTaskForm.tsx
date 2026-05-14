@@ -4,10 +4,11 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  ScrollView,
   StyleSheet,
   Platform,
 } from 'react-native'
-import { Picker } from '@react-native-picker/picker'
+import { useTheme } from '../../context/ThemeContext'
 import { theme } from '../../theme'
 
 const PRIORITIES = ['low', 'medium', 'high'] as const
@@ -19,6 +20,7 @@ interface Props {
 }
 
 export function AddTaskForm({ onSubmit, onCancel }: Props) {
+  const { colors } = useTheme()
   const [name, setName] = useState('')
   const [nameError, setNameError] = useState('')
   const [dueDate, setDueDate] = useState('')
@@ -28,9 +30,9 @@ export function AddTaskForm({ onSubmit, onCancel }: Props) {
   const [note, setNote] = useState('')
 
   function submit() {
-    if (!name.trim()) { setNameError('O nome da tarefa é obrigatório'); return }
+    if (!name.trim()) { setNameError('Task name is required'); return }
     if (dueDate && !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
-      setDueDateError('Invalid date format. Use YYYY-MM-DD.')
+      setDueDateError('Use format YYYY-MM-DD')
       return
     }
     setDueDateError('')
@@ -46,78 +48,105 @@ export function AddTaskForm({ onSubmit, onCancel }: Props) {
     })
   }
 
+  const inputStyle = [s.input, { backgroundColor: colors.surfaceEl, borderColor: colors.border, color: colors.text }]
+
   return (
-    <View>
+    <View style={s.root}>
       <View style={s.fields}>
+        {/* Name */}
         <View>
-          <Text style={s.label}>Task name *</Text>
+          <Text style={[s.label, { color: colors.textMuted }]}>Task name *</Text>
           <TextInput
-            style={s.input}
+            style={[inputStyle, nameError ? { borderColor: colors.danger } : null]}
             value={name}
             onChangeText={v => { setName(v); setNameError('') }}
             placeholder="Cancel gym membership"
-            placeholderTextColor={theme.textFaint}
+            placeholderTextColor={colors.textFaint}
           />
+          {nameError ? <Text style={[s.errText, { color: colors.danger }]}>{nameError}</Text> : null}
         </View>
 
+        {/* Due date */}
         <View>
-          <Text style={s.label}>Due date (YYYY-MM-DD)</Text>
+          <Text style={[s.label, { color: colors.textMuted }]}>Due date</Text>
           <TextInput
-            style={[s.input, dueDateError ? s.inputError : null]}
+            style={[inputStyle, dueDateError ? { borderColor: colors.danger } : null]}
             value={dueDate}
             onChangeText={v => { setDueDate(v); setDueDateError('') }}
-            placeholder="2025-12-31"
-            placeholderTextColor={theme.textFaint}
+            placeholder="YYYY-MM-DD"
+            placeholderTextColor={colors.textFaint}
             keyboardType="numeric"
           />
-          {dueDateError ? <Text style={s.errorText}>{dueDateError}</Text> : null}
+          {dueDateError ? <Text style={[s.errText, { color: colors.danger }]}>{dueDateError}</Text> : null}
         </View>
 
+        {/* Priority */}
         <View>
-          <Text style={s.label}>Priority</Text>
+          <Text style={[s.label, { color: colors.textMuted }]}>Priority</Text>
           <View style={s.pills}>
             {PRIORITIES.map(p => (
               <TouchableOpacity
                 key={p}
-                style={[s.pill, priority === p && s.pillActive]}
+                style={[s.pill, {
+                  backgroundColor: priority === p ? colors.accent : colors.surfaceEl,
+                  borderColor: priority === p ? colors.accent : colors.border,
+                }]}
                 onPress={() => setPriority(p)}
               >
-                <Text style={[s.pillText, priority === p && s.pillTextActive]}>{p}</Text>
+                <Text style={[s.pillText, { color: priority === p ? colors.accentFg : colors.textMuted }]}>
+                  {p}
+                </Text>
               </TouchableOpacity>
             ))}
           </View>
         </View>
 
+        {/* Category */}
         <View>
-          <Text style={s.label}>Category</Text>
-          <Picker
-            selectedValue={category}
-            onValueChange={setCategory}
-            style={s.picker}
-          >
-            {CATEGORIES.map(c => <Picker.Item key={c} label={c} value={c} />)}
-          </Picker>
+          <Text style={[s.label, { color: colors.textMuted }]}>Category</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.pillsScroll}>
+            {CATEGORIES.map(c => (
+              <TouchableOpacity
+                key={c}
+                style={[s.pill, {
+                  backgroundColor: category === c ? colors.accent : colors.surfaceEl,
+                  borderColor: category === c ? colors.accent : colors.border,
+                }]}
+                onPress={() => setCategory(c)}
+              >
+                <Text style={[s.pillText, { color: category === c ? colors.accentFg : colors.textMuted }]}>
+                  {c}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
         </View>
 
+        {/* Note */}
         <View>
-          <Text style={s.label}>Note</Text>
+          <Text style={[s.label, { color: colors.textMuted }]}>Note</Text>
           <TextInput
-            style={s.input}
+            style={inputStyle}
             value={note}
             onChangeText={setNote}
             placeholder="Optional"
-            placeholderTextColor={theme.textFaint}
+            placeholderTextColor={colors.textFaint}
           />
         </View>
       </View>
 
-      {nameError ? <Text style={s.nameErrorText}>{nameError}</Text> : null}
       <View style={s.actions}>
-        <TouchableOpacity style={s.btnSecondary} onPress={onCancel}>
-          <Text style={s.btnSecondaryText}>Cancel</Text>
+        <TouchableOpacity
+          style={[s.btnSecondary, { backgroundColor: colors.surfaceEl, borderColor: colors.border }]}
+          onPress={onCancel}
+        >
+          <Text style={[s.btnSecondaryText, { color: colors.textMuted }]}>Cancel</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={s.btnPrimary} onPress={submit}>
-          <Text style={s.btnPrimaryText}>Add Task</Text>
+        <TouchableOpacity
+          style={[s.btnPrimary, { backgroundColor: colors.accent }]}
+          onPress={submit}
+        >
+          <Text style={[s.btnPrimaryText, { color: colors.accentFg }]}>Add Task</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -125,11 +154,11 @@ export function AddTaskForm({ onSubmit, onCancel }: Props) {
 }
 
 const s = StyleSheet.create({
+  root: { gap: 0 },
   fields: { gap: theme.sp4 },
   label: {
     fontSize: theme.textXs,
     fontFamily: theme.fontBold,
-    color: theme.text,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: theme.sp1,
@@ -138,73 +167,48 @@ const s = StyleSheet.create({
     paddingHorizontal: theme.sp3,
     paddingVertical: theme.sp3,
     borderWidth: 1,
-    borderColor: theme.border,
     borderRadius: theme.radiusMd,
     fontSize: theme.textSm,
     fontFamily: theme.fontRegular,
-    backgroundColor: theme.surfaceEl,
-    color: theme.text,
   },
-  inputError: {
-    borderColor: theme.danger,
-  },
-  errorText: {
+  errText: {
     fontSize: theme.textXs,
     fontFamily: theme.fontMedium,
-    color: theme.danger,
     marginTop: theme.sp1,
   },
-  picker: {
-    backgroundColor: theme.surfaceEl,
-    borderWidth: 1,
-    borderColor: theme.border,
-    borderRadius: theme.radiusMd,
-    height: 44,
-    color: theme.text,
-  },
   pills: { flexDirection: 'row', gap: theme.sp2 },
+  pillsScroll: { gap: theme.sp2 },
   pill: {
     flex: 1,
     paddingVertical: theme.sp2,
+    paddingHorizontal: theme.sp3,
     borderRadius: theme.radiusMd,
-    backgroundColor: theme.surfaceEl,
     borderWidth: 1,
-    borderColor: theme.border,
     alignItems: 'center',
   },
-  pillActive: { backgroundColor: theme.accent, borderColor: theme.accent },
-  pillText: { fontSize: theme.textXs, fontFamily: theme.fontBold, color: theme.textMuted },
-  pillTextActive: { color: theme.accentFg },
-  nameErrorText: { color: theme.danger, fontSize: 12, fontFamily: theme.fontMedium, marginBottom: 8 },
+  pillText: {
+    fontSize: theme.textXs,
+    fontFamily: theme.fontBold,
+  },
   actions: { flexDirection: 'row', gap: theme.sp3, marginTop: theme.sp6 },
   btnPrimary: {
     flex: 1,
     paddingVertical: 14,
     borderRadius: 14,
-    backgroundColor: theme.accent,
     alignItems: 'center',
     ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.12,
-        shadowRadius: 4,
-      },
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 4 },
       android: { elevation: 3 },
-      web: {
-        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-      },
+      web: { boxShadow: '0 2px 8px rgba(0,0,0,0.15)' },
     }),
   },
-  btnPrimaryText: { fontSize: 15, fontFamily: theme.fontBold, color: theme.accentFg },
+  btnPrimaryText: { fontSize: 15, fontFamily: theme.fontBold },
   btnSecondary: {
     paddingVertical: 14,
     paddingHorizontal: theme.sp5,
     borderRadius: 14,
-    backgroundColor: theme.surfaceEl,
     borderWidth: 1,
-    borderColor: theme.border,
     alignItems: 'center',
   },
-  btnSecondaryText: { fontSize: theme.textSm, fontFamily: theme.fontBold, color: theme.textMuted },
+  btnSecondaryText: { fontSize: theme.textSm, fontFamily: theme.fontBold },
 })

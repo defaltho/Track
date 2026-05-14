@@ -100,6 +100,8 @@ interface DataStore {
   removeTask: (id: string) => void
 
   updateSettings: (patch: Partial<Settings>) => void
+  clearAll: () => void
+  importData: (data: Partial<{ subscriptions: Subscription[]; apps: AppEntry[]; events: EventEntry[]; tasks: Task[] }>) => void
 }
 
 const defaultSettings: Settings = {
@@ -194,6 +196,17 @@ export const useDataStore = create<DataStore>()(
 
       updateSettings: (patch) =>
         set((s) => ({ settings: { ...s.settings, ...patch } })),
+
+      clearAll: () =>
+        set(() => ({ subscriptions: [], apps: [], events: [], tasks: [] })),
+
+      importData: (data) =>
+        set((s) => ({
+          subscriptions: data.subscriptions ?? s.subscriptions,
+          apps: data.apps ?? s.apps,
+          events: data.events ?? s.events,
+          tasks: data.tasks ?? s.tasks,
+        })),
     }),
     {
       name: 'track-data',

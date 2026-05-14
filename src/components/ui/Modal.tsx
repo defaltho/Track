@@ -9,8 +9,8 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
-  Dimensions,
 } from 'react-native'
+import { useTheme } from '../../context/ThemeContext'
 import { theme } from '../../theme'
 
 interface Props {
@@ -21,6 +21,8 @@ interface Props {
 }
 
 export function Modal({ open, title, onClose, children }: Props) {
+  const { colors } = useTheme()
+
   return (
     <RNModal visible={open} transparent animationType="slide" onRequestClose={onClose}>
       <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={onClose}>
@@ -29,17 +31,26 @@ export function Modal({ open, title, onClose, children }: Props) {
           style={s.kav}
         >
           <Pressable onStartShouldSetResponder={() => true}>
-            <View style={s.modal}>
+            <View style={[s.sheet, { backgroundColor: colors.surface }]}>
+              {/* Drag handle */}
+              <View style={s.handleWrap}>
+                <View style={[s.handle, { backgroundColor: colors.borderStrong }]} />
+              </View>
+
+              {/* Header */}
               <View style={s.header}>
-                <Text style={s.title}>{title}</Text>
-                <TouchableOpacity style={s.closeBtn} onPress={onClose}>
-                  <Text style={s.closeText}>×</Text>
+                <Text style={[s.title, { color: colors.text }]}>{title}</Text>
+                <TouchableOpacity style={[s.closeBtn, { backgroundColor: colors.surfaceEl }]} onPress={onClose}>
+                  <Text style={[s.closeX, { color: colors.textMuted }]}>×</Text>
                 </TouchableOpacity>
               </View>
+
+              {/* Content */}
               <ScrollView
                 style={s.body}
                 contentContainerStyle={s.bodyContent}
                 keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
               >
                 {children}
               </ScrollView>
@@ -54,52 +65,65 @@ export function Modal({ open, title, onClose, children }: Props) {
 const s = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.55)',
     justifyContent: 'flex-end',
     alignItems: 'center',
   },
   kav: {
     width: '100%',
     maxWidth: 520,
-    flex: 1,
+    justifyContent: 'flex-end',
   },
-  modal: {
-    backgroundColor: theme.surface,
-    borderTopLeftRadius: theme.radiusXl,
-    borderTopRightRadius: theme.radiusXl,
-    maxHeight: Dimensions.get('window').height * 0.88,
+  sheet: {
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    maxHeight: '90%' as any,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.12, shadowRadius: 24 },
+      android: { elevation: 24 },
+      web: { boxShadow: '0 -4px 40px rgba(0,0,0,0.15)' },
+    }),
+  },
+  handleWrap: {
+    alignItems: 'center',
+    paddingTop: 14,
+    paddingBottom: 4,
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: theme.sp5,
+    paddingHorizontal: theme.sp5,
+    paddingTop: theme.sp3,
     paddingBottom: theme.sp4,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.border,
   },
   title: {
-    fontSize: theme.textLg,
-    fontFamily: theme.fontBold,
-    color: theme.text,
+    fontSize: 22,
+    fontFamily: theme.fontBlack,
+    letterSpacing: -0.5,
   },
   closeBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: theme.surfaceEl,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  closeText: {
-    fontSize: 18,
-    color: theme.textMuted,
-    lineHeight: 20,
+  closeX: {
+    fontSize: 20,
+    lineHeight: 22,
+    fontFamily: theme.fontLight,
   },
   body: {
-    maxHeight: 500,
+    maxHeight: '80%' as any,
   },
   bodyContent: {
-    padding: theme.sp5,
+    paddingHorizontal: theme.sp5,
+    paddingBottom: 40,
   },
 })

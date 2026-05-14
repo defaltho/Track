@@ -16,11 +16,13 @@ import {
 } from 'date-fns'
 import { useDataStore } from '../stores/data'
 import { Modal } from '../components/ui/Modal'
+import { useTheme } from '../context/ThemeContext'
 import { theme } from '../theme'
 
 const WEEKDAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']
 
 export function Calendar() {
+  const { colors } = useTheme()
   const store = useDataStore()
   const [current, setCurrent] = useState(new Date())
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
@@ -62,33 +64,42 @@ export function Calendar() {
     [store.subscriptions, selectedDay]
   )
 
-  function prev() {
-    setCurrent(d => new Date(d.getFullYear(), d.getMonth() - 1, 1))
-  }
-  function next() {
-    setCurrent(d => new Date(d.getFullYear(), d.getMonth() + 1, 1))
-  }
+  function prev() { setCurrent(d => new Date(d.getFullYear(), d.getMonth() - 1, 1)) }
+  function next() { setCurrent(d => new Date(d.getFullYear(), d.getMonth() + 1, 1)) }
 
   const CELL_W = `${100 / 7}%` as any
 
   return (
-    <ScrollView style={s.page} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
-      <Text style={s.pageTitle}>Calendar</Text>
-      <View style={s.card}>
+    <ScrollView
+      style={[s.page, { backgroundColor: colors.bg }]}
+      contentContainerStyle={s.content}
+      showsVerticalScrollIndicator={false}
+    >
+      <Text style={[s.pageTitle, { color: colors.text }]}>Calendar</Text>
+
+      <View style={[s.card, { backgroundColor: colors.surface }]}>
         <View style={s.calHeader}>
-          <TouchableOpacity style={s.navBtn} onPress={prev} accessibilityLabel="Previous month" accessibilityRole="button">
-            <Text style={s.navText}>‹</Text>
+          <TouchableOpacity
+            style={[s.navBtn, { backgroundColor: colors.surfaceEl }]}
+            onPress={prev}
+            accessibilityLabel="Previous month"
+          >
+            <Text style={[s.navText, { color: colors.text }]}>‹</Text>
           </TouchableOpacity>
-          <Text style={s.monthLabel}>{label}</Text>
-          <TouchableOpacity style={s.navBtn} onPress={next} accessibilityLabel="Next month" accessibilityRole="button">
-            <Text style={s.navText}>›</Text>
+          <Text style={[s.monthLabel, { color: colors.text }]}>{label}</Text>
+          <TouchableOpacity
+            style={[s.navBtn, { backgroundColor: colors.surfaceEl }]}
+            onPress={next}
+            accessibilityLabel="Next month"
+          >
+            <Text style={[s.navText, { color: colors.text }]}>›</Text>
           </TouchableOpacity>
         </View>
 
         <View style={s.calGrid}>
           {WEEKDAYS.map(d => (
             <View key={d} style={[s.cell, { width: CELL_W }]}>
-              <Text style={s.weekday}>{d}</Text>
+              <Text style={[s.weekday, { color: colors.textMuted }]}>{d}</Text>
             </View>
           ))}
 
@@ -107,14 +118,14 @@ export function Calendar() {
                 style={[s.dayCell, { width: CELL_W }]}
                 onPress={() => setSelectedDay(str)}
               >
-                <View style={[s.dayNum, isToday && s.dayNumToday]}>
-                  <Text style={[s.dayNumText, isToday && s.dayNumTextToday]}>
+                <View style={[s.dayNum, isToday && { backgroundColor: colors.accent }]}>
+                  <Text style={[s.dayNumText, { color: isToday ? colors.accentFg : colors.text }]}>
                     {format(day, 'd')}
                   </Text>
                 </View>
                 <View style={s.dayDots}>
-                  {hasEv && <View style={[s.dayDot, s.dayDotEvent]} />}
-                  {hasSub && <View style={[s.dayDot, s.dayDotSub]} />}
+                  {hasEv && <View style={[s.dayDot, { backgroundColor: colors.accent }]} />}
+                  {hasSub && <View style={[s.dayDot, { backgroundColor: colors.textMuted }]} />}
                 </View>
               </TouchableOpacity>
             )
@@ -123,23 +134,23 @@ export function Calendar() {
       </View>
 
       {upcoming.length > 0 ? (
-        <View style={s.card}>
+        <View style={[s.card, { backgroundColor: colors.surface }]}>
           <View style={s.sectionRow}>
-            <Text style={s.sectionTitle}>This month</Text>
-            <View style={s.countBadge}>
-              <Text style={s.countText}>{upcoming.length}</Text>
+            <Text style={[s.sectionTitle, { color: colors.text }]}>This month</Text>
+            <View style={[s.countBadge, { backgroundColor: colors.accent }]}>
+              <Text style={[s.countText, { color: colors.accentFg }]}>{upcoming.length}</Text>
             </View>
           </View>
           {upcoming.map((ev: any) => (
-            <View key={ev.id} style={s.eventItem}>
-              <Text style={s.eventDate}>{format(parseISO(ev.date), 'd MMM')}</Text>
-              <Text style={s.eventName}>{ev.emoji ?? '•'} {ev.name}</Text>
+            <View key={ev.id} style={[s.eventItem, { borderBottomColor: colors.border }]}>
+              <Text style={[s.eventDate, { color: colors.textMuted }]}>{format(parseISO(ev.date), 'd MMM')}</Text>
+              <Text style={[s.eventName, { color: colors.text }]}>{ev.emoji ?? '•'} {ev.name}</Text>
             </View>
           ))}
         </View>
       ) : (
-        <View style={[s.card, s.emptyCard]}>
-          <Text style={s.emptyText}>Sem cobranças este mês</Text>
+        <View style={[s.card, s.emptyCard, { backgroundColor: colors.surface }]}>
+          <Text style={[s.emptyText, { color: colors.textMuted }]}>No events this month</Text>
         </View>
       )}
 
@@ -151,22 +162,22 @@ export function Calendar() {
         {selectedDay && (
           <View>
             {dayEvents.length === 0 && daySubs.length === 0 && (
-              <Text style={s.dayEmpty}>Nothing on this day</Text>
+              <Text style={[s.dayEmpty, { color: colors.textMuted }]}>Nothing on this day</Text>
             )}
             {dayEvents.map((ev: any) => (
-              <View key={ev.id} style={s.dayRow}>
-                <View style={[s.dayTag, s.dayTagEvent]}>
-                  <Text style={[s.dayTagText, { color: theme.accentFg }]}>Event</Text>
+              <View key={ev.id} style={[s.dayRow, { borderBottomColor: colors.border }]}>
+                <View style={[s.dayTag, { backgroundColor: colors.accent }]}>
+                  <Text style={[s.dayTagText, { color: colors.accentFg }]}>Event</Text>
                 </View>
-                <Text style={s.dayName}>{ev.emoji ?? '📅'} {ev.name}</Text>
+                <Text style={[s.dayName, { color: colors.text }]}>{ev.emoji ?? '📅'} {ev.name}</Text>
               </View>
             ))}
             {daySubs.map((sub: any) => (
-              <View key={sub.id} style={s.dayRow}>
-                <View style={s.dayTag}>
-                  <Text style={s.dayTagText}>Charge</Text>
+              <View key={sub.id} style={[s.dayRow, { borderBottomColor: colors.border }]}>
+                <View style={[s.dayTag, { backgroundColor: colors.surfaceEl }]}>
+                  <Text style={[s.dayTagText, { color: colors.textMuted }]}>Charge</Text>
                 </View>
-                <Text style={s.dayName}>{sub.emoji ?? '💳'} {sub.name} — {sub.currency} {sub.price}</Text>
+                <Text style={[s.dayName, { color: colors.text }]}>{sub.emoji ?? '💳'} {sub.name} — {sub.currency} {sub.price}</Text>
               </View>
             ))}
           </View>
@@ -177,48 +188,41 @@ export function Calendar() {
 }
 
 const s = StyleSheet.create({
-  page: { flex: 1, backgroundColor: theme.bg },
+  page: { flex: 1 },
   content: { padding: theme.sp4, gap: theme.sp4, paddingBottom: 110 },
 
   pageTitle: {
     fontSize: 34,
     fontFamily: theme.fontBlack,
-    color: theme.text,
     letterSpacing: -1,
     marginBottom: theme.sp4,
   },
 
   card: {
-    backgroundColor: theme.surface,
     borderRadius: theme.radiusXl,
-    borderWidth: 0,
     padding: theme.sp5,
     ...theme.shadow,
   },
 
   calHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: theme.sp5 },
-  monthLabel: { fontSize: theme.textLg, fontFamily: theme.fontBold, color: theme.text },
-  navBtn: { padding: theme.sp2, borderRadius: theme.radiusFull, backgroundColor: theme.surfaceEl },
-  navText: { fontSize: 22, color: theme.text, fontFamily: theme.fontBold },
+  monthLabel: { fontSize: theme.textLg, fontFamily: theme.fontBold },
+  navBtn: { padding: theme.sp2, borderRadius: theme.radiusFull },
+  navText: { fontSize: 22, fontFamily: theme.fontBold },
 
   calGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   cell: { alignItems: 'center', paddingBottom: theme.sp2 },
-  weekday: { fontSize: theme.textXs, color: theme.textMuted, fontFamily: theme.fontMedium },
+  weekday: { fontSize: theme.textXs, fontFamily: theme.fontMedium },
 
   dayCell: { alignItems: 'center', paddingVertical: theme.sp2, minHeight: 38 },
   dayNum: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
-  dayNumToday: { backgroundColor: theme.accent },
-  dayNumText: { fontSize: theme.textXs, fontFamily: theme.fontMedium, color: theme.text },
-  dayNumTextToday: { color: theme.accentFg },
+  dayNumText: { fontSize: theme.textXs, fontFamily: theme.fontMedium },
   dayDots: { flexDirection: 'row', gap: 2, minHeight: 6 },
   dayDot: { width: 5, height: 5, borderRadius: 3 },
-  dayDotEvent: { backgroundColor: theme.accent },
-  dayDotSub: { backgroundColor: theme.textMuted },
 
   sectionRow: { flexDirection: 'row', alignItems: 'center', gap: theme.sp2, marginBottom: theme.sp4 },
-  sectionTitle: { fontSize: theme.textSm, fontFamily: theme.fontBold, color: theme.text },
-  countBadge: { backgroundColor: theme.accent, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
-  countText: { fontSize: theme.textXs, color: theme.accentFg, fontFamily: theme.fontBold },
+  sectionTitle: { fontSize: theme.textSm, fontFamily: theme.fontBold },
+  countBadge: { borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
+  countText: { fontSize: theme.textXs, fontFamily: theme.fontBold },
 
   eventItem: {
     flexDirection: 'row',
@@ -226,29 +230,25 @@ const s = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: theme.sp2,
     borderBottomWidth: 1,
-    borderBottomColor: theme.border,
   },
-  eventDate: { fontSize: theme.textXs, color: theme.textMuted, width: 40, fontFamily: theme.fontRegular },
-  eventName: { fontSize: theme.textSm, fontFamily: theme.fontMedium, color: theme.text },
+  eventDate: { fontSize: theme.textXs, width: 40, fontFamily: theme.fontRegular },
+  eventName: { fontSize: theme.textSm, fontFamily: theme.fontMedium },
 
-  dayEmpty: { fontSize: theme.textSm, color: theme.textMuted, paddingVertical: theme.sp2, fontFamily: theme.fontRegular },
+  dayEmpty: { fontSize: theme.textSm, paddingVertical: theme.sp2, fontFamily: theme.fontRegular },
   emptyCard: { alignItems: 'center', padding: theme.sp8 },
-  emptyText: { fontSize: theme.textSm, color: theme.textMuted, fontFamily: theme.fontRegular },
+  emptyText: { fontSize: theme.textSm, fontFamily: theme.fontRegular },
   dayRow: {
     flexDirection: 'row',
     gap: theme.sp3,
     alignItems: 'center',
     paddingVertical: theme.sp3,
     borderBottomWidth: 1,
-    borderBottomColor: theme.border,
   },
   dayTag: {
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
-    backgroundColor: theme.surfaceEl,
   },
-  dayTagEvent: { backgroundColor: theme.accent },
-  dayTagText: { fontSize: theme.textXs, fontFamily: theme.fontBold, color: theme.textMuted, textTransform: 'uppercase' },
-  dayName: { fontSize: theme.textSm, fontFamily: theme.fontMedium, color: theme.text, flex: 1 },
+  dayTagText: { fontSize: theme.textXs, fontFamily: theme.fontBold, textTransform: 'uppercase' },
+  dayName: { fontSize: theme.textSm, fontFamily: theme.fontMedium, flex: 1 },
 })

@@ -7,10 +7,9 @@ import {
   Pressable,
   StyleSheet,
 } from 'react-native'
+import { MotiView } from 'moti'
 import Animated, {
-  FadeInDown,
   FadeInRight,
-  FadeInUp,
   ZoomIn,
   useSharedValue,
   useAnimatedStyle,
@@ -27,26 +26,18 @@ import {
 } from 'date-fns'
 import { useDataStore } from '../stores/data'
 import { useToastStore } from '../stores/toasts'
+import { useTheme } from '../context/ThemeContext'
 import { totalMonthlySpend, coffees } from '../utils/calculations'
 import { Modal } from '../components/ui/Modal'
+import { DotGrid } from '../components/ui/DotGrid'
 import { AddTrackForm } from '../components/forms/AddTrackForm'
 import { AddTaskForm } from '../components/forms/AddTaskForm'
-import { theme, CURRENCY_SYMBOL } from '../theme'
+import { theme, CURRENCY_SYMBOL, Colors } from '../theme'
 
-// ── Press-scale wrapper ───────────────────────────────────────────────
-function PressCard({
-  style,
-  onPress,
-  children,
-}: {
-  style?: any
-  onPress?: () => void
-  children: React.ReactNode
-}) {
+// ── Press-scale wrapper ────────────────────────────────────────────────
+function PressCard({ style, onPress, children }: { style?: any; onPress?: () => void; children: React.ReactNode }) {
   const scale = useSharedValue(1)
-  const animStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }))
+  const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }))
   return (
     <Pressable
       onPressIn={() => { scale.value = withSpring(0.97, { damping: 16, stiffness: 380 }) }}
@@ -58,33 +49,32 @@ function PressCard({
   )
 }
 
-// ── Ring badge ────────────────────────────────────────────────────────
-function RingBadge({ value, max = 20, size = 56 }: { value: number; max?: number; size?: number }) {
+// ── Ring badge ─────────────────────────────────────────────────────────
+function RingBadge({ value, max = 20, size = 56, colors }: { value: number; max?: number; size?: number; colors: Colors }) {
   const stroke = 3
   const r = (size - stroke) / 2
   const circ = 2 * Math.PI * r
   const pct = max > 0 ? Math.min(value / max, 1) : 0
   const dash = circ * pct
+  const isDark = colors.bg !== '#F2F1EE'
+  const trackColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'
+  const fillColor = colors.accent
+
   return (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
       <Svg width={size} height={size} style={{ position: 'absolute', transform: [{ rotate: '-90deg' }] }}>
-        <SvgCircle cx={size / 2} cy={size / 2} r={r}
-          stroke="rgba(0,0,0,0.08)" strokeWidth={stroke} fill="none" />
+        <SvgCircle cx={size / 2} cy={size / 2} r={r} stroke={trackColor} strokeWidth={stroke} fill="none" />
         {pct > 0 && (
-          <SvgCircle cx={size / 2} cy={size / 2} r={r}
-            stroke="rgba(0,0,0,0.7)" strokeWidth={stroke} fill="none"
+          <SvgCircle cx={size / 2} cy={size / 2} r={r} stroke={fillColor} strokeWidth={stroke} fill="none"
             strokeDasharray={`${dash} ${circ - dash}`} strokeLinecap="round" />
         )}
       </Svg>
-      <Text style={rb.num}>{value}</Text>
+      <Text style={{ fontSize: 20, fontFamily: theme.fontMonoBold, color: colors.text, letterSpacing: -0.5 }}>{value}</Text>
     </View>
   )
 }
-const rb = StyleSheet.create({
-  num: { fontSize: 20, fontFamily: 'Roboto_700Bold', color: '#111111', letterSpacing: -0.5 },
-})
 
-// ── Activity heatmap ──────────────────────────────────────────────────
+// ── Activity heatmap ───────────────────────────────────────────────────
 const CELL = 9
 const GAP = 2
 const WEEKS = 26
@@ -114,14 +104,8 @@ function buildHeatmap(subs: any[], events: any[]) {
   return cols
 }
 
-function dotColor(count: number) {
-  if (count === 0) return 'rgba(0,0,0,0.07)'
-  if (count === 1) return 'rgba(0,0,0,0.28)'
-  if (count === 2) return 'rgba(0,0,0,0.55)'
-  return '#111111'
-}
-
-function ActivityHeatmap({ subs, events }: { subs: any[]; events: any[] }) {
+function ActivityHeatmap({ subs, events, colors }: { subs: any[]; events: any[]; colors: Colors }) {
+  const isDark = colors.bg !== '#F2F1EE'
   const cols = useMemo(() => buildHeatmap(subs, events), [subs, events])
   const monthLabels = useMemo(() => {
     const labels: { col: number; label: string }[] = []
@@ -129,20 +113,33 @@ function ActivityHeatmap({ subs, events }: { subs: any[]; events: any[] }) {
     cols.forEach((week, ci) => {
       if (!week[0]?.date) return
       const m = getMonth(parseISO(week[0].date))
-      if (m !== last) {
-        labels.push({ col: ci, label: format(parseISO(week[0].date), 'MMM') })
-        last = m
-      }
+      if (m !== last) { labels.push({ col: ci, label: format(parseISO(week[0].date), 'MMM') }); last = m }
     })
     return labels
   }, [cols])
   const totalW = cols.length * (CELL + GAP) - GAP
+
+  function dotColor(count: number) {
+    if (isDark) {
+      if (count === 0) return 'rgba(255,255,255,0.07)'
+      if (count === 1) return 'rgba(255,255,255,0.28)'
+      if (count === 2) return colors.accentRed + '88'
+      return colors.accentRed
+    }
+    if (count === 0) return 'rgba(0,0,0,0.07)'
+    if (count === 1) return 'rgba(0,0,0,0.28)'
+    if (count === 2) return 'rgba(0,0,0,0.55)'
+    return '#111111'
+  }
+
+  const monthLabelColor = isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.35)'
+
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
       <View>
         <View style={{ height: 16, width: totalW, marginBottom: 5 }}>
           {monthLabels.map((ml, i) => (
-            <Text key={i} style={[hm.monthLabel, { position: 'absolute', left: ml.col * (CELL + GAP) }]}>
+            <Text key={i} style={[hm.monthLabel, { position: 'absolute', left: ml.col * (CELL + GAP), color: monthLabelColor }]}>
               {ml.label}
             </Text>
           ))}
@@ -162,32 +159,19 @@ function ActivityHeatmap({ subs, events }: { subs: any[]; events: any[] }) {
 }
 const hm = StyleSheet.create({
   cell: { width: CELL, height: CELL, borderRadius: 2 },
-  monthLabel: { fontSize: 9, fontFamily: 'Roboto_400Regular', color: 'rgba(0,0,0,0.35)', letterSpacing: 0.3 },
+  monthLabel: { fontSize: 9, fontFamily: theme.fontMono, letterSpacing: 0.3 },
 })
 
-// ── Subscription row ──────────────────────────────────────────────────
-function SubRow({
-  sub,
-  symbol,
-  diff,
-  onRemove,
-  delay,
-}: {
-  sub: any
-  symbol: string
-  diff: number
-  onRemove: () => void
-  delay: number
-}) {
+// ── Subscription row ───────────────────────────────────────────────────
+function SubRow({ sub, symbol, diff, onRemove, delay, colors }: { sub: any; symbol: string; diff: number; onRemove: () => void; delay: number; colors: Colors }) {
   const scale = useSharedValue(1)
   const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }))
   const dueLabel = diff === 0 ? 'Today' : diff === 1 ? 'Tomorrow' : `In ${diff}d`
-  const dueColor = diff === 0 ? theme.danger : diff <= 2 ? theme.warning : theme.textMuted
+  const dueColor = diff === 0 ? colors.accentRed : diff <= 2 ? colors.warning : colors.textMuted
+  const dueBg = diff === 0 ? colors.accentRed + '18' : colors.surfaceEl
 
   return (
-    <Animated.View
-      entering={FadeInRight.delay(delay).springify().damping(20).stiffness(220)}
-    >
+    <Animated.View entering={FadeInRight.delay(delay).springify().damping(20).stiffness(220)}>
       <Pressable
         onPressIn={() => { scale.value = withSpring(0.98, { damping: 16, stiffness: 380 }) }}
         onPressOut={() => { scale.value = withSpring(1, { damping: 16, stiffness: 380 }) }}
@@ -195,26 +179,26 @@ function SubRow({
         delayLongPress={500}
         accessibilityRole="button"
       >
-        <Animated.View style={[sr.row, animStyle]}>
-          <View style={sr.badge}>
+        <Animated.View style={[sr.row, { borderBottomColor: colors.border }, animStyle]}>
+          <View style={[sr.badge, { backgroundColor: colors.surfaceEl }]}>
             <Text style={sr.emoji}>{sub.emoji ?? '💳'}</Text>
           </View>
           <View style={sr.body}>
-            <Text style={sr.name} numberOfLines={1}>{sub.name}</Text>
+            <Text style={[sr.name, { color: colors.text }]} numberOfLines={1}>{sub.name}</Text>
             <View style={sr.metaRow}>
-              <View style={[sr.duePill, { backgroundColor: diff === 0 ? 'rgba(220,38,38,0.1)' : 'rgba(0,0,0,0.05)' }]}>
+              <View style={[sr.duePill, { backgroundColor: dueBg }]}>
                 <Text style={[sr.dueText, { color: dueColor }]}>{dueLabel}</Text>
               </View>
-              <Text style={sr.category}>{sub.category ?? ''}</Text>
+              <Text style={[sr.category, { color: colors.textFaint }]}>{sub.category ?? ''}</Text>
             </View>
           </View>
           <View style={sr.right}>
-            <Text style={sr.price}>{symbol}{sub.price}</Text>
-            <Text style={sr.cycle}>{sub.billingCycle ?? 'mo'}</Text>
+            <Text style={[sr.price, { color: colors.text }]}>{symbol}{sub.price}</Text>
+            <Text style={[sr.cycle, { color: colors.textMuted }]}>{sub.billingCycle ?? 'mo'}</Text>
           </View>
-          <TouchableOpacity style={sr.removeBtn} onPress={onRemove} hitSlop={8}>
-            <View style={sr.removeLine} />
-            <View style={[sr.removeLine, { transform: [{ rotate: '90deg' }], position: 'absolute' }]} />
+          <TouchableOpacity style={[sr.removeBtn, { backgroundColor: colors.surfaceEl }]} onPress={onRemove} hitSlop={8}>
+            <View style={[sr.removeLine, { backgroundColor: colors.textMuted }]} />
+            <View style={[sr.removeLine, { backgroundColor: colors.textMuted, transform: [{ rotate: '90deg' }], position: 'absolute' }]} />
           </TouchableOpacity>
         </Animated.View>
       </Pressable>
@@ -222,114 +206,59 @@ function SubRow({
   )
 }
 const sr = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.sp3,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.border,
-  },
-  badge: {
-    width: 44,
-    height: 44,
-    borderRadius: 13,
-    backgroundColor: theme.surfaceEl,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  row: { flexDirection: 'row', alignItems: 'center', gap: theme.sp3, paddingVertical: 14, borderBottomWidth: 1 },
+  badge: { width: 44, height: 44, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   emoji: { fontSize: 22 },
   body: { flex: 1, minWidth: 0, gap: 5 },
-  name: { fontSize: theme.textBase, fontFamily: theme.fontBold, color: theme.text, letterSpacing: -0.3 },
+  name: { fontSize: theme.textBase, fontFamily: theme.fontBold, letterSpacing: -0.3 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  duePill: {
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 5,
-  },
+  duePill: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 5 },
   dueText: { fontSize: 10, fontFamily: theme.fontBold, letterSpacing: 0.2 },
-  category: { fontSize: 10, fontFamily: theme.fontRegular, color: theme.textFaint },
+  category: { fontSize: 10, fontFamily: theme.fontRegular },
   right: { alignItems: 'flex-end', gap: 3 },
-  price: { fontSize: theme.textBase, fontFamily: theme.fontBlack, color: theme.text, letterSpacing: -0.5 },
-  cycle: { fontSize: 10, fontFamily: theme.fontRegular, color: theme.textMuted },
-  removeBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: theme.surfaceEl,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  removeLine: { width: 12, height: 1.5, backgroundColor: theme.textMuted, borderRadius: 1 },
+  price: { fontSize: theme.textBase, fontFamily: theme.fontMonoBold, letterSpacing: -0.5 },
+  cycle: { fontSize: 10, fontFamily: theme.fontMono },
+  removeBtn: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  removeLine: { width: 12, height: 1.5, borderRadius: 1 },
 })
 
-// ── Task row ──────────────────────────────────────────────────────────
-function TaskRow({ task, delay, onToggle, onRemove }: {
-  task: any; delay: number; onToggle: () => void; onRemove: () => void
-}) {
+// ── Task row ───────────────────────────────────────────────────────────
+function TaskRow({ task, delay, onToggle, onRemove, colors }: { task: any; delay: number; onToggle: () => void; onRemove: () => void; colors: Colors }) {
   return (
     <Animated.View
       entering={FadeInRight.delay(delay).springify().damping(20).stiffness(220)}
-      style={sr.row}
+      style={[sr.row, { borderBottomColor: colors.border }]}
     >
       <TouchableOpacity
-        style={[tr.checkbox, task.done && tr.checkboxDone]}
+        style={[tr.checkbox, { borderColor: colors.borderStrong, backgroundColor: colors.surfaceEl }, task.done && { backgroundColor: colors.accent, borderColor: colors.accent }]}
         onPress={onToggle}
         accessibilityRole="checkbox"
       >
         {task.done && (
-          <Animated.Text entering={ZoomIn.springify().damping(12).stiffness(300)} style={tr.checkmark}>
+          <Animated.Text entering={ZoomIn.springify().damping(12).stiffness(300)} style={[tr.checkmark, { color: colors.accentFg }]}>
             ✓
           </Animated.Text>
         )}
       </TouchableOpacity>
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={[sr.name, task.done && tr.done]}>{task.name}</Text>
-        {task.note ? <Text style={sr.category}>{task.note}</Text> : null}
+        <Text style={[sr.name, { color: colors.text }, task.done && { color: colors.textMuted, textDecorationLine: 'line-through' }]}>{task.name}</Text>
+        {task.note ? <Text style={[sr.category, { color: colors.textFaint }]}>{task.note}</Text> : null}
       </View>
-      <TouchableOpacity style={sr.removeBtn} onPress={onRemove}>
-        <View style={sr.removeLine} />
-        <View style={[sr.removeLine, { transform: [{ rotate: '90deg' }], position: 'absolute' }]} />
+      <TouchableOpacity style={[sr.removeBtn, { backgroundColor: colors.surfaceEl }]} onPress={onRemove}>
+        <View style={[sr.removeLine, { backgroundColor: colors.textMuted }]} />
+        <View style={[sr.removeLine, { backgroundColor: colors.textMuted, transform: [{ rotate: '90deg' }], position: 'absolute' }]} />
       </TouchableOpacity>
     </Animated.View>
   )
 }
 const tr = StyleSheet.create({
-  checkbox: {
-    width: 22, height: 22, borderRadius: 7,
-    borderWidth: 1.5, borderColor: theme.borderStrong,
-    backgroundColor: theme.surfaceEl,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  checkboxDone: { backgroundColor: theme.accent, borderColor: theme.accent },
-  checkmark: { fontSize: 12, color: theme.accentFg, fontFamily: theme.fontBold },
-  done: { color: theme.textMuted, textDecorationLine: 'line-through' },
+  checkbox: { width: 22, height: 22, borderRadius: 7, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  checkmark: { fontSize: 12, fontFamily: theme.fontBold },
 })
 
-// ── Adjust icon ───────────────────────────────────────────────────────
-function AdjustIcon() {
-  return (
-    <View style={adj.wrap}>
-      <View style={adj.bar} />
-      <View style={[adj.bar, adj.barMid]} />
-      <View style={adj.bar} />
-    </View>
-  )
-}
-const adj = StyleSheet.create({
-  wrap: { gap: 3, alignItems: 'center', justifyContent: 'center' },
-  bar: { width: 14, height: 1.5, backgroundColor: 'rgba(0,0,0,0.35)', borderRadius: 1 },
-  barMid: { width: 10 },
-})
-
-// ── Entering helpers ──────────────────────────────────────────────────
-const fadeDown = (delay = 0) =>
-  FadeInDown.delay(delay).springify().damping(20).stiffness(210)
-const fadeUp = (delay = 0) =>
-  FadeInUp.delay(delay).springify().damping(20).stiffness(210)
-
-// ── Dashboard ─────────────────────────────────────────────────────────
+// ── Dashboard ──────────────────────────────────────────────────────────
 export function Dashboard() {
+  const { colors, themeKey } = useTheme()
   const store = useDataStore()
   const toast = useToastStore()
 
@@ -389,119 +318,150 @@ export function Dashboard() {
   }
 
   const hasItems = dueSubs.length > 0 || todayTasks.length > 0
+  const isNothing = themeKey === 'nothing'
+  const dotColor = isNothing ? colors.accentRed : colors.text
 
   return (
-    <ScrollView style={s.page} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
+    <ScrollView style={[s.page, { backgroundColor: colors.bg }]} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
 
       {/* ── Header ── */}
-      <Animated.View entering={fadeDown(0)} style={s.header}>
-        <Text style={s.pageTitle}>Track</Text>
+      <MotiView
+        from={{ opacity: 0, translateY: -8 }}
+        animate={{ opacity: 1, translateY: 0 }}
+        transition={{ type: 'spring', damping: 20, stiffness: 200 }}
+        style={s.header}
+      >
+        <Text style={[s.pageTitle, { color: colors.text }]}>
+          {isNothing ? '⬡ Track' : 'Track'}
+        </Text>
         <View style={s.headerBtns}>
-          <PressCard style={s.iconBtn} onPress={() => setShowAddTask(true)}>
-            <View style={s.iconBtnLine} />
-            <View style={[s.iconBtnLine, { width: 10 }]} />
-            <View style={s.iconBtnLine} />
+          <PressCard style={[s.iconBtn, { backgroundColor: colors.surface }]} onPress={() => setShowAddTask(true)}>
+            <View style={{ width: 14, height: 1.5, backgroundColor: colors.text, borderRadius: 1 }} />
+            <View style={{ width: 10, height: 1.5, backgroundColor: colors.text, borderRadius: 1 }} />
+            <View style={{ width: 14, height: 1.5, backgroundColor: colors.text, borderRadius: 1 }} />
           </PressCard>
-          <PressCard style={s.iconBtn} onPress={() => setShowAddTrack(true)}>
-            <Text style={s.iconBtnPlus}>+</Text>
+          <PressCard style={[s.iconBtn, { backgroundColor: colors.surface }]} onPress={() => setShowAddTrack(true)}>
+            <Text style={[s.iconBtnPlus, { color: colors.text }]}>+</Text>
           </PressCard>
         </View>
-      </Animated.View>
+      </MotiView>
 
       {/* ── 2-col KPI cards ── */}
-      <Animated.View entering={fadeDown(55)} style={s.row2}>
-
-        <PressCard style={[s.card, s.kpiCard]}>
+      <MotiView
+        from={{ opacity: 0, translateY: 16 }}
+        animate={{ opacity: 1, translateY: 0 }}
+        transition={{ type: 'spring', damping: 20, stiffness: 200, delay: 60 }}
+        style={s.row2}
+      >
+        <PressCard style={[s.card, s.kpiCard, { backgroundColor: colors.surface }]}>
+          {isNothing && <DotGrid color={dotColor} opacity={0.08} />}
           <View style={s.kpiTopRow}>
-            <RingBadge value={activeSubs.length} max={Math.max(activeSubs.length + 4, 10)} />
-            <View style={s.adjustBtn}><AdjustIcon /></View>
+            <RingBadge value={activeSubs.length} max={Math.max(activeSubs.length + 4, 10)} colors={colors} />
+            <View style={[s.adjustBtn, { backgroundColor: colors.surfaceEl }]}>
+              <View style={{ gap: 3, alignItems: 'center' }}>
+                {[14, 10, 14].map((w, i) => (
+                  <View key={i} style={{ width: w, height: 1.5, backgroundColor: colors.text + '55', borderRadius: 1 }} />
+                ))}
+              </View>
+            </View>
           </View>
           <View style={s.kpiBottom}>
-            <Text style={s.kpiName}>Active</Text>
-            <Text style={s.kpiSub}>subscriptions</Text>
+            <Text style={[s.kpiName, { color: colors.text }]}>Active</Text>
+            <Text style={[s.kpiSub, { color: colors.textMuted }]}>subscriptions</Text>
           </View>
         </PressCard>
 
-        <PressCard style={[s.card, s.kpiCard]}>
+        <PressCard style={[s.card, s.kpiCard, { backgroundColor: colors.surface }]}>
+          {isNothing && <DotGrid color={dotColor} opacity={0.08} />}
           <View style={s.kpiTopRow}>
             <View style={s.spendBlock}>
-              <Text style={s.spendMain}>{monthly.toFixed(0)}</Text>
-              <Text style={s.spendUnit}>{symbol}</Text>
+              <Text style={[s.spendMain, { color: colors.text }]}>{monthly.toFixed(0)}</Text>
+              <Text style={[s.spendUnit, { color: colors.textMuted }]}>{symbol}</Text>
             </View>
-            <View style={s.adjustBtn}><AdjustIcon /></View>
+            <View style={[s.adjustBtn, { backgroundColor: colors.surfaceEl }]}>
+              <View style={{ gap: 3, alignItems: 'center' }}>
+                {[14, 10, 14].map((w, i) => (
+                  <View key={i} style={{ width: w, height: 1.5, backgroundColor: colors.text + '55', borderRadius: 1 }} />
+                ))}
+              </View>
+            </View>
           </View>
           <View style={s.kpiBottom}>
-            <Text style={s.kpiName}>Monthly</Text>
-            <Text style={s.kpiSub}>spend</Text>
+            <Text style={[s.kpiName, { color: colors.text }]}>Monthly</Text>
+            <Text style={[s.kpiSub, { color: colors.textMuted }]}>spend</Text>
           </View>
         </PressCard>
-
-      </Animated.View>
+      </MotiView>
 
       {/* ── Heatmap ── */}
-      <Animated.View entering={fadeDown(110)} style={s.card}>
-        <ActivityHeatmap subs={store.subscriptions} events={store.events} />
-      </Animated.View>
+      <MotiView
+        from={{ opacity: 0, translateY: 16 }}
+        animate={{ opacity: 1, translateY: 0 }}
+        transition={{ type: 'spring', damping: 20, stiffness: 200, delay: 120 }}
+        style={[s.card, { backgroundColor: colors.surface }]}
+      >
+        <ActivityHeatmap subs={store.subscriptions} events={store.events} colors={colors} />
+      </MotiView>
 
       {/* ── Due this week ── */}
-      <Animated.View entering={fadeDown(165)} style={s.card}>
+      <MotiView
+        from={{ opacity: 0, translateY: 16 }}
+        animate={{ opacity: 1, translateY: 0 }}
+        transition={{ type: 'spring', damping: 20, stiffness: 200, delay: 180 }}
+        style={[s.card, { backgroundColor: colors.surface }]}
+      >
         <View style={s.sectionHeader}>
-          <Text style={s.sectionTitle}>Due this week</Text>
-          <PressCard style={s.addPill} onPress={() => setShowAddTrack(true)}>
-            <Text style={s.addPillText}>+ Add</Text>
+          <Text style={[s.sectionTitle, { color: colors.text }]}>Due this week</Text>
+          <PressCard style={[s.addPill, { backgroundColor: colors.surfaceEl }]} onPress={() => setShowAddTrack(true)}>
+            <Text style={[s.addPillText, { color: colors.textMuted }]}>+ Add</Text>
           </PressCard>
         </View>
 
         {!hasItems && (
-          <Text style={s.empty}>Nothing due in the next 7 days</Text>
+          <Text style={[s.empty, { color: colors.textFaint }]}>Nothing due in the next 7 days</Text>
         )}
 
         {dueSubs.map((sub: any, idx: number) => {
           const diff = differenceInCalendarDays(parseISO(sub.nextChargeDate), now)
           return (
-            <SubRow
-              key={sub.id}
-              sub={sub}
-              symbol={symbol}
-              diff={diff}
-              delay={200 + idx * 40}
-              onRemove={() => setConfirm({ kind: 'sub', id: sub.id, name: sub.name })}
-            />
+            <SubRow key={sub.id} sub={sub} symbol={symbol} diff={diff} delay={200 + idx * 40} colors={colors}
+              onRemove={() => setConfirm({ kind: 'sub', id: sub.id, name: sub.name })} />
           )
         })}
 
         {todayTasks.map((task: any, idx: number) => (
-          <TaskRow
-            key={task.id}
-            task={task}
-            delay={300 + idx * 40}
+          <TaskRow key={task.id} task={task} delay={300 + idx * 40} colors={colors}
             onToggle={() => store.updateTask(task.id, { done: !task.done })}
-            onRemove={() => setConfirm({ kind: 'task', id: task.id, name: task.name })}
-          />
+            onRemove={() => setConfirm({ kind: 'task', id: task.id, name: task.name })} />
         ))}
-      </Animated.View>
+      </MotiView>
 
       {/* ── Stats row ── */}
-      <Animated.View entering={fadeUp(220)} style={s.row2}>
-
-        <PressCard style={[s.card, s.statCard]}>
-          <Text style={s.statNum}>{coffeeCount}</Text>
-          <Text style={s.statLabel}>coffees / mo</Text>
-          <Text style={s.statSub}>at {symbol}{store.settings.coffeePrice?.toFixed(2)}</Text>
+      <MotiView
+        from={{ opacity: 0, translateY: 16 }}
+        animate={{ opacity: 1, translateY: 0 }}
+        transition={{ type: 'spring', damping: 20, stiffness: 200, delay: 240 }}
+        style={s.row2}
+      >
+        <PressCard style={[s.card, s.statCard, { backgroundColor: colors.surface }]}>
+          {isNothing && <DotGrid color={dotColor} opacity={0.07} />}
+          <Text style={[s.statNum, { color: colors.text }]}>{coffeeCount}</Text>
+          <Text style={[s.statLabel, { color: colors.text }]}>coffees / mo</Text>
+          <Text style={[s.statSub, { color: colors.textMuted }]}>at {symbol}{store.settings.coffeePrice?.toFixed(2)}</Text>
         </PressCard>
 
-        <PressCard style={[s.card, s.statCard]}>
+        <PressCard style={[s.card, s.statCard, { backgroundColor: colors.surface }]}>
+          {isNothing && <DotGrid color={dotColor} opacity={0.07} />}
           <Animated.Text
             entering={ZoomIn.delay(280).springify().damping(12).stiffness(260)}
-            style={s.statNum}
+            style={[s.statNum, { color: colors.text }]}
           >
             {monthEvents.length}
           </Animated.Text>
-          <Text style={s.statLabel}>events</Text>
-          <Text style={s.statSub}>{format(now, 'MMMM')}</Text>
+          <Text style={[s.statLabel, { color: colors.text }]}>events</Text>
+          <Text style={[s.statSub, { color: colors.textMuted }]}>{format(now, 'MMMM')}</Text>
         </PressCard>
-
-      </Animated.View>
+      </MotiView>
 
       {/* ── Modals ── */}
       <Modal open={showAddTrack} title="Add Track" onClose={() => setShowAddTrack(false)}>
@@ -513,14 +473,14 @@ export function Dashboard() {
       <Modal open={confirm !== null} title="Remove?" onClose={() => setConfirm(null)}>
         {confirm && (
           <View>
-            <Text style={s.confirmText}>
+            <Text style={[s.confirmText, { color: colors.text }]}>
               Remove <Text style={{ fontFamily: theme.fontBold }}>{confirm.name}</Text>? This cannot be undone.
             </Text>
             <View style={s.confirmActions}>
-              <TouchableOpacity style={s.btnSecondary} onPress={() => setConfirm(null)}>
-                <Text style={s.btnSecondaryText}>Cancel</Text>
+              <TouchableOpacity style={[s.btnSecondary, { backgroundColor: colors.surfaceEl }]} onPress={() => setConfirm(null)}>
+                <Text style={[s.btnSecondaryText, { color: colors.textMuted }]}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={s.btnDanger} onPress={confirmRemove}>
+              <TouchableOpacity style={[s.btnDanger, { backgroundColor: colors.danger }]} onPress={confirmRemove}>
                 <Text style={s.btnDangerText}>Remove</Text>
               </TouchableOpacity>
             </View>
@@ -531,85 +491,49 @@ export function Dashboard() {
   )
 }
 
-// ── Styles ─────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  page: { flex: 1, backgroundColor: theme.bg },
+  page: { flex: 1 },
   content: { padding: theme.sp4, gap: theme.sp3, paddingBottom: 110 },
 
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 4,
-    paddingTop: theme.sp2,
-    marginBottom: theme.sp2,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: 4, paddingTop: theme.sp2, marginBottom: theme.sp2,
   },
-  pageTitle: {
-    fontSize: 34,
-    fontFamily: theme.fontBlack,
-    color: theme.text,
-    letterSpacing: -1,
-  },
+  pageTitle: { fontSize: 34, fontFamily: theme.fontBlack, letterSpacing: -1 },
   headerBtns: { flexDirection: 'row', gap: theme.sp2 },
-  iconBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: theme.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 3,
-  },
-  iconBtnLine: { width: 14, height: 1.5, backgroundColor: theme.text, borderRadius: 1 },
-  iconBtnPlus: { fontSize: 22, fontFamily: theme.fontLight, color: theme.text, lineHeight: 26 },
+  iconBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', gap: 3 },
+  iconBtnPlus: { fontSize: 22, fontFamily: theme.fontLight, lineHeight: 26 },
 
-  card: { backgroundColor: theme.surface, borderRadius: theme.radiusXl, padding: theme.sp5 },
+  card: { borderRadius: theme.radiusXl, padding: theme.sp5, overflow: 'hidden' },
   row2: { flexDirection: 'row', gap: theme.sp3 },
 
   kpiCard: { flex: 1, justifyContent: 'space-between', minHeight: 140 },
   kpiTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   kpiBottom: { marginTop: theme.sp3 },
-  kpiName: { fontSize: theme.textBase, fontFamily: theme.fontBold, color: theme.text, letterSpacing: -0.3 },
-  kpiSub: { fontSize: theme.textXs, fontFamily: theme.fontRegular, color: theme.textMuted, marginTop: 2 },
+  kpiName: { fontSize: theme.textBase, fontFamily: theme.fontBold, letterSpacing: -0.3 },
+  kpiSub: { fontSize: theme.textXs, fontFamily: theme.fontRegular, marginTop: 2 },
 
   spendBlock: { flexDirection: 'row', alignItems: 'flex-end', gap: 3 },
-  spendMain: { fontSize: 40, fontFamily: theme.fontBlack, color: theme.text, letterSpacing: -2, lineHeight: 44 },
-  spendUnit: { fontSize: 18, fontFamily: theme.fontBold, color: theme.textMuted, marginBottom: 4 },
+  spendMain: { fontSize: 48, fontFamily: theme.fontMonoBold, letterSpacing: -2, lineHeight: 52 },
+  spendUnit: { fontSize: 18, fontFamily: theme.fontMono, marginBottom: 4 },
 
-  adjustBtn: {
-    width: 30, height: 30, borderRadius: 15,
-    backgroundColor: theme.surfaceEl,
-    alignItems: 'center', justifyContent: 'center',
-  },
+  adjustBtn: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
 
-  sectionHeader: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    marginBottom: theme.sp4,
-  },
-  sectionTitle: { fontSize: theme.textBase, fontFamily: theme.fontBold, color: theme.text, letterSpacing: -0.3 },
-  addPill: {
-    paddingHorizontal: 12, paddingVertical: 6,
-    borderRadius: theme.radiusFull,
-    backgroundColor: theme.surfaceEl,
-  },
-  addPillText: { fontSize: theme.textXs, fontFamily: theme.fontBold, color: theme.textMuted },
-  empty: { fontSize: theme.textSm, fontFamily: theme.fontRegular, color: theme.textFaint, paddingVertical: theme.sp3 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: theme.sp4 },
+  sectionTitle: { fontSize: theme.textBase, fontFamily: theme.fontBold, letterSpacing: -0.3 },
+  addPill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: theme.radiusFull },
+  addPillText: { fontSize: theme.textXs, fontFamily: theme.fontBold },
+  empty: { fontSize: theme.textSm, fontFamily: theme.fontRegular, paddingVertical: theme.sp3 },
 
-  statCard: { flex: 1, gap: 4 },
-  statNum: { fontSize: 32, fontFamily: theme.fontBlack, color: theme.text, letterSpacing: -1.5 },
-  statLabel: { fontSize: theme.textSm, fontFamily: theme.fontBold, color: theme.text },
-  statSub: { fontSize: theme.textXs, fontFamily: theme.fontRegular, color: theme.textMuted },
+  statCard: { flex: 1, gap: 4, overflow: 'hidden' },
+  statNum: { fontSize: 32, fontFamily: theme.fontMonoBold, letterSpacing: -1.5 },
+  statLabel: { fontSize: theme.textSm, fontFamily: theme.fontBold },
+  statSub: { fontSize: theme.textXs, fontFamily: theme.fontMono },
 
-  confirmText: { fontSize: theme.textSm, marginBottom: theme.sp5, color: theme.text, lineHeight: 22 },
+  confirmText: { fontSize: theme.textSm, marginBottom: theme.sp5, lineHeight: 22 },
   confirmActions: { flexDirection: 'row', gap: theme.sp3 },
-  btnSecondary: {
-    flex: 1, paddingVertical: theme.sp3, borderRadius: theme.radiusMd,
-    backgroundColor: theme.surfaceEl, alignItems: 'center',
-  },
-  btnSecondaryText: { fontSize: theme.textSm, fontFamily: theme.fontBold, color: theme.textMuted },
-  btnDanger: {
-    flex: 1, paddingVertical: theme.sp3, borderRadius: theme.radiusMd,
-    backgroundColor: theme.danger, alignItems: 'center',
-  },
+  btnSecondary: { flex: 1, paddingVertical: theme.sp3, borderRadius: theme.radiusMd, alignItems: 'center' },
+  btnSecondaryText: { fontSize: theme.textSm, fontFamily: theme.fontBold },
+  btnDanger: { flex: 1, paddingVertical: theme.sp3, borderRadius: theme.radiusMd, alignItems: 'center' },
   btnDangerText: { fontSize: theme.textSm, fontFamily: theme.fontBold, color: '#fff' },
 })

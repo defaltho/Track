@@ -11,7 +11,7 @@ export default function Root({ children }: PropsWithChildren) {
         <ScrollViewStyleReset />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap" rel="stylesheet" />
+        <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
         <style dangerouslySetInnerHTML={{
           __html: `
             *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }

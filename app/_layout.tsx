@@ -1,8 +1,8 @@
 import { Stack } from 'expo-router'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { Toast } from '../src/components/ui/Toast'
-import { View, Platform, StyleSheet, Text } from 'react-native'
-import { theme } from '../src/theme'
+import { View, Platform, StyleSheet } from 'react-native'
+import { ThemeProvider, useTheme } from '../src/context/ThemeContext'
 import {
   useFonts,
   Roboto_300Light,
@@ -11,6 +11,10 @@ import {
   Roboto_700Bold,
   Roboto_900Black,
 } from '@expo-google-fonts/roboto'
+import {
+  SpaceMono_400Regular,
+  SpaceMono_700Bold,
+} from '@expo-google-fonts/space-mono'
 import { useEffect } from 'react'
 import * as SplashScreen from 'expo-splash-screen'
 
@@ -18,14 +22,17 @@ SplashScreen.preventAutoHideAsync()
 
 const SHELL_W = 393
 
-export default function RootLayout() {
+function AppShell() {
   const [fontsLoaded] = useFonts({
     Roboto_300Light,
     Roboto_400Regular,
     Roboto_500Medium,
     Roboto_700Bold,
     Roboto_900Black,
+    SpaceMono_400Regular,
+    SpaceMono_700Bold,
   })
+  const { colors } = useTheme()
 
   useEffect(() => {
     if (fontsLoaded) SplashScreen.hideAsync()
@@ -33,43 +40,36 @@ export default function RootLayout() {
 
   if (!fontsLoaded) return null
 
-  const isWeb = Platform.OS === 'web'
-
   const inner = (
     <SafeAreaProvider>
-      <View style={styles.app}>
+      <View style={[s.app, { backgroundColor: colors.bg }]}>
         <Stack screenOptions={{ headerShown: false }} />
         <Toast />
       </View>
     </SafeAreaProvider>
   )
 
-  if (!isWeb) return inner
+  if (Platform.OS !== 'web') return inner
 
   return (
-    <View style={styles.webBg}>
-      <View style={styles.phoneShell as any}>
+    <View style={s.webBg}>
+      <View style={[s.phone, { backgroundColor: colors.bg }] as any}>
         {inner}
       </View>
     </View>
   )
 }
 
-const styles = StyleSheet.create({
-  app: {
-    flex: 1,
-    backgroundColor: theme.bg,
-  },
-  webBg: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'transparent',
-  },
-  phoneShell: {
-    width: SHELL_W,
-    height: '100vh' as any,
-    backgroundColor: theme.bg,
-    overflow: 'hidden',
-  },
+export default function RootLayout() {
+  return (
+    <ThemeProvider>
+      <AppShell />
+    </ThemeProvider>
+  )
+}
+
+const s = StyleSheet.create({
+  app: { flex: 1 },
+  webBg: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  phone: { width: SHELL_W, height: '100vh' as any, overflow: 'hidden' },
 })
