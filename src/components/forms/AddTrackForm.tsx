@@ -14,6 +14,7 @@ import { theme } from '../../theme'
 
 const TYPES = ['subscription', 'app', 'event'] as const
 const CURRENCIES = ['EUR', 'USD', 'GBP', 'BRL']
+const CURRENCY_SYM: Record<string, string> = { EUR: '€', USD: '$', GBP: '£', BRL: 'R$' }
 const CYCLES = ['weekly', 'monthly', 'yearly']
 const CATEGORIES = ['Streaming', 'Music', 'Gaming', 'Cloud', 'Productivity', 'News', 'Fitness', 'Education', 'Other']
 const PAYMENTS = ['Card', 'PayPal', 'Apple Pay', 'Google Pay', 'Bank Transfer', 'Other']
@@ -38,24 +39,32 @@ interface Props {
 
 export function AddTrackForm({ onSubmit, onCancel }: Props) {
   const { colors } = useTheme()
-  const [type, setType] = useState<typeof TYPES[number]>('subscription')
-  const [name, setName] = useState('')
-  const [emoji, setEmoji] = useState('💳')
-  const [price, setPrice] = useState('')
-  const [currency, setCurrency] = useState('EUR')
-  const [billingCycle, setBillingCycle] = useState('monthly')
-  const [nextDate, setNextDate] = useState('')
-  const [category, setCategory] = useState('Other')
-  const [payment, setPayment] = useState('Card')
-  const [note, setNote] = useState('')
-  const [error, setError] = useState('')
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false)
-  const [emojiCategory, setEmojiCategory] = useState('Finance')
 
-  function submit() {
+  // Form state
+  const [step, setStep]               = useState(1)
+  const [type, setType]               = useState<typeof TYPES[number]>('subscription')
+  const [name, setName]               = useState('')
+  const [emoji, setEmoji]             = useState('💳')
+  const [price, setPrice]             = useState('')
+  const [currency, setCurrency]       = useState('EUR')
+  const [billingCycle, setBillingCycle] = useState('monthly')
+  const [nextDate, setNextDate]       = useState('')
+  const [category, setCategory]       = useState('Other')
+  const [payment, setPayment]         = useState('Card')
+  const [note, setNote]               = useState('')
+  const [error, setError]             = useState('')
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false)
+  const [emojiCategory, setEmojiCategory]     = useState('Finance')
+
+  function goNext() {
     if (!name.trim()) { setError('Name is required'); return }
     if (type !== 'event' && !price) { setError('Price is required'); return }
     if (!nextDate) { setError('Date is required'); return }
+    setError('')
+    setStep(2)
+  }
+
+  function submit() {
     setError('')
     const base = { type, name: name.trim(), emoji, color: '#000000', currency, category, note: note.trim(), active: true }
     if (type === 'event') {
@@ -65,199 +74,224 @@ export function AddTrackForm({ onSubmit, onCancel }: Props) {
     }
   }
 
-  const dateLabel = type === 'event' ? 'Date' : type === 'app' ? 'Purchase date' : 'Next charge'
   const inputStyle = { backgroundColor: colors.surfaceEl, borderColor: colors.border, color: colors.text }
+  const dateLabel  = type === 'event' ? 'Date' : type === 'app' ? 'Purchase date' : 'Next charge'
 
   return (
     <View>
-      {/* Type tabs */}
-      <View style={s.typeTabs}>
-        {TYPES.map(t => (
-          <TouchableOpacity
-            key={t}
-            style={[s.tab, { backgroundColor: type === t ? colors.accent : colors.surfaceEl, borderColor: type === t ? colors.accent : colors.border }]}
-            onPress={() => setType(t)}
-          >
-            <Text style={[s.tabText, { color: type === t ? colors.accentFg : colors.textMuted }]}>
-              {t.charAt(0).toUpperCase() + t.slice(1)}
-            </Text>
-          </TouchableOpacity>
-        ))}
+      {/* ── Step indicator ── */}
+      <View style={si.row}>
+        <View style={si.dots}>
+          {[1, 2].map(n => (
+            <View key={n} style={[si.dot, { backgroundColor: n <= step ? colors.accent : colors.border }]} />
+          ))}
+        </View>
+        <Text style={[si.label, { color: colors.textMuted }]}>
+          {step === 1 ? 'Essentials' : 'Details'}
+        </Text>
       </View>
 
-      <View style={s.fields}>
-        {/* Emoji + Name */}
-        <View style={s.row}>
-          <View style={s.emojiField}>
-            <Text style={[s.label, { color: colors.textMuted }]}>Icon</Text>
-            <TouchableOpacity
-              style={[s.input, s.emojiInput, inputStyle]}
-              onPress={() => setShowEmojiPicker(true)}
-              accessibilityRole="button"
-              accessibilityLabel="Choose icon"
-            >
-              <Text style={s.emojiText}>{emoji}</Text>
-            </TouchableOpacity>
+      {/* ════════════ STEP 1 ════════════ */}
+      {step === 1 && (
+        <View style={s.fields}>
+          {/* Type tabs */}
+          <View style={[s.segmented, { backgroundColor: colors.surfaceEl }]}>
+            {TYPES.map(t => (
+              <TouchableOpacity
+                key={t}
+                style={[s.segment, type === t && { backgroundColor: colors.accent }]}
+                onPress={() => setType(t)}
+              >
+                <Text style={[s.segmentText, { color: type === t ? colors.accentFg : colors.textMuted }]}>
+                  {t.charAt(0).toUpperCase() + t.slice(1)}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
-          <View style={s.grow}>
-            <Text style={[s.label, { color: colors.textMuted }]}>Name *</Text>
+
+          {/* Emoji + Name */}
+          <View style={s.row}>
+            <View style={s.emojiField}>
+              <Text style={[s.label, { color: colors.textMuted }]}>Icon</Text>
+              <TouchableOpacity
+                style={[s.input, s.emojiInput, inputStyle]}
+                onPress={() => setShowEmojiPicker(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Choose icon"
+              >
+                <Text style={s.emojiText}>{emoji}</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={s.grow}>
+              <Text style={[s.label, { color: colors.textMuted }]}>Name *</Text>
+              <TextInput
+                style={[s.input, inputStyle]}
+                value={name}
+                onChangeText={v => { setName(v); setError('') }}
+                placeholder="Netflix"
+                placeholderTextColor={colors.textFaint}
+              />
+            </View>
+          </View>
+
+          {/* Price + Currency symbols */}
+          {type !== 'event' && (
+            <View style={s.row}>
+              <View style={s.grow}>
+                <Text style={[s.label, { color: colors.textMuted }]}>Price *</Text>
+                <TextInput
+                  style={[s.input, inputStyle]}
+                  value={price}
+                  onChangeText={v => { setPrice(v); setError('') }}
+                  placeholder="9.99"
+                  placeholderTextColor={colors.textFaint}
+                  keyboardType="decimal-pad"
+                />
+              </View>
+              <View style={s.currencyWrap}>
+                <Text style={[s.label, { color: colors.textMuted }]}>Currency</Text>
+                <View style={s.currencyGrid}>
+                  {CURRENCIES.map(c => (
+                    <TouchableOpacity
+                      key={c}
+                      style={[s.currencyBtn, {
+                        backgroundColor: currency === c ? colors.accent : colors.surfaceEl,
+                        borderColor: currency === c ? colors.accent : colors.border,
+                      }]}
+                      onPress={() => setCurrency(c)}
+                    >
+                      <Text style={[s.currencySymText, { color: currency === c ? colors.accentFg : colors.text }]}>
+                        {CURRENCY_SYM[c]}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* Date */}
+          <View>
+            <Text style={[s.label, { color: colors.textMuted }]}>{dateLabel} * (YYYY-MM-DD)</Text>
             <TextInput
               style={[s.input, inputStyle]}
-              value={name}
-              onChangeText={v => { setName(v); setError('') }}
-              placeholder="Netflix"
+              value={nextDate}
+              onChangeText={v => { setNextDate(v); setError('') }}
+              placeholder="2025-12-31"
               placeholderTextColor={colors.textFaint}
+              keyboardType="numeric"
             />
           </View>
         </View>
+      )}
 
-        {/* Price + Currency */}
-        {type !== 'event' && (
-          <View style={s.row}>
-            <View style={s.grow}>
-              <Text style={[s.label, { color: colors.textMuted }]}>Price *</Text>
-              <TextInput
-                style={[s.input, inputStyle]}
-                value={price}
-                onChangeText={v => { setPrice(v); setError('') }}
-                placeholder="9.99"
-                placeholderTextColor={colors.textFaint}
-                keyboardType="decimal-pad"
-              />
-            </View>
-            <View style={s.currencyWrap}>
-              <Text style={[s.label, { color: colors.textMuted }]}>Currency</Text>
-              <View style={s.currencyPills}>
-                {CURRENCIES.map(c => (
+      {/* ════════════ STEP 2 ════════════ */}
+      {step === 2 && (
+        <View style={s.fields}>
+          {/* Billing cycle — subscription only */}
+          {type === 'subscription' && (
+            <View>
+              <Text style={[s.label, { color: colors.textMuted }]}>Billing cycle</Text>
+              <View style={[s.segmented, { backgroundColor: colors.surfaceEl }]}>
+                {CYCLES.map(c => (
                   <TouchableOpacity
                     key={c}
-                    style={[s.currencyPill, {
-                      backgroundColor: currency === c ? colors.accent : colors.surfaceEl,
-                      borderColor: currency === c ? colors.accent : colors.border,
-                    }]}
-                    onPress={() => setCurrency(c)}
+                    style={[s.segment, billingCycle === c && { backgroundColor: colors.accent }]}
+                    onPress={() => setBillingCycle(c)}
                   >
-                    <Text style={[s.currencyPillText, { color: currency === c ? colors.accentFg : colors.textMuted }]}>
+                    <Text style={[s.segmentText, { color: billingCycle === c ? colors.accentFg : colors.textMuted }]}>
                       {c}
                     </Text>
                   </TouchableOpacity>
                 ))}
               </View>
             </View>
-          </View>
-        )}
+          )}
 
-        {/* Billing cycle */}
-        {type === 'subscription' && (
+          {/* Category */}
           <View>
-            <Text style={[s.label, { color: colors.textMuted }]}>Billing cycle</Text>
-            <View style={s.pills}>
-              {CYCLES.map(c => (
+            <Text style={[s.label, { color: colors.textMuted }]}>Category</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.pillsScroll}>
+              {CATEGORIES.map(c => (
                 <TouchableOpacity
                   key={c}
                   style={[s.pill, {
-                    backgroundColor: billingCycle === c ? colors.accent : colors.surfaceEl,
-                    borderColor: billingCycle === c ? colors.accent : colors.border,
+                    backgroundColor: category === c ? colors.accent : colors.surfaceEl,
+                    borderColor: category === c ? colors.accent : colors.border,
                   }]}
-                  onPress={() => setBillingCycle(c)}
+                  onPress={() => setCategory(c)}
                 >
-                  <Text style={[s.pillText, { color: billingCycle === c ? colors.accentFg : colors.textMuted }]}>
+                  <Text style={[s.pillText, { color: category === c ? colors.accentFg : colors.textMuted }]}>
                     {c}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        )}
-
-        {/* Date */}
-        <View>
-          <Text style={[s.label, { color: colors.textMuted }]}>{dateLabel} * (YYYY-MM-DD)</Text>
-          <TextInput
-            style={[s.input, inputStyle]}
-            value={nextDate}
-            onChangeText={v => { setNextDate(v); setError('') }}
-            placeholder="2025-12-31"
-            placeholderTextColor={colors.textFaint}
-            keyboardType="numeric"
-          />
-        </View>
-
-        {/* Category */}
-        <View>
-          <Text style={[s.label, { color: colors.textMuted }]}>Category</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.pillsScroll}>
-            {CATEGORIES.map(c => (
-              <TouchableOpacity
-                key={c}
-                style={[s.pill, {
-                  backgroundColor: category === c ? colors.accent : colors.surfaceEl,
-                  borderColor: category === c ? colors.accent : colors.border,
-                }]}
-                onPress={() => setCategory(c)}
-              >
-                <Text style={[s.pillText, { color: category === c ? colors.accentFg : colors.textMuted }]}>
-                  {c}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-
-        {/* Payment */}
-        {type === 'subscription' && (
-          <View>
-            <Text style={[s.label, { color: colors.textMuted }]}>Payment</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.pillsScroll}>
-              {PAYMENTS.map(m => (
-                <TouchableOpacity
-                  key={m}
-                  style={[s.pill, {
-                    backgroundColor: payment === m ? colors.accent : colors.surfaceEl,
-                    borderColor: payment === m ? colors.accent : colors.border,
-                  }]}
-                  onPress={() => setPayment(m)}
-                >
-                  <Text style={[s.pillText, { color: payment === m ? colors.accentFg : colors.textMuted }]}>
-                    {m}
                   </Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
           </View>
-        )}
 
-        {/* Note */}
-        <View>
-          <Text style={[s.label, { color: colors.textMuted }]}>Note</Text>
-          <TextInput
-            style={[s.input, inputStyle]}
-            value={note}
-            onChangeText={setNote}
-            placeholder="Optional"
-            placeholderTextColor={colors.textFaint}
-          />
+          {/* Payment method — subscription only */}
+          {type === 'subscription' && (
+            <View>
+              <Text style={[s.label, { color: colors.textMuted }]}>Payment</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.pillsScroll}>
+                {PAYMENTS.map(m => (
+                  <TouchableOpacity
+                    key={m}
+                    style={[s.pill, {
+                      backgroundColor: payment === m ? colors.accent : colors.surfaceEl,
+                      borderColor: payment === m ? colors.accent : colors.border,
+                    }]}
+                    onPress={() => setPayment(m)}
+                  >
+                    <Text style={[s.pillText, { color: payment === m ? colors.accentFg : colors.textMuted }]}>
+                      {m}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
+          {/* Note */}
+          <View>
+            <Text style={[s.label, { color: colors.textMuted }]}>Note</Text>
+            <TextInput
+              style={[s.input, s.noteInput, inputStyle]}
+              value={note}
+              onChangeText={setNote}
+              placeholder="Optional"
+              placeholderTextColor={colors.textFaint}
+              multiline
+              numberOfLines={3}
+              textAlignVertical="top"
+            />
+          </View>
         </View>
-      </View>
+      )}
 
       {error ? <Text style={[s.errorText, { color: colors.danger }]}>{error}</Text> : null}
 
+      {/* ── Actions ── */}
       <View style={s.actions}>
         <TouchableOpacity
           style={[s.btnSecondary, { backgroundColor: colors.surfaceEl, borderColor: colors.border }]}
-          onPress={onCancel}
+          onPress={step === 1 ? onCancel : () => setStep(1)}
         >
-          <Text style={[s.btnSecondaryText, { color: colors.textMuted }]}>Cancel</Text>
+          <Text style={[s.btnSecondaryText, { color: colors.textMuted }]}>
+            {step === 1 ? 'Cancel' : '← Back'}
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[s.btnPrimary, { backgroundColor: colors.accent }]}
-          onPress={submit}
+          onPress={step === 1 ? goNext : submit}
         >
-          <Text style={[s.btnPrimaryText, { color: colors.accentFg }]}>Add</Text>
+          <Text style={[s.btnPrimaryText, { color: colors.accentFg }]}>
+            {step === 1 ? 'Next →' : 'Add'}
+          </Text>
         </TouchableOpacity>
       </View>
 
-      {/* Emoji Picker */}
+      {/* ── Emoji Picker ── */}
       <Modal visible={showEmojiPicker} transparent animationType="slide" onRequestClose={() => setShowEmojiPicker(false)}>
         <TouchableOpacity style={s.pickerOverlay} activeOpacity={1} onPress={() => setShowEmojiPicker(false)}>
           <View style={[s.pickerSheet, { backgroundColor: colors.surface }]}>
@@ -299,14 +333,22 @@ export function AddTrackForm({ onSubmit, onCancel }: Props) {
   )
 }
 
-const s = StyleSheet.create({
-  typeTabs: { flexDirection: 'row', gap: theme.sp2, marginBottom: theme.sp5 },
-  tab: { flex: 1, paddingVertical: theme.sp2, borderRadius: theme.radiusMd, borderWidth: 1, alignItems: 'center' },
-  tabText: { fontSize: theme.textSm, fontFamily: theme.fontBold },
+// Step indicator styles
+const si = StyleSheet.create({
+  row:   { flexDirection: 'row', alignItems: 'center', marginBottom: theme.sp5 },
+  dots:  { flexDirection: 'row', gap: 6 },
+  dot:   { width: 28, height: 3, borderRadius: 2 },
+  label: { fontSize: 12, fontFamily: theme.fontRegular, marginLeft: 'auto' },
+})
 
+const s = StyleSheet.create({
   fields: { gap: theme.sp4 },
-  row: { flexDirection: 'row', gap: theme.sp3, alignItems: 'flex-end' },
-  grow: { flex: 1 },
+  row:    { flexDirection: 'row', gap: theme.sp3, alignItems: 'flex-end' },
+  grow:   { flex: 1 },
+
+  segmented:   { flexDirection: 'row', borderRadius: theme.radiusFull, padding: 4, marginBottom: theme.sp5, gap: 2 },
+  segment:     { flex: 1, paddingVertical: 9, borderRadius: theme.radiusFull, alignItems: 'center' },
+  segmentText: { fontSize: theme.textSm, fontFamily: theme.fontBold },
 
   label: {
     fontSize: theme.textXs,
@@ -316,50 +358,61 @@ const s = StyleSheet.create({
     marginBottom: theme.sp1,
   },
   input: {
-    paddingHorizontal: theme.sp3,
+    paddingHorizontal: theme.sp4,
     paddingVertical: theme.sp3,
     borderWidth: 1,
-    borderRadius: theme.radiusMd,
+    borderRadius: theme.radiusLg,
     fontSize: theme.textSm,
     fontFamily: theme.fontRegular,
   },
+  noteInput: { minHeight: 72, paddingTop: theme.sp3 },
+
   emojiField: { width: 64 },
   emojiInput: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 0 },
-  emojiText: { fontSize: 22 },
+  emojiText:  { fontSize: 22 },
 
   currencyWrap: { flex: 1 },
-  currencyPills: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
-  currencyPill: { paddingHorizontal: 8, paddingVertical: 6, borderRadius: 7, borderWidth: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-  currencyPillText: { fontSize: 10, fontFamily: theme.fontBold },
+  currencyGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  currencyBtn: {
+    width: 42, height: 42,
+    borderRadius: theme.radiusMd,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  currencySymText: { fontSize: 17, fontFamily: theme.fontBold },
 
-  pills: { flexDirection: 'row', gap: theme.sp2 },
   pillsScroll: { gap: theme.sp2, paddingVertical: 2 },
-  pill: { flex: 1, paddingVertical: theme.sp2, paddingHorizontal: theme.sp3, borderRadius: theme.radiusMd, borderWidth: 1, alignItems: 'center' },
-  pillText: { fontSize: theme.textXs, fontFamily: theme.fontBold },
+  pill: {
+    paddingVertical: 9, paddingHorizontal: 14,
+    borderRadius: theme.radiusFull, borderWidth: 1,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  pillText: { fontSize: theme.textXs, fontFamily: theme.fontBold, textAlign: 'center' },
 
   errorText: { fontSize: 12, fontFamily: theme.fontMedium, marginBottom: 8, marginTop: 8 },
   actions: { flexDirection: 'row', gap: theme.sp3, marginTop: theme.sp6 },
   btnPrimary: {
-    flex: 1, paddingVertical: 14, borderRadius: 14, alignItems: 'center',
+    flex: 1, paddingVertical: 14, borderRadius: theme.radiusFull, alignItems: 'center',
     ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 4 },
+      ios:     { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 4 },
       android: { elevation: 3 },
-      web: { boxShadow: '0 2px 8px rgba(0,0,0,0.15)' },
+      web:     { boxShadow: '0 2px 8px rgba(0,0,0,0.15)' },
     }),
   },
-  btnPrimaryText: { fontSize: 15, fontFamily: theme.fontBold },
-  btnSecondary: { paddingVertical: 14, paddingHorizontal: theme.sp5, borderRadius: 14, borderWidth: 1, alignItems: 'center' },
+  btnPrimaryText:  { fontSize: 15, fontFamily: theme.fontBold },
+  btnSecondary:    { paddingVertical: 14, paddingHorizontal: theme.sp5, borderRadius: theme.radiusFull, borderWidth: 1, alignItems: 'center' },
   btnSecondaryText: { fontSize: theme.textSm, fontFamily: theme.fontBold },
 
   pickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
-  pickerSheet: { borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: theme.sp5, paddingBottom: 36 },
-  pickerHandle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: theme.sp4 },
-  pickerTitle: { fontSize: theme.textBase, fontFamily: theme.fontBold, marginBottom: theme.sp4, textAlign: 'center' },
-  catScroll: { marginBottom: theme.sp4 },
+  pickerSheet:   { borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: theme.sp5, paddingBottom: 36 },
+  pickerHandle:  { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: theme.sp4 },
+  pickerTitle:   { fontSize: theme.textBase, fontFamily: theme.fontBold, marginBottom: theme.sp4, textAlign: 'center' },
+  catScroll:        { marginBottom: theme.sp4 },
   catScrollContent: { gap: theme.sp2, paddingHorizontal: theme.sp1 },
-  catPill: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 999, borderWidth: 1 },
+  catPill:     { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 999, borderWidth: 1 },
   catPillText: { fontSize: theme.textXs, fontFamily: theme.fontBold },
-  emojiGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp2, justifyContent: 'center' },
-  emojiCell: { width: 52, height: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  emojiGrid:     { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp2, justifyContent: 'center' },
+  emojiCell:     { width: 52, height: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   emojiCellText: { fontSize: 26 },
 })

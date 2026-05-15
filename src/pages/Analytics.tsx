@@ -12,7 +12,6 @@ import Svg, {
   Stop,
   Path,
   Circle,
-  Text as SvgText,
 } from 'react-native-svg'
 import { useDataStore } from '../stores/data'
 import {
@@ -100,25 +99,25 @@ export function Analytics() {
           </View>
         </View>
 
-        <Svg width="100%" height={100} viewBox="0 0 300 100" preserveAspectRatio="none">
-          <Defs>
-            <LinearGradient id="g-analytics" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0%" stopColor={colors.accentFg} stopOpacity={0.25} />
-              <Stop offset="100%" stopColor={colors.accentFg} stopOpacity={0} />
-            </LinearGradient>
-          </Defs>
-          {store.subscriptions.length > 0 ? (
-            <>
-              <Path d={path.area} fill="url(#g-analytics)" />
-              <Path d={path.line} fill="none" stroke={colors.accentFg} strokeWidth={1.5} strokeLinejoin="round" />
-              <Circle cx={path.last.x} cy={path.last.y} r={3} fill={colors.accentFg} />
-            </>
-          ) : (
-            <SvgText x={150} y={54} textAnchor="middle" fontSize={12} fill={colors.accentFg} opacity={0.6}>
+        {store.subscriptions.length > 0 ? (
+          <Svg width="100%" height={100} viewBox="0 0 300 100" preserveAspectRatio="none">
+            <Defs>
+              <LinearGradient id="g-analytics" x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0%" stopColor={colors.accentFg} stopOpacity={0.25} />
+                <Stop offset="100%" stopColor={colors.accentFg} stopOpacity={0} />
+              </LinearGradient>
+            </Defs>
+            <Path d={path.area} fill="url(#g-analytics)" />
+            <Path d={path.line} fill="none" stroke={colors.accentFg} strokeWidth={1.5} strokeLinejoin="round" />
+            <Circle cx={path.last.x} cy={path.last.y} r={3} fill={colors.accentFg} />
+          </Svg>
+        ) : (
+          <View style={s.chartEmpty}>
+            <Text style={[s.chartEmptyText, { color: colors.accentFg }]}>
               Add a subscription to see the chart
-            </SvgText>
-          )}
-        </Svg>
+            </Text>
+          </View>
+        )}
       </View>
 
       {/* Breakdown */}
@@ -169,7 +168,7 @@ const s = StyleSheet.create({
 
   summaryGrid: { flexDirection: 'row', justifyContent: 'space-between', gap: theme.sp3 },
   stat: { flex: 1 },
-  statNum: { fontSize: theme.textXl, fontFamily: theme.fontMonoBold },
+  statNum: { fontSize: theme.textXl, fontFamily: theme.fontBlack },
   statLabel: { fontSize: theme.textXs, fontFamily: theme.fontRegular, marginTop: 2 },
 
   chartHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: theme.sp4, flexWrap: 'wrap', gap: theme.sp2 },
@@ -188,4 +187,7 @@ const s = StyleSheet.create({
 
   emptyCard: { alignItems: 'center', padding: theme.sp8 },
   empty: { fontSize: theme.textSm, fontFamily: theme.fontRegular },
+
+  chartEmpty: { height: 100, alignItems: 'center', justifyContent: 'center' },
+  chartEmptyText: { fontSize: 13, fontFamily: theme.fontRegular, opacity: 0.6 },
 })

@@ -1,8 +1,9 @@
-import { Stack } from 'expo-router'
+import { Stack, useRouter, useSegments } from 'expo-router'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { Toast } from '../src/components/ui/Toast'
-import { View, Platform, StyleSheet } from 'react-native'
+import { View, StyleSheet, Platform } from 'react-native'
 import { ThemeProvider, useTheme } from '../src/context/ThemeContext'
+import { useAuthStore } from '../src/stores/auth'
 import {
   useFonts,
   Roboto_300Light,
@@ -20,8 +21,6 @@ import * as SplashScreen from 'expo-splash-screen'
 
 SplashScreen.preventAutoHideAsync()
 
-const SHELL_W = 393
-
 function AppShell() {
   const [fontsLoaded] = useFonts({
     Roboto_300Light,
@@ -33,30 +32,44 @@ function AppShell() {
     SpaceMono_700Bold,
   })
   const { colors } = useTheme()
+  const router = useRouter()
+  const segments = useSegments()
 
+  const user       = useAuthStore(s => s.user)
+  const onboarding = useAuthStore(s => s.onboarding)
+  const hydrated   = useAuthStore(s => s._hydrated)
+
+  // Hide splash once fonts and auth store are ready
   useEffect(() => {
-    if (fontsLoaded) SplashScreen.hideAsync()
-  }, [fontsLoaded])
+    if (fontsLoaded && hydrated) SplashScreen.hideAsync()
+  }, [fontsLoaded, hydrated])
 
-  if (!fontsLoaded) return null
+  // Auth routing guard
+  useEffect(() => {
+    if (!fontsLoaded || !hydrated) return
 
-  const inner = (
+    const inLogin      = segments[0] === 'login'
+    const inOnboarding = segments[0] === 'onboarding'
+
+    if (!user) {
+      if (!inLogin) router.replace('/login')
+    } else if (!onboarding) {
+      if (!inOnboarding) router.replace('/onboarding')
+    } else {
+      if (inLogin || inOnboarding) router.replace('/(tabs)')
+    }
+  }, [user, onboarding, hydrated, fontsLoaded, segments])
+
+  if (!fontsLoaded || !hydrated) return null
+
+  // Full-screen on web — no phone frame
+  return (
     <SafeAreaProvider>
-      <View style={[s.app, { backgroundColor: colors.bg }]}>
+      <View style={[s.root, { backgroundColor: colors.bg }]}>
         <Stack screenOptions={{ headerShown: false }} />
         <Toast />
       </View>
     </SafeAreaProvider>
-  )
-
-  if (Platform.OS !== 'web') return inner
-
-  return (
-    <View style={s.webBg}>
-      <View style={[s.phone, { backgroundColor: colors.bg }] as any}>
-        {inner}
-      </View>
-    </View>
   )
 }
 
@@ -69,7 +82,5 @@ export default function RootLayout() {
 }
 
 const s = StyleSheet.create({
-  app: { flex: 1 },
-  webBg: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  phone: { width: SHELL_W, height: '100vh' as any, overflow: 'hidden' },
+  root: { flex: 1, ...Platform.select({ web: { minHeight: '100vh' as any } }) },
 })

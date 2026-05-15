@@ -9,9 +9,12 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  Dimensions,
 } from 'react-native'
 import { useTheme } from '../../context/ThemeContext'
 import { theme } from '../../theme'
+
+const SCREEN_H = Dimensions.get('window').height
 
 interface Props {
   open: boolean
@@ -30,7 +33,7 @@ export function Modal({ open, title, onClose, children }: Props) {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={s.kav}
         >
-          <Pressable onStartShouldSetResponder={() => true}>
+          <Pressable style={s.pressable} onPress={e => e.stopPropagation()}>
             <View style={[s.sheet, { backgroundColor: colors.surface }]}>
               {/* Drag handle */}
               <View style={s.handleWrap}>
@@ -45,12 +48,13 @@ export function Modal({ open, title, onClose, children }: Props) {
                 </TouchableOpacity>
               </View>
 
-              {/* Content */}
+              {/* Scrollable content */}
               <ScrollView
                 style={s.body}
                 contentContainerStyle={s.bodyContent}
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={false}
+                bounces={Platform.OS === 'ios'}
               >
                 {children}
               </ScrollView>
@@ -74,10 +78,17 @@ const s = StyleSheet.create({
     maxWidth: 520,
     justifyContent: 'flex-end',
   },
+  pressable: {
+    width: '100%',
+  },
   sheet: {
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-    maxHeight: '90%' as any,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    marginBottom: 16,
+    maxHeight: SCREEN_H * 0.88,
+    flexDirection: 'column',
     ...Platform.select({
       ios: { shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.12, shadowRadius: 24 },
       android: { elevation: 24 },
@@ -88,6 +99,7 @@ const s = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 14,
     paddingBottom: 4,
+    flexShrink: 0,
   },
   handle: {
     width: 36,
@@ -101,6 +113,7 @@ const s = StyleSheet.create({
     paddingHorizontal: theme.sp5,
     paddingTop: theme.sp3,
     paddingBottom: theme.sp4,
+    flexShrink: 0,
   },
   title: {
     fontSize: 22,
@@ -120,7 +133,8 @@ const s = StyleSheet.create({
     fontFamily: theme.fontLight,
   },
   body: {
-    maxHeight: '80%' as any,
+    flex: 1,
+    minHeight: 0,
   },
   bodyContent: {
     paddingHorizontal: theme.sp5,

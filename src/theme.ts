@@ -78,7 +78,7 @@ export const theme = {
   fontBold: 'Roboto_700Bold',
   fontBlack: 'Roboto_900Black',
   fontMono: 'SpaceMono_400Regular',
-  fontMonoBold: 'SpaceMono_700Bold',
+  fontMonoBold: 'Roboto_700Bold',
 
   sp1: 4, sp2: 8, sp3: 12, sp4: 16, sp5: 20, sp6: 24, sp8: 32,
 
@@ -113,7 +113,7 @@ export const fonts = {
   fontBold: 'Roboto_700Bold',
   fontBlack: 'Roboto_900Black',
   fontMono: 'SpaceMono_400Regular',
-  fontMonoBold: 'SpaceMono_700Bold',
+  fontMonoBold: 'Roboto_700Bold',
 }
 
 export const sp = { sp1: 4, sp2: 8, sp3: 12, sp4: 16, sp5: 20, sp6: 24, sp8: 32 }
