@@ -55,3 +55,53 @@ export const RANGE_DAYS: Record<string, number> = {
   '1Y': 365,
   'Max': 365 * 3,
 }
+
+export const RANGE_CONFIG: Record<string, { back: number; ahead: number }> = {
+  '1W':  { back: 1,  ahead: 1 },
+  '3M':  { back: 2,  ahead: 2 },
+  '6M':  { back: 4,  ahead: 2 },
+  '1Y':  { back: 8,  ahead: 3 },
+  'Max': { back: 11, ahead: 3 },
+}
+
+export function buildMonthlyBars(
+  subscriptions: any[],
+  monthsBack = 5,
+  monthsAhead = 3,
+  monthOffset = 0,
+): { label: string; value: number; isCurrent: boolean; isFuture: boolean }[] {
+  const today = new Date()
+  const result: { label: string; value: number; isCurrent: boolean; isFuture: boolean }[] = []
+
+  for (let m = -monthsBack; m <= monthsAhead; m++) {
+    const d = new Date(today.getFullYear(), today.getMonth() + m - monthOffset, 1)
+    const monthIdx = d.getMonth()
+    const daysInMonth = new Date(d.getFullYear(), monthIdx + 1, 0).getDate()
+    let total = 0
+
+    for (const sub of subscriptions) {
+      if (sub.active === false) continue
+      const cycle = (sub.billingCycle ?? 'monthly') as string
+      const price = parseFloat(sub.price) || 0
+
+      if (cycle === 'weekly') {
+        total += price * Math.floor(daysInMonth / 7)
+      } else if (cycle === 'monthly') {
+        total += price
+      } else if (cycle === 'yearly') {
+        const chargeMonth = sub.nextChargeDate ? new Date(sub.nextChargeDate).getMonth() : -1
+        total += chargeMonth === monthIdx ? price : 0
+      } else {
+        total += monthlyEquivalent(price, cycle)
+      }
+    }
+
+    result.push({
+      label: d.toLocaleString('en', { month: 'short' }),
+      value: total,
+      isCurrent: monthOffset === 0 && m === 0,
+      isFuture: monthOffset === 0 && m > 0,
+    })
+  }
+  return result
+}

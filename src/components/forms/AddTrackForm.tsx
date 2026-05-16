@@ -221,7 +221,12 @@ export function AddTrackForm({ onSubmit, onCancel }: Props) {
           {/* Category */}
           <View>
             <Text style={[s.label, { color: colors.textMuted }]}>Category</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.pillsScroll}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={Platform.OS === 'web'}
+              contentContainerStyle={s.pillsScroll}
+              style={Platform.OS === 'web' ? s.hScrollWeb : undefined}
+            >
               {CATEGORIES.map(c => (
                 <TouchableOpacity
                   key={c}
@@ -243,8 +248,13 @@ export function AddTrackForm({ onSubmit, onCancel }: Props) {
           {type === 'subscription' && (
             <View>
               <Text style={[s.label, { color: colors.textMuted }]}>Payment</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.pillsScroll}>
-                {PAYMENTS.map(m => (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={Platform.OS === 'web'}
+                contentContainerStyle={s.pillsScroll}
+                style={Platform.OS === 'web' ? s.hScrollWeb : undefined}
+            >
+              {PAYMENTS.map(m => (
                   <TouchableOpacity
                     key={m}
                     style={[s.pill, {
@@ -423,6 +433,7 @@ const s = StyleSheet.create({
   currencySymText: { fontSize: 17, fontFamily: theme.fontBold },
 
   pillsScroll: { gap: theme.sp2, paddingVertical: 2 },
+  hScrollWeb:  { paddingBottom: 6 } as any,
   pill: {
     paddingVertical: 9, paddingHorizontal: 14,
     borderRadius: theme.radiusFull, borderWidth: 1,
