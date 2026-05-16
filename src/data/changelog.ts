@@ -11,7 +11,7 @@ export const CHANGELOG: ChangelogEntry[] = [
   {
     version: '0.1.1',
     date: '2026-05-16',
-    summary: 'feat: Nothing.tech design overhaul — Moti animations, Space Mono, dynamic theming, iCloud-style footer',
+    summary: 'feat: notebook redesign, button DNA, compact calendar, dev mode, secret scanner',
   },
   {
     version: '0.1.0',
