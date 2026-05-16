@@ -322,7 +322,7 @@ export default function Settings() {
           Track v{VERSION}
         </Text>
         <Text style={[s.footerCopy, { color: colors.textFaint }]}>
-          © 2026 defaltho. All rights reserved.
+          © 2026 defaltho & Luis Miguel. All rights reserved.
         </Text>
       </View>
 

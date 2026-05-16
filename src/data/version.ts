@@ -1,3 +1,3 @@
-// Auto-bumped by .git/hooks/pre-commit on every commit.
+// Auto-bumped by .git/hooks/prepare-commit-msg on every commit.
 // Format: MAJOR.MINOR.PATCH
-export const VERSION = '0.1.1'
+export const VERSION = '0.1.2'

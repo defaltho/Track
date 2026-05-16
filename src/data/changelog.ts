@@ -9,6 +9,11 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.1.2',
+    date: '2026-05-16',
+    summary: 'fix: move bump+changelog from pre-commit to prepare-commit-msg so it reads the real commit subject',
+  },
+  {
     version: '0.1.1',
     date: '2026-05-16',
     summary: 'feat: notebook redesign, button DNA, compact calendar, dev mode, secret scanner',
