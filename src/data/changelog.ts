@@ -9,6 +9,22 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.1.5',
+    date: '2026-05-16',
+    summary: 'feat: widget DNA + 13 mono widgets + universal button DNA',
+    notes: [
+      'Widget DNA: mono sizing (square 1×1 / rectangle 2×1), auto-pairing rows, top-tag header',
+      'New widgets: BreakdownWidget (stacked bar + delta rows), RingGoalWidget, LineTrendWidget, ClockWidget (analog Braun-style, device time)',
+      'Dashboard now has 13 widgets; web uses the same widget grid as mobile (max-width 480)',
+      'Hero numbers in SpaceMono_700Bold (fontMonoBold fix), sizes scaled proportional to the box',
+      'Segmented control + IconButton variants of Button DNA',
+      'Button DNA applied to every CTA: Settings, Login, Onboarding, Calendar nav, Dashboard header, AddTrackForm tabs/currency/category/payment pills',
+      'Calendar: shared bordered frame around SidePanel + grid on desktop',
+      "Cherry-picked Luis's Analytics rewrite (stock-chart-style with comparison line + radar chart)",
+      "CLAUDE.md: Contributors section with cherry-pick workflow rules",
+    ],
+  },
+  {
     version: '0.1.4',
     date: '2026-05-16',
     summary: 'chore: sync version bump from prepare-commit-msg',

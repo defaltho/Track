@@ -12,9 +12,12 @@
  */
 import fs from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { execSync } from 'node:child_process'
 
-const ROOT = path.resolve(new URL('..', import.meta.url).pathname)
+// fileURLToPath handles Windows drive letters and URL-encoded spaces
+// (`new URL().pathname` on Windows gives "/C:/..." with %20 — both wrong).
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const PKG = path.join(ROOT, 'package.json')
 const VER = path.join(ROOT, 'src/data/version.ts')
 const CHG = path.join(ROOT, 'src/data/changelog.ts')

@@ -1,3 +1,3 @@
-// Auto-bumped by .git/hooks/prepare-commit-msg on every commit.
+// Bumped by scripts/bump-version.mjs (npm run bump).
 // Format: MAJOR.MINOR.PATCH
-export const VERSION = '0.1.4'
+export const VERSION = '0.1.5'
