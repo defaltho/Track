@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 /**
- * Bumps patch version (package.json + src/data/version.ts) and prepends
- * an entry to src/data/changelog.ts using the actual commit subject.
+ * Manual version bump — run BEFORE committing the release commit.
  *
- * Run as a `prepare-commit-msg` hook: receives the commit message file
- * path as argv[2] and the message source as argv[3].
- *   .git/hooks/prepare-commit-msg "$1" "$2" "$3"  → node scripts/bump-version.mjs "$1" "$2"
+ *   npm run bump "feat: my release subject"
+ *   git add package.json src/data/version.ts src/data/changelog.ts
+ *   git commit
  *
- * Skips on merge / squash / amend so we don't double-bump.
+ * Bumps patch in package.json + src/data/version.ts and prepends a new entry
+ * to src/data/changelog.ts using the subject passed on argv[2] (or .git/COMMIT_EDITMSG
+ * as fallback). Stages the modified files.
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -18,14 +19,8 @@ const PKG = path.join(ROOT, 'package.json')
 const VER = path.join(ROOT, 'src/data/version.ts')
 const CHG = path.join(ROOT, 'src/data/changelog.ts')
 
-const [,, msgFileArg, source] = process.argv
-
-// Skip on merges / squashes / template / commit-amend (--amend uses 'commit')
-if (source === 'merge' || source === 'squash' || source === 'commit') {
-  process.exit(0)
-}
-
-const msgFile = msgFileArg || path.join(ROOT, '.git/COMMIT_EDITMSG')
+const [,, subjectArg] = process.argv
+const msgFile = path.join(ROOT, '.git/COMMIT_EDITMSG')
 
 function readJson(p) { return JSON.parse(fs.readFileSync(p, 'utf-8')) }
 function writeJson(p, v) { fs.writeFileSync(p, JSON.stringify(v, null, 2) + '\n') }
@@ -41,26 +36,22 @@ function today() {
 }
 
 function readCommitSubject() {
+  if (subjectArg) return subjectArg.trim()
   try {
     const raw = fs.readFileSync(msgFile, 'utf-8')
     const first = raw.split('\n').find(l => l.trim() && !l.startsWith('#'))
-    return (first || 'commit').trim()
-  } catch { return 'commit' }
+    return (first || 'release').trim()
+  } catch { return 'release' }
 }
 
 const subject = readCommitSubject()
-
-// Empty / no-message commits — nothing to log
-if (!subject || subject === 'commit') {
-  process.exit(0)
-}
 
 const pkg = readJson(PKG)
 const next = bumpPatch(pkg.version || '0.1.0')
 pkg.version = next
 writeJson(PKG, pkg)
 
-const verSrc = `// Auto-bumped by .git/hooks/prepare-commit-msg on every commit.\n// Format: MAJOR.MINOR.PATCH\nexport const VERSION = '${next}'\n`
+const verSrc = `// Bumped by scripts/bump-version.mjs (npm run bump).\n// Format: MAJOR.MINOR.PATCH\nexport const VERSION = '${next}'\n`
 fs.writeFileSync(VER, verSrc)
 
 const summary = subject.replace(/'/g, "\\'")

@@ -1,6 +1,6 @@
 {
   "name": "track",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
@@ -8,7 +8,9 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "build": "expo export"
+    "build": "expo export",
+    "bump": "node scripts/bump-version.mjs",
+    "hooks:install": "bash scripts/install-git-hooks.sh"
   },
   "dependencies": {
     "@expo-google-fonts/roboto": "^0.4.3",

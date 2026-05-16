@@ -1,4 +1,4 @@
-// New entries are prepended automatically by the pre-commit hook.
+// New entries are prepended by `npm run bump "<subject>"` before a release commit.
 // Each entry: { version, date (YYYY-MM-DD), summary (commit subject), notes? }
 export interface ChangelogEntry {
   version: string
@@ -8,6 +8,11 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '0.1.4',
+    date: '2026-05-16',
+    summary: 'chore: sync version bump from prepare-commit-msg',
+  },
   {
     version: '0.1.3',
     date: '2026-05-16',

@@ -18,23 +18,17 @@ node "$REPO/scripts/scan-secrets.mjs"
 EOF
 chmod +x "$PRE"
 
-# prepare-commit-msg: receives ($1=msg-file $2=source $3=sha) AFTER the message
-# has been prepared. Lets us read the real commit subject for the changelog.
-PREP="$ROOT/.git/hooks/prepare-commit-msg"
-cat > "$PREP" <<'EOF'
-#!/usr/bin/env bash
-# Auto-bump patch version + prepend changelog entry using actual commit subject.
-# Skip with: git commit --no-verify
-set -e
-REPO="$(git rev-parse --show-toplevel)"
-node "$REPO/scripts/bump-version.mjs" "$1" "$2"
-EOF
-chmod +x "$PREP"
+# Remove any old broken auto-bump hook (was unreliable — git's snapshot of the
+# index is taken before prepare-commit-msg runs, so files added there leak out).
+rm -f "$ROOT/.git/hooks/prepare-commit-msg"
 
-chmod +x "$ROOT/scripts/bump-version.mjs"
 chmod +x "$ROOT/scripts/scan-secrets.mjs"
+chmod +x "$ROOT/scripts/bump-version.mjs"
 
-echo "✓ git hooks installed:"
-echo "    pre-commit         → scripts/scan-secrets.mjs    (blocks commit on secret patterns)"
-echo "    prepare-commit-msg → scripts/bump-version.mjs    (bumps patch + writes changelog)"
-echo "  Skip both with: git commit --no-verify  (only when intentional)"
+echo "✓ git hook installed:"
+echo "    pre-commit → scripts/scan-secrets.mjs    (blocks commit on secret patterns)"
+echo ""
+echo "Manual version bump (when you want to ship a release):"
+echo "    npm run bump          # bumps patch in package.json + version.ts + changelog"
+echo ""
+echo "Skip secret scan with: git commit --no-verify  (only when intentional)"
