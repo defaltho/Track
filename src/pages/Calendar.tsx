@@ -8,10 +8,11 @@ import { Ionicons } from '@expo/vector-icons'
 import {
   format, startOfMonth, endOfMonth, eachDayOfInterval, getDay,
   parseISO, isBefore, isSameMonth, isSameDay, startOfDay, addMonths, subMonths,
-  differenceInCalendarDays,
+  differenceInCalendarDays, getWeek, getDayOfYear,
 } from 'date-fns'
 import { useDataStore } from '../stores/data'
 import { Modal } from '../components/ui/Modal'
+import { IconButton } from '../components/ui/Button'
 import { useTheme } from '../context/ThemeContext'
 import { theme, Colors } from '../theme'
 
@@ -19,17 +20,20 @@ const WEEKDAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']
 
 // ── Day cell with hover + press scale ─────────────────────────────────
 function DayCell({
-  day, isCurrentMonth, isToday, isPast, emojis, dotColors, hasActivity, monthTag, onPress, colors,
+  day, isCurrentMonth, isToday, isPast, isPinned, emojis, dotColors, hasActivity, monthTag, onPress, onHoverIn, onHoverOut, colors,
 }: {
   day: Date
   isCurrentMonth: boolean
   isToday: boolean
   isPast: boolean
+  isPinned: boolean
   emojis: string[]
   dotColors: string[]
   hasActivity: boolean
   monthTag: string | null
   onPress: () => void
+  onHoverIn?: () => void
+  onHoverOut?: () => void
   colors: Colors
 }) {
   const scale = useSharedValue(1)
@@ -55,15 +59,16 @@ function DayCell({
       onPress={onPress}
       onPressIn={()  => { scale.value = withSpring(0.94, { damping: 18, stiffness: 420 }) }}
       onPressOut={() => { scale.value = withSpring(1, { damping: 18, stiffness: 420 }) }}
-      onHoverIn={()  => { if (isWeb) { setHovered(true);  scale.value = withSpring(1.04, { damping: 22, stiffness: 360 }) } }}
-      onHoverOut={() => { if (isWeb) { setHovered(false); scale.value = withSpring(1, { damping: 22, stiffness: 360 }) } }}
+      onHoverIn={()  => { if (isWeb) { setHovered(true);  scale.value = withSpring(1.04, { damping: 22, stiffness: 360 }); onHoverIn?.() } }}
+      onHoverOut={() => { if (isWeb) { setHovered(false); scale.value = withSpring(1, { damping: 22, stiffness: 360 }); onHoverOut?.() } }}
     >
       <Animated.View
         style={[
           cs.card,
           {
             backgroundColor: cellBg,
-            borderColor: !isCurrentMonth ? 'transparent' : colors.border,
+            borderColor: !isCurrentMonth ? 'transparent' : (isPinned ? colors.text : colors.border),
+            borderWidth: isPinned ? 1.5 : StyleSheet.hairlineWidth,
             opacity: !isCurrentMonth ? 0.45 : 1,
           },
           hovered && isWeb && isCurrentMonth && { backgroundColor: colors.surfaceHigh },
@@ -100,9 +105,15 @@ export function Calendar() {
 
   const [current, setCurrent] = useState(new Date())
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
+  const [hoveredDay, setHoveredDay] = useState<string | null>(null)
 
   const today = startOfDay(new Date())
   const todayStr = format(today, 'yyyy-MM-dd')
+
+  // Day shown in the side panel: hover (preview) > selected (pinned) > today
+  const panelDay = hoveredDay ?? selectedDay ?? todayStr
+  const panelMode: 'today' | 'pinned' | 'preview' =
+    hoveredDay ? 'preview' : (selectedDay && selectedDay !== todayStr ? 'pinned' : 'today')
 
   // 7-column grid covering the full visible weeks (week starts Monday)
   const grid = useMemo(() => {
@@ -153,6 +164,21 @@ export function Calendar() {
     [store.subscriptions, selectedDay]
   )
 
+  // Panel data (for the desktop side panel — uses panelDay)
+  const panelEvents = useMemo(
+    () => (store.events as any[]).filter(e => e.date === panelDay),
+    [store.events, panelDay]
+  )
+  const panelSubs = useMemo(
+    () => (store.subscriptions as any[]).filter(s => s.active !== false && s.nextChargeDate === panelDay),
+    [store.subscriptions, panelDay]
+  )
+  const panelTotal = useMemo(
+    () => panelSubs.reduce((sum: number, s: any) => sum + (Number(s.price) || 0), 0),
+    [panelSubs]
+  )
+  const panelCurrency = panelSubs[0]?.currency as string | undefined
+
   function prev() { setCurrent(d => subMonths(d, 1)) }
   function next() { setCurrent(d => addMonths(d, 1)) }
   function jumpToday() { setCurrent(new Date()) }
@@ -177,11 +203,32 @@ export function Calendar() {
   }, [store.events, store.subscriptions, current])
 
   return (
-    <ScrollView
-      style={[cs.page, { backgroundColor: colors.bg }]}
-      contentContainerStyle={[cs.scroll, isDesktop && cs.scrollDesktop]}
-      showsVerticalScrollIndicator={false}
-    >
+    <View style={[cs.page, { backgroundColor: colors.bg }]}>
+      {/* Shared frame — wraps both SidePanel and Calendar grid on desktop */}
+      {isDesktop && (
+        <View
+          style={[cs.desktopFrame, { borderColor: colors.border }]}
+          pointerEvents="none"
+        />
+      )}
+      {isDesktop && (
+        <SidePanel
+          colors={colors}
+          panelDay={panelDay}
+          panelMode={panelMode}
+          events={panelEvents}
+          subs={panelSubs}
+          total={panelTotal}
+          currency={panelCurrency}
+          isPinned={selectedDay !== null && selectedDay !== todayStr}
+          onUnpin={() => setSelectedDay(null)}
+        />
+      )}
+      <ScrollView
+        style={cs.page}
+        contentContainerStyle={[cs.scroll, isDesktop && cs.scrollDesktop]}
+        showsVerticalScrollIndicator={false}
+      >
       <View style={[cs.container, isDesktop && cs.containerDesktop]}>
         {/* Header */}
         <View style={cs.header}>
@@ -235,11 +282,14 @@ export function Calendar() {
                 isCurrentMonth={isCurrentMonth}
                 isToday={isToday}
                 isPast={isPast}
+                isPinned={selectedDay === str}
                 emojis={emojis}
                 dotColors={info?.colors ?? []}
                 hasActivity={hasActivity}
                 monthTag={monthTag}
-                onPress={() => setSelectedDay(str)}
+                onPress={() => setSelectedDay(prev => prev === str ? null : str)}
+                onHoverIn={isDesktop ? () => setHoveredDay(str) : undefined}
+                onHoverOut={isDesktop ? () => setHoveredDay(prev => prev === str ? null : prev) : undefined}
                 colors={colors}
               />
             )
@@ -277,7 +327,7 @@ export function Calendar() {
       </View>
 
       <Modal
-        open={selectedDay !== null}
+        open={!isDesktop && selectedDay !== null}
         title={selectedDay ? format(parseISO(selectedDay), 'EEEE, d MMMM') : ''}
         onClose={() => setSelectedDay(null)}
       >
@@ -305,32 +355,156 @@ export function Calendar() {
           </View>
         )}
       </Modal>
-    </ScrollView>
+      </ScrollView>
+    </View>
   )
 }
 
-// ── Nav button (chevron with hover) ───────────────────────────────────
-function NavBtn({ icon, onPress, colors }: { icon: any; onPress: () => void; colors: Colors }) {
-  const scale = useSharedValue(1)
-  const [hovered, setHovered] = useState(false)
-  const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }))
-  const isWeb = Platform.OS === 'web'
+// ── Side panel (Cal.com-style summary, desktop only) ──────────────────
+function SidePanel({
+  colors, panelDay, panelMode, events, subs, total, currency, isPinned, onUnpin,
+}: {
+  colors: Colors
+  panelDay: string
+  panelMode: 'today' | 'pinned' | 'preview'
+  events: any[]
+  subs: any[]
+  total: number
+  currency?: string
+  isPinned: boolean
+  onUnpin: () => void
+}) {
+  const dt = parseISO(panelDay)
+  const weekdayLabel = format(dt, 'EEEE')
+  const monthDay     = format(dt, 'd MMM').toLowerCase()
+  const yearLabel    = format(dt, 'yyyy')
+  const monthFull    = format(dt, 'MMMM yyyy').toLowerCase()
+  const week         = getWeek(dt)
+  const doy          = getDayOfYear(dt)
+  const kicker =
+    panelMode === 'preview' ? 'previewing' :
+    panelMode === 'pinned'  ? 'pinned day'  :
+                              'today'
+  const kickerDotColor =
+    panelMode === 'preview' ? colors.textFaint :
+    panelMode === 'pinned'  ? colors.accent    :
+                              colors.success
+  const headerEmoji =
+    panelMode === 'preview' ? '👀' :
+    panelMode === 'pinned'  ? '📌' :
+                              '✨'
+  const isEmpty = events.length === 0 && subs.length === 0
+  const totalLabel = total > 0 ? `${symFor(currency)}${total.toFixed(2)}` : '—'
+  const itemCount = subs.length + events.length
+
   return (
-    <Pressable
-      onPress={onPress}
-      onPressIn={()  => { scale.value = withSpring(0.94, { damping: 18, stiffness: 420 }) }}
-      onPressOut={() => { scale.value = withSpring(1, { damping: 18, stiffness: 420 }) }}
-      onHoverIn={()  => { if (isWeb) { setHovered(true);  scale.value = withSpring(1.06, { damping: 22, stiffness: 360 }) } }}
-      onHoverOut={() => { if (isWeb) { setHovered(false); scale.value = withSpring(1, { damping: 22, stiffness: 360 }) } }}
-    >
-      <Animated.View style={[
-        cs.navBtn,
-        { borderColor: colors.border, backgroundColor: hovered && isWeb ? colors.surfaceEl : 'transparent' },
-        animStyle,
-      ]}>
-        <Ionicons name={icon} size={18} color={colors.text} />
-      </Animated.View>
-    </Pressable>
+    <View style={sp.root} pointerEvents="box-none">
+      <View style={[sp.card, { backgroundColor: colors.surfaceEl, borderColor: colors.border }]}>
+        {/* Kicker row */}
+        <View style={sp.kickerRow}>
+          <View style={[sp.kickerDot, { backgroundColor: kickerDotColor }]} />
+          <Text style={[sp.kicker, { color: colors.textMuted }]}>{kicker}</Text>
+        </View>
+
+        {/* Title with emoji prefix (Cal.com style: bold heading + meta line) */}
+        <Text style={[sp.title, { color: colors.text }]}>
+          {headerEmoji}  {weekdayLabel},{'\n'}{monthDay} {yearLabel}
+        </Text>
+
+        {/* Meta subtitle with extra context */}
+        <View style={sp.metaRow}>
+          <Text style={[sp.metaTag, { color: colors.textMuted, backgroundColor: colors.surface, borderColor: colors.border }]}>
+            week {week}
+          </Text>
+          <Text style={[sp.metaTag, { color: colors.textMuted, backgroundColor: colors.surface, borderColor: colors.border }]}>
+            day {doy}/365
+          </Text>
+        </View>
+
+        {/* Body — Cal.com style description text with emoji + bold */}
+        <View style={[sp.bodyDivider, { backgroundColor: colors.border }]} />
+        <ScrollView style={sp.body} contentContainerStyle={sp.bodyContent} showsVerticalScrollIndicator={false}>
+          {isEmpty ? (
+            <View style={sp.list}>
+              <Text style={[sp.summary, { color: colors.text }]}>
+                🌿  <Text style={sp.bold}>Nothing tracking today.</Text> No charges, no events — your wallet and calendar both get a breather.
+              </Text>
+              <Text style={[sp.summary, { color: colors.text }]}>
+                ☕  Use the quiet to plan ahead. Browse what's coming this month, set a new subscription to track, or just close the tab and enjoy the day.
+              </Text>
+              <Text style={[sp.summary, { color: colors.text }]}>
+                ✨  Quiet days are still data — they tell you when life slows down. Track wisely, rest well.
+              </Text>
+            </View>
+          ) : (
+            <View style={sp.list}>
+              {/* Summary paragraph */}
+              <Text style={[sp.summary, { color: colors.text }]}>
+                💬  You have <Text style={sp.bold}>{itemCount} {itemCount === 1 ? 'thing' : 'things'}</Text> on this day
+                {total > 0 ? <> totalling <Text style={sp.bold}>{symFor(currency)}{total.toFixed(2)}</Text>.</> : '.'}{' '}
+                Here's the breakdown — a quick look at what's coming up so nothing slips through the cracks. 🧭
+              </Text>
+
+              {/* Subscriptions with descriptive prose */}
+              {subs.map((s: any) => (
+                <Text key={`s-${s.id}`} style={[sp.line, { color: colors.text }]}>
+                  {s.emoji ?? '💳'}  <Text style={sp.bold}>{s.name}</Text> will charge <Text style={sp.bold}>{symFor(s.currency)}{Number(s.price ?? 0).toFixed(2)}</Text> today. Auto-renewal is on — make sure the card on file is still valid. 💳
+                </Text>
+              ))}
+
+              {/* Events with descriptive prose */}
+              {events.map((e: any) => (
+                <Text key={`e-${e.id}`} style={[sp.line, { color: colors.text }]}>
+                  {e.emoji ?? '📅'}  <Text style={sp.bold}>{e.name}</Text> is on the books for today. Add a reminder if you need a nudge — it's the small things that compound. ✨
+                </Text>
+              ))}
+
+              {/* Closing wisdom line */}
+              <Text style={[sp.summary, { color: colors.text, marginTop: 4 }]}>
+                <Text style={sp.bold}>Track wisely</Text> — small habits become freedom. Every charge logged, every event noted, brings clarity to where your time and money actually go. 🚀
+              </Text>
+            </View>
+          )}
+        </ScrollView>
+
+        {/* Footer — Cal.com style icon rows */}
+        <View style={[sp.bodyDivider, { backgroundColor: colors.border }]} />
+        <View style={sp.footer}>
+          <View style={sp.footerRow}>
+            <Text style={sp.footerEmoji}>🕐</Text>
+            <Text style={[sp.footerLabel, { color: colors.text }]}>{subs.length} {subs.length === 1 ? 'charge' : 'charges'}</Text>
+          </View>
+          <View style={sp.footerRow}>
+            <Text style={sp.footerEmoji}>📅</Text>
+            <Text style={[sp.footerLabel, { color: colors.text }]}>{events.length} {events.length === 1 ? 'event' : 'events'}</Text>
+          </View>
+          <View style={sp.footerRow}>
+            <Text style={sp.footerEmoji}>💳</Text>
+            <Text style={[sp.footerLabel, { color: colors.text }]}>{totalLabel}</Text>
+          </View>
+          <View style={sp.footerRow}>
+            <Text style={sp.footerEmoji}>🌍</Text>
+            <Text style={[sp.footerLabel, { color: colors.text }]}>{monthFull}</Text>
+          </View>
+        </View>
+
+        {isPinned && (
+          <Pressable onPress={onUnpin} style={({ hovered }: any) => [sp.unpin, { backgroundColor: hovered && Platform.OS === 'web' ? colors.surface : 'transparent', borderColor: colors.border }]}>
+            <Ionicons name="arrow-back-outline" size={13} color={colors.textMuted} />
+            <Text style={[sp.unpinLabel, { color: colors.textMuted }]}>back to today</Text>
+          </Pressable>
+        )}
+      </View>
+    </View>
+  )
+}
+
+// ── Nav button (chevron) — Button DNA via IconButton ──────────────────
+function NavBtn({ icon, onPress, colors }: { icon: any; onPress: () => void; colors: Colors }) {
+  return (
+    <IconButton variant="primary" size="sm" onPress={onPress} accessibilityLabel={String(icon)}>
+      <Ionicons name={icon} size={16} color="#FFFFFF" />
+    </IconButton>
   )
 }
 
@@ -343,7 +517,24 @@ const symFor = (c?: string) => {
 const cs = StyleSheet.create({
   page:           { flex: 1 },
   scroll:         { padding: theme.sp4, gap: theme.sp4, paddingBottom: 110 },
-  scrollDesktop:  { paddingVertical: 56, paddingHorizontal: 32, alignItems: 'center' },
+  scrollDesktop:  { paddingVertical: 56, paddingLeft: 420, paddingRight: 32, alignItems: 'center' },
+
+  // Shared bordered frame wrapping SidePanel + Calendar grid on desktop
+  desktopFrame: {
+    ...Platform.select({
+      web: {
+        position: 'fixed' as any,
+        top: 40,
+        bottom: 40,
+        left: 280,        // matches SidePanel.left (sidebar 240 + 40 breathing)
+        right: 32,        // matches calendar paddingRight
+        borderRadius: 14,
+        borderWidth: StyleSheet.hairlineWidth,
+        zIndex: 1,
+      },
+      default: {},
+    }) as object,
+  },
   container:      { width: '100%', gap: 24 },
   containerDesktop:{ maxWidth: 760 },
 
@@ -412,4 +603,57 @@ const cs = StyleSheet.create({
   dayPrice: { fontSize: 14, fontFamily: theme.fontMono, letterSpacing: -0.3 },
   dayPill:  { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 },
   dayPillText: { fontSize: 10, fontFamily: theme.fontMedium, letterSpacing: 0.6 },
+})
+
+const sp = StyleSheet.create({
+  root: {
+    ...Platform.select({
+      web: {
+        position: 'fixed' as any,
+        top: 56,
+        left: 280,
+        bottom: 56,
+        width: 360,
+        zIndex: 5,
+      },
+      default: { width: 360 },
+    }),
+  },
+  card: {
+    flex: 1,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 28,
+  },
+
+  kickerRow:  { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
+  kickerDot:  { width: 8, height: 8, borderRadius: 4 },
+  kicker:     { fontSize: 11, fontFamily: theme.fontMedium, letterSpacing: 0.2, textTransform: 'lowercase' },
+
+  title:      { fontSize: 26, fontFamily: theme.fontBold, letterSpacing: -0.8, lineHeight: 32, textTransform: 'capitalize' },
+
+  metaRow:    { flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginTop: 12 },
+  metaTag:    { fontSize: 10, fontFamily: theme.fontMedium, letterSpacing: 0.6, textTransform: 'lowercase', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
+
+  bodyDivider:{ height: StyleSheet.hairlineWidth, width: '100%', marginVertical: 16 },
+  body:       { flex: 1 },
+  bodyContent:{ paddingBottom: 4, gap: 12 },
+
+  emptyBox:   { alignItems: 'center', justifyContent: 'center', paddingVertical: 24, gap: 6 },
+  emptyEmoji: { fontSize: 32 },
+  empty:      { fontSize: 14, fontFamily: theme.fontBold, letterSpacing: -0.2 },
+  emptySub:   { fontSize: 12, fontFamily: theme.fontMedium, letterSpacing: 0.1 },
+
+  list:       { gap: 14 },
+  summary:    { fontSize: 14, fontFamily: theme.fontRegular, lineHeight: 22, letterSpacing: -0.1 },
+  line:       { fontSize: 14, fontFamily: theme.fontRegular, lineHeight: 22, letterSpacing: -0.1 },
+  bold:       { fontFamily: theme.fontBold },
+
+  footer:     { gap: 10, marginTop: 4 },
+  footerRow:  { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  footerEmoji:{ fontSize: 14, width: 18, textAlign: 'center' },
+  footerLabel:{ fontSize: 13, fontFamily: theme.fontMedium, letterSpacing: -0.1 },
+
+  unpin:      { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10, alignSelf: 'flex-start', borderWidth: StyleSheet.hairlineWidth, marginTop: 16 },
+  unpinLabel: { fontSize: 11, fontFamily: theme.fontMedium, letterSpacing: 0.2 },
 })

@@ -18,15 +18,15 @@ const NAV_SECTIONS: NavSection[] = [
   {
     section: 'Main Menu',
     items: [
-      { name: 'index',     href: '/',          activeIc: 'grid'             as IoniconName, inactiveIc: 'grid-outline'             as IoniconName, label: 'Dashboard' },
-      { name: 'calendar',  href: '/calendar',  activeIc: 'calendar'         as IoniconName, inactiveIc: 'calendar-outline'         as IoniconName, label: 'Calendar'  },
-      { name: 'analytics', href: '/analytics', activeIc: 'bar-chart'        as IoniconName, inactiveIc: 'bar-chart-outline'        as IoniconName, label: 'Analytics' },
+      { name: 'index',     href: '/',          activeIc: 'home-outline'        as IoniconName, inactiveIc: 'home-outline'        as IoniconName, label: 'Dashboard' },
+      { name: 'calendar',  href: '/calendar',  activeIc: 'calendar-outline'    as IoniconName, inactiveIc: 'calendar-outline'    as IoniconName, label: 'Calendar'  },
+      { name: 'analytics', href: '/analytics', activeIc: 'stats-chart-outline' as IoniconName, inactiveIc: 'stats-chart-outline' as IoniconName, label: 'Analytics' },
     ],
   },
   {
     section: 'Workspace',
     items: [
-      { name: 'settings',  href: '/settings',  activeIc: 'settings'         as IoniconName, inactiveIc: 'settings-outline'         as IoniconName, label: 'Settings'  },
+      { name: 'settings',  href: '/settings',  activeIc: 'cog-outline'         as IoniconName, inactiveIc: 'cog-outline'         as IoniconName, label: 'Settings'  },
     ],
   },
 ]
@@ -53,7 +53,7 @@ function Sidebar({ colors }: { colors: Colors }) {
   const pathname = usePathname()
   const user = useAuthStore(s => s.user)
   const logout = useAuthStore(s => s.logout)
-  const { themeKey, setTheme } = useTheme()
+  const { themeKey, setTheme, isDark } = useTheme()
   const [ccOpen, setCcOpen] = useState(false)
 
   const userName    = user?.name || 'Guest'
@@ -98,6 +98,7 @@ function Sidebar({ colors }: { colors: Colors }) {
                     isActive={isActive}
                     onPress={() => router.push(item.href as any)}
                     colors={colors}
+                    isDark={isDark}
                   />
                 )
               })}
@@ -138,33 +139,46 @@ function Sidebar({ colors }: { colors: Colors }) {
   )
 }
 
-// ── Sidebar item (with hover) ─────────────────────────────────────────
+// ── Sidebar item (with hover + button DNA on active) ──────────────────
 function SidebarItem({
-  item, isActive, onPress, colors,
+  item, isActive, onPress, colors, isDark,
 }: {
   item: NavItem
   isActive: boolean
   onPress: () => void
   colors: Colors
+  isDark: boolean
 }) {
   const [hovered, setHovered] = useState(false)
   const isWeb = Platform.OS === 'web'
-  const bg = isActive ? colors.surface : (hovered && isWeb ? colors.surfaceEl : 'transparent')
-  const iconBg = isActive ? colors.text : 'transparent'
+  const iconColor = isActive ? colors.text : colors.textMuted
+
+  // Active pill = button DNA, themed (light: white→cream gradient; dark: dark gradient like PRIMARY button)
+  const activeStyle = isActive
+    ? (isDark ? sb.itemActiveDark : sb.itemActiveLight)
+    : null
+  const inactiveBg = hovered && isWeb ? colors.surfaceEl : 'transparent'
+
   return (
     <Pressable
       onPress={onPress}
       onHoverIn={() => isWeb && setHovered(true)}
       onHoverOut={() => isWeb && setHovered(false)}
-      style={[sb.item, { backgroundColor: bg, borderColor: isActive ? colors.border : 'transparent' }]}
+      style={[
+        sb.item,
+        !isActive && { backgroundColor: inactiveBg },
+        activeStyle,
+      ]}
     >
-      <View style={[sb.itemIconBox, { backgroundColor: iconBg }]}>
-        <Ionicons
-          name={isActive ? item.activeIc : item.inactiveIc}
-          size={14}
-          color={isActive ? colors.bg : colors.textMuted}
-        />
-      </View>
+      {/* Top highlight on active pill (matches button DNA) */}
+      {isActive && (
+        <View style={[sb.itemTopHighlight, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.6)' }]} pointerEvents="none" />
+      )}
+      <Ionicons
+        name={item.inactiveIc}
+        size={18}
+        color={iconColor}
+      />
       <Text style={[sb.itemLabel, { color: isActive ? colors.text : colors.textMuted, fontFamily: isActive ? 'Roboto_700Bold' : 'Roboto_500Medium' }]}>
         {item.label}
       </Text>
@@ -183,15 +197,14 @@ function ControlCenter({
   userEmail: string
   userInitial: string
   themeKey: string
-  setTheme: (t: 'light' | 'dark' | 'nothing') => void
+  setTheme: (t: 'light' | 'dark') => void
   onOpenSettings: () => void
   onLogout: () => void
 }) {
   if (!open) return null
-  const themes: Array<{ key: 'light' | 'dark' | 'nothing'; label: string; ic: IoniconName }> = [
+  const themes: Array<{ key: 'light' | 'dark'; label: string; ic: IoniconName }> = [
     { key: 'light',   label: 'Light',   ic: 'sunny-outline' },
     { key: 'dark',    label: 'Dark',    ic: 'moon-outline' },
-    { key: 'nothing', label: 'Nothing', ic: 'flash-outline' },
   ]
   return (
     <Modal visible={open} transparent animationType="fade" onRequestClose={onClose}>
@@ -306,11 +319,59 @@ const sb = StyleSheet.create({
 
   scroll:       { flex: 1, gap: 18 },
   section:      { gap: 6 },
-  sectionTitle: { fontSize: 12, fontFamily: 'Roboto_500Medium', letterSpacing: 0.2, paddingHorizontal: 10, marginBottom: 2 },
-  nav:          { gap: 2 },
-  item:         { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 7, paddingHorizontal: 8, borderRadius: 10, borderWidth: StyleSheet.hairlineWidth },
-  itemIconBox:  { width: 24, height: 24, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
-  itemLabel:    { fontSize: 13, letterSpacing: -0.1 },
+  sectionTitle: { fontSize: 12, fontFamily: 'Roboto_500Medium', letterSpacing: 0.2, paddingHorizontal: 14, marginBottom: 2 },
+  nav:          { gap: 3 },
+  item:         { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 11, paddingHorizontal: 14, borderRadius: 14, overflow: 'hidden', position: 'relative' },
+  itemLabel:    { fontSize: 14, letterSpacing: -0.1 },
+
+  // Button DNA — light variant (white→cream gradient + faint border + subtle shadow)
+  itemActiveLight: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#E4E2DC',
+    ...Platform.select({
+      web: {
+        backgroundColor: '#FFFFFF',
+        background: 'linear-gradient(180deg, #FFFFFF 0%, #F5F4F0 100%)',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.05), 0 0 0 1px rgba(0,0,0,0.04)',
+      } as any,
+      ios: {
+        backgroundColor: '#FFFFFF',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.06,
+        shadowRadius: 3,
+      },
+      android: { backgroundColor: '#FFFFFF', elevation: 1 },
+      default: { backgroundColor: '#FFFFFF' },
+    }),
+  },
+
+  // Button DNA — dark variant (matches PRIMARY button: dark gradient + double shadow)
+  itemActiveDark: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#3a3942',
+    ...Platform.select({
+      web: {
+        backgroundColor: '#262428',
+        background: 'linear-gradient(180deg, #201E25 0%, #323137 100%)',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.10), 0 0 0 1px #0D0D0D',
+      } as any,
+      ios: {
+        backgroundColor: '#262428',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.18,
+        shadowRadius: 4,
+      },
+      android: { backgroundColor: '#262428', elevation: 3 },
+      default: { backgroundColor: '#262428' },
+    }),
+  },
+
+  itemTopHighlight: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, height: 1,
+  },
 
   userCard:     { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: 14 },
   userAvatar:   { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },

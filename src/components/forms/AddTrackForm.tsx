@@ -11,7 +11,8 @@ import {
 } from 'react-native'
 import { useTheme } from '../../context/ThemeContext'
 import { theme } from '../../theme'
-import { Button } from '../ui/Button'
+import { Button, IconButton } from '../ui/Button'
+import { Segmented } from '../ui/Segmented'
 
 const TYPES = ['subscription', 'app', 'event'] as const
 const CURRENCIES = ['EUR', 'USD', 'GBP', 'BRL']
@@ -104,20 +105,15 @@ export function AddTrackForm({ onSubmit, onCancel }: Props) {
       {/* ════════════ STEP 1 ════════════ */}
       {step === 1 && (
         <View style={s.fields}>
-          {/* Type tabs */}
-          <View style={[s.segmented, { backgroundColor: colors.surfaceEl }]}>
-            {TYPES.map(t => (
-              <TouchableOpacity
-                key={t}
-                style={[s.segment, type === t && { backgroundColor: colors.accent }]}
-                onPress={() => setType(t)}
-              >
-                <Text style={[s.segmentText, { color: type === t ? colors.accentFg : colors.textMuted }]}>
-                  {t.charAt(0).toUpperCase() + t.slice(1)}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          {/* Type tabs — Button DNA via Segmented */}
+          <Segmented
+            options={TYPES as unknown as readonly string[]}
+            value={type}
+            onChange={v => setType(v as typeof type)}
+            layout="equal"
+            size="md"
+            capitalize
+          />
 
           {/* Emoji + Name */}
           <View style={s.row}>
@@ -162,18 +158,17 @@ export function AddTrackForm({ onSubmit, onCancel }: Props) {
                 <Text style={[s.label, { color: colors.textMuted }]}>Currency</Text>
                 <View style={s.currencyGrid}>
                   {CURRENCIES.map(c => (
-                    <TouchableOpacity
+                    <IconButton
                       key={c}
-                      style={[s.currencyBtn, {
-                        backgroundColor: currency === c ? colors.accent : colors.surfaceEl,
-                        borderColor: currency === c ? colors.accent : colors.border,
-                      }]}
+                      variant={currency === c ? 'primary' : 'secondary'}
+                      size="md"
                       onPress={() => setCurrency(c)}
+                      accessibilityLabel={c}
                     >
-                      <Text style={[s.currencySymText, { color: currency === c ? colors.accentFg : colors.text }]}>
+                      <Text style={[s.currencySymText, { color: currency === c ? '#FFFFFF' : colors.text }]}>
                         {CURRENCY_SYM[c]}
                       </Text>
-                    </TouchableOpacity>
+                    </IconButton>
                   ))}
                 </View>
               </View>
@@ -202,73 +197,40 @@ export function AddTrackForm({ onSubmit, onCancel }: Props) {
           {type === 'subscription' && (
             <View>
               <Text style={[s.label, { color: colors.textMuted }]}>Billing cycle</Text>
-              <View style={[s.segmented, { backgroundColor: colors.surfaceEl }]}>
-                {CYCLES.map(c => (
-                  <TouchableOpacity
-                    key={c}
-                    style={[s.segment, billingCycle === c && { backgroundColor: colors.accent }]}
-                    onPress={() => setBillingCycle(c)}
-                  >
-                    <Text style={[s.segmentText, { color: billingCycle === c ? colors.accentFg : colors.textMuted }]}>
-                      {c}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              <Segmented
+                options={CYCLES}
+                value={billingCycle}
+                onChange={setBillingCycle}
+                layout="equal"
+                size="sm"
+                capitalize
+              />
             </View>
           )}
 
           {/* Category */}
           <View>
             <Text style={[s.label, { color: colors.textMuted }]}>Category</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={Platform.OS === 'web'}
-              contentContainerStyle={s.pillsScroll}
-              style={Platform.OS === 'web' ? s.hScrollWeb : undefined}
-            >
-              {CATEGORIES.map(c => (
-                <TouchableOpacity
-                  key={c}
-                  style={[s.pill, {
-                    backgroundColor: category === c ? colors.accent : colors.surfaceEl,
-                    borderColor: category === c ? colors.accent : colors.border,
-                  }]}
-                  onPress={() => setCategory(c)}
-                >
-                  <Text style={[s.pillText, { color: category === c ? colors.accentFg : colors.textMuted }]}>
-                    {c}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+            <Segmented
+              options={CATEGORIES}
+              value={category}
+              onChange={setCategory}
+              layout="scroll"
+              size="sm"
+            />
           </View>
 
           {/* Payment method — subscription only */}
           {type === 'subscription' && (
             <View>
               <Text style={[s.label, { color: colors.textMuted }]}>Payment</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={Platform.OS === 'web'}
-                contentContainerStyle={s.pillsScroll}
-                style={Platform.OS === 'web' ? s.hScrollWeb : undefined}
-            >
-              {PAYMENTS.map(m => (
-                  <TouchableOpacity
-                    key={m}
-                    style={[s.pill, {
-                      backgroundColor: payment === m ? colors.accent : colors.surfaceEl,
-                      borderColor: payment === m ? colors.accent : colors.border,
-                    }]}
-                    onPress={() => setPayment(m)}
-                  >
-                    <Text style={[s.pillText, { color: payment === m ? colors.accentFg : colors.textMuted }]}>
-                      {m}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
+              <Segmented
+                options={PAYMENTS}
+                value={payment}
+                onChange={setPayment}
+                layout="scroll"
+                size="sm"
+              />
             </View>
           )}
 
@@ -346,22 +308,15 @@ export function AddTrackForm({ onSubmit, onCancel }: Props) {
             <View style={[s.pickerHandle, { backgroundColor: colors.borderStrong }]} />
             <Text style={[s.pickerTitle, { color: colors.text }]}>Choose Icon</Text>
 
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.catScroll} contentContainerStyle={s.catScrollContent}>
-              {Object.keys(EMOJI_SETS).map(cat => (
-                <TouchableOpacity
-                  key={cat}
-                  style={[s.catPill, {
-                    backgroundColor: emojiCategory === cat ? colors.accent : colors.surfaceEl,
-                    borderColor: emojiCategory === cat ? colors.accent : colors.border,
-                  }]}
-                  onPress={() => setEmojiCategory(cat)}
-                >
-                  <Text style={[s.catPillText, { color: emojiCategory === cat ? colors.accentFg : colors.textMuted }]}>
-                    {cat}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+            <View style={s.catScroll}>
+              <Segmented
+                options={Object.keys(EMOJI_SETS)}
+                value={emojiCategory}
+                onChange={setEmojiCategory}
+                layout="scroll"
+                size="sm"
+              />
+            </View>
 
             <View style={s.emojiGrid}>
               {(EMOJI_SETS[emojiCategory] ?? []).map(e => (
@@ -394,10 +349,6 @@ const s = StyleSheet.create({
   row:    { flexDirection: 'row', gap: theme.sp3, alignItems: 'flex-end' },
   grow:   { flex: 1 },
 
-  segmented:   { flexDirection: 'row', borderRadius: theme.radiusFull, padding: 4, marginBottom: theme.sp5, gap: 2 },
-  segment:     { flex: 1, paddingVertical: 9, borderRadius: theme.radiusFull, alignItems: 'center' },
-  segmentText: { fontSize: theme.textSm, fontFamily: theme.fontBold },
-
   label: {
     fontSize: theme.textXs,
     fontFamily: theme.fontBold,
@@ -423,46 +374,16 @@ const s = StyleSheet.create({
 
   currencyWrap: { flex: 1 },
   currencyGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  currencyBtn: {
-    width: 42, height: 42,
-    borderRadius: theme.radiusMd,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   currencySymText: { fontSize: 17, fontFamily: theme.fontBold },
-
-  pillsScroll: { gap: theme.sp2, paddingVertical: 2 },
-  hScrollWeb:  { paddingBottom: 6 } as any,
-  pill: {
-    paddingVertical: 9, paddingHorizontal: 14,
-    borderRadius: theme.radiusFull, borderWidth: 1,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  pillText: { fontSize: theme.textXs, fontFamily: theme.fontBold, textAlign: 'center' },
 
   errorText: { fontSize: 12, fontFamily: theme.fontMedium, marginBottom: 8, marginTop: 8 },
   actions: { flexDirection: 'row', gap: theme.sp3, marginTop: theme.sp6 },
-  btnPrimary: {
-    flex: 1, paddingVertical: 14, borderRadius: theme.radiusFull, alignItems: 'center',
-    ...Platform.select({
-      ios:     { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 4 },
-      android: { elevation: 3 },
-      web:     { boxShadow: '0 2px 8px rgba(0,0,0,0.15)' },
-    }),
-  },
-  btnPrimaryText:  { fontSize: 15, fontFamily: theme.fontBold },
-  btnSecondary:    { paddingVertical: 14, paddingHorizontal: theme.sp5, borderRadius: theme.radiusFull, borderWidth: 1, alignItems: 'center' },
-  btnSecondaryText: { fontSize: theme.textSm, fontFamily: theme.fontBold },
 
   pickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
   pickerSheet:   { borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: theme.sp5, paddingBottom: 36 },
   pickerHandle:  { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: theme.sp4 },
   pickerTitle:   { fontSize: theme.textBase, fontFamily: theme.fontBold, marginBottom: theme.sp4, textAlign: 'center' },
-  catScroll:        { marginBottom: theme.sp4 },
-  catScrollContent: { gap: theme.sp2, paddingHorizontal: theme.sp1 },
-  catPill:     { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 999, borderWidth: 1 },
-  catPillText: { fontSize: theme.textXs, fontFamily: theme.fontBold },
+  catScroll:     { marginBottom: theme.sp4 },
   emojiGrid:     { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp2, justifyContent: 'center' },
   emojiCell:     { width: 52, height: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   emojiCellText: { fontSize: 26 },

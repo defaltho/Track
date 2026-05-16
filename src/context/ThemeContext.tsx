@@ -1,12 +1,14 @@
 import React, { createContext, useContext, useMemo } from 'react'
-import { lightColors, darkColors, nothingColors, Colors } from '../theme'
+import { lightColors, darkColors, Colors } from '../theme'
 import { useDataStore } from '../stores/data'
+
+export type ThemeKey = 'light' | 'dark'
 
 interface ThemeCtx {
   colors: Colors
   isDark: boolean
-  themeKey: string
-  setTheme: (t: 'light' | 'dark' | 'nothing') => void
+  themeKey: ThemeKey
+  setTheme: (t: ThemeKey) => void
 }
 
 const Ctx = createContext<ThemeCtx>({
@@ -17,22 +19,21 @@ const Ctx = createContext<ThemeCtx>({
 })
 
 function resolveColors(key: string): Colors {
-  if (key === 'nothing') return nothingColors
   if (key === 'dark') return darkColors
   return lightColors
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const themeKey = useDataStore(s => s.settings.theme)
+  const themeKey = useDataStore(s => s.settings.theme) as ThemeKey
   const updateSettings = useDataStore(s => s.updateSettings)
-  const isDark = themeKey === 'dark' || themeKey === 'nothing'
+  const isDark = themeKey === 'dark'
   const colors = resolveColors(themeKey)
   const value = useMemo(
     () => ({
       colors,
       isDark,
       themeKey,
-      setTheme: (t: 'light' | 'dark' | 'nothing') => updateSettings({ theme: t }),
+      setTheme: (t: ThemeKey) => updateSettings({ theme: t }),
     }),
     [colors, isDark, themeKey, updateSettings]
   )

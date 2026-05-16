@@ -2,18 +2,24 @@ import React from 'react'
 import { View, Text, StyleSheet } from 'react-native'
 import { useToastStore } from '../../stores/toasts'
 import { theme } from '../../theme'
+import { useTheme } from '../../context/ThemeContext'
 
 export function Toast() {
   const items = useToastStore(s => s.items)
+  const { colors } = useTheme()
   if (items.length === 0) return null
 
   return (
     <View style={s.container} pointerEvents="none">
-      {items.map(t => (
-        <View key={t.id} style={[s.toast, t.type === 'success' ? s.success : s.info]}>
-          <Text style={s.text}>{t.message}</Text>
-        </View>
-      ))}
+      {items.map(t => {
+        const bg     = t.type === 'success' ? colors.success : colors.text
+        const fg     = t.type === 'success' ? colors.accentFg : colors.bg
+        return (
+          <View key={t.id} style={[s.toast, { backgroundColor: bg }]}>
+            <Text style={[s.text, { color: fg }]}>{t.message}</Text>
+          </View>
+        )
+      })}
     </View>
   )
 }
@@ -21,7 +27,7 @@ export function Toast() {
 const s = StyleSheet.create({
   container: {
     position: 'absolute',
-    bottom: 100, // above tab bar
+    bottom: 96, // sits above floating tab bar (24 + 64)
     left: 0,
     right: 0,
     alignItems: 'center',
@@ -34,14 +40,7 @@ const s = StyleSheet.create({
     borderRadius: theme.radiusMd,
     maxWidth: 320,
   },
-  info: {
-    backgroundColor: theme.text,
-  },
-  success: {
-    backgroundColor: '#2d6a4f',
-  },
   text: {
-    color: '#fff',
     fontSize: theme.textSm,
     fontFamily: theme.fontMedium,
   },

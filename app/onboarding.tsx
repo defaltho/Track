@@ -7,6 +7,7 @@ import { Picker } from '@react-native-picker/picker'
 import { useRouter } from 'expo-router'
 import { useAuthStore, OnboardingAnswers } from '../src/stores/auth'
 import { theme } from '../src/theme'
+import { Button } from '../src/components/ui/Button'
 
 const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
 const YEARS  = Array.from({ length: new Date().getFullYear() - 5 - 1939 }, (_, i) => 1940 + i)
@@ -210,10 +211,15 @@ export default function OnboardingScreen() {
           {/* Step content */}
           <View style={s.content}>{renderContent()}</View>
 
-          {/* Continue button */}
-          <TouchableOpacity style={s.btnPrimary} onPress={next}>
-            <Text style={s.btnPrimaryTxt}>{isLast ? 'Começar →' : 'Continuar'}</Text>
-          </TouchableOpacity>
+          {/* Continue button — Button DNA */}
+          <Button
+            label={isLast ? 'Começar →' : 'Continuar'}
+            variant="primary"
+            size="lg"
+            onPress={next}
+            fullWidth
+          />
+
         </View>
       </ScrollView>
     </View>
@@ -255,6 +261,25 @@ const s = StyleSheet.create({
   picker: { ...Platform.select({ web: { height: 44 } as any, default: {} }) },
 
   // CTA
-  btnPrimary: { backgroundColor: '#111', borderRadius: 12, padding: 15, alignItems: 'center' },
-  btnPrimaryTxt: { fontFamily: theme.fontMedium, fontSize: 15, color: '#fff' },
+  btnPrimary: {
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#3a3942',
+    ...Platform.select({
+      web: {
+        backgroundColor: '#262428',
+        background: 'linear-gradient(180deg, #201E25 0%, #323137 100%)',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.10), 0 0 0 1px #0D0D0D',
+        transition: 'box-shadow 160ms ease, background 160ms ease',
+      } as any,
+      ios:     { backgroundColor: '#262428', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.18, shadowRadius: 4 },
+      android: { backgroundColor: '#262428', elevation: 3 },
+      default: { backgroundColor: '#262428' },
+    }),
+  },
+  btnPrimaryTxt: { fontFamily: theme.fontBold, fontSize: 14, color: '#FFFFFF', letterSpacing: -0.2 },
 })

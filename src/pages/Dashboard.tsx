@@ -15,8 +15,12 @@ import { useToastStore } from '../stores/toasts'
 import { useTheme } from '../context/ThemeContext'
 import { totalMonthlySpend, coffees } from '../utils/calculations'
 import { Modal } from '../components/ui/Modal'
-import { DotGrid } from '../components/ui/DotGrid'
-import { Button } from '../components/ui/Button'
+import { Button, IconButton } from '../components/ui/Button'
+import { Widget, WidgetRow } from '../components/ui/Widget'
+import { BreakdownWidget, BreakdownItem } from '../components/widgets/BreakdownWidget'
+import { RingGoalWidget } from '../components/widgets/RingGoalWidget'
+import { LineTrendWidget } from '../components/widgets/LineTrendWidget'
+import { ClockWidget } from '../components/widgets/ClockWidget'
 import { AddTrackForm } from '../components/forms/AddTrackForm'
 import { AddTaskForm } from '../components/forms/AddTaskForm'
 import { theme, CURRENCY_SYMBOL, Colors } from '../theme'
@@ -78,16 +82,20 @@ function useCountUp(target: number, duration = 700): number {
 
 // ── Ring badge ─────────────────────────────────────────────────────────
 function RingBadge({ value, max = 20, size = 56, colors }: { value: number; max?: number; size?: number; colors: Colors }) {
-  const stroke = 3, r = (size - stroke) / 2, circ = 2 * Math.PI * r
+  const stroke = Math.max(3, Math.round(size * 0.045))
+  const r = (size - stroke) / 2
+  const circ = 2 * Math.PI * r
   const pct = max > 0 ? Math.min(value / max, 1) : 0
   const isDark = colors.bg !== '#F2F1EE'
+  // Number scales with the ring — keeps the proportion identical at any size
+  const numSize = Math.round(size * 0.36)
   return (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
       <Svg width={size} height={size} style={{ position: 'absolute', transform: [{ rotate: '-90deg' }] }}>
         <SvgCircle cx={size/2} cy={size/2} r={r} stroke={isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'} strokeWidth={stroke} fill="none" />
         {pct > 0 && <SvgCircle cx={size/2} cy={size/2} r={r} stroke={colors.accent} strokeWidth={stroke} fill="none" strokeDasharray={`${circ*pct} ${circ*(1-pct)}`} strokeLinecap="round" />}
       </Svg>
-      <Text style={{ fontSize: 20, fontFamily: theme.fontBlack, color: colors.text, letterSpacing: -0.5 }}>{value}</Text>
+      <Text style={{ fontSize: numSize, fontFamily: theme.fontMonoBold, color: colors.text, letterSpacing: -0.5 }}>{value}</Text>
     </View>
   )
 }
@@ -152,51 +160,50 @@ const hm = StyleSheet.create({
 function SubRow({ sub, symbol, diff, onRemove, delay, colors }: { sub: any; symbol: string; diff: number; onRemove: () => void; delay: number; colors: Colors }) {
   const scale = useSharedValue(1)
   const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }))
-  const dueColor = diff === 0 ? colors.accentRed : diff <= 2 ? colors.warning : colors.textMuted
-  const dueBg    = diff === 0 ? colors.accentRed+'18' : colors.surfaceEl
-  const dueLabel = diff === 0 ? 'Today' : diff === 1 ? 'Tomorrow' : `In ${diff}d`
+  // accentRed is reserved for "due today" only — everything else is graphite
+  const isToday = diff === 0
+  const dueColor = isToday ? colors.accentRed : colors.textMuted
+  const dueLabel = isToday ? 'today' : diff === 1 ? 'tomorrow' : `in ${diff}d`
   return (
     <Animated.View entering={FadeInRight.delay(delay).springify().damping(20).stiffness(220)}>
       <Pressable onPressIn={() => { scale.value = withSpring(0.98,{damping:16,stiffness:380}) }} onPressOut={() => { scale.value = withSpring(1,{damping:16,stiffness:380}) }} onLongPress={onRemove} delayLongPress={500}>
         <Animated.View style={[sr.row, { borderBottomColor: colors.border }, animStyle]}>
-          {sub.color ? <View style={[sr.accentBar, { backgroundColor: sub.color }]} /> : null}
-          <View style={[sr.badge, { backgroundColor: colors.surfaceEl, borderColor: sub.color ?? 'transparent', borderWidth: sub.color ? 1.5 : 0 }]}><Text style={sr.emoji}>{sub.emoji ?? '💳'}</Text></View>
+          <View style={[sr.badge, { backgroundColor: colors.surfaceEl }]}><Text style={sr.emoji}>{sub.emoji ?? '💳'}</Text></View>
           <View style={sr.body}>
             <Text style={[sr.name, { color: colors.text }]} numberOfLines={1}>{sub.name}</Text>
             <View style={sr.metaRow}>
-              <View style={[sr.duePill, { backgroundColor: dueBg }]}><Text style={[sr.dueText, { color: dueColor }]}>{dueLabel}</Text></View>
-              <Text style={[sr.cat, { color: colors.textFaint }]}>{sub.category ?? ''}</Text>
+              <Text style={[sr.dueText, { color: dueColor }]}>· {dueLabel}</Text>
+              {sub.category ? <Text style={[sr.cat, { color: colors.textFaint }]}>{sub.category}</Text> : null}
             </View>
           </View>
           <View style={sr.right}>
             <Text style={[sr.price, { color: colors.text }]}>{symbol}{sub.price}</Text>
             <Text style={[sr.cycle, { color: colors.textMuted }]}>{sub.billingCycle ?? 'mo'}</Text>
           </View>
-          <TouchableOpacity style={[sr.removeBtn, { backgroundColor: colors.surfaceEl }]} onPress={onRemove} hitSlop={8}>
+          <IconButton variant="secondary" size="sm" onPress={onRemove} accessibilityLabel="Remove">
             <View style={[sr.removeLine, { backgroundColor: colors.textMuted }]} />
             <View style={[sr.removeLine, { backgroundColor: colors.textMuted, transform:[{rotate:'90deg'}], position:'absolute' }]} />
-          </TouchableOpacity>
+          </IconButton>
         </Animated.View>
       </Pressable>
     </Animated.View>
   )
 }
 const sr = StyleSheet.create({
-  row:       { flexDirection:'row', alignItems:'center', gap:theme.sp3, paddingVertical:14, borderBottomWidth:1 },
-  accentBar: { width: 3, height: 28, borderRadius: 2, marginRight: -theme.sp1 },
-  badge:     { width:44, height:44, borderRadius:13, alignItems:'center', justifyContent:'center' },
-  emoji:     { fontSize:22 },
-  body:      { flex:1, minWidth:0, gap:5 },
+  row:       { flexDirection:'row', alignItems:'center', gap:theme.sp3, paddingVertical:theme.sp3, borderBottomWidth:StyleSheet.hairlineWidth },
+  badge:     { width:40, height:40, borderRadius:theme.radiusMd, alignItems:'center', justifyContent:'center' },
+  emoji:     { fontSize:20 },
+  body:      { flex:1, minWidth:0, gap:4 },
   name:      { fontSize:theme.textBase, fontFamily:theme.fontBold, letterSpacing:-0.3 },
-  metaRow:   { flexDirection:'row', alignItems:'center', gap:6 },
-  duePill:   { paddingHorizontal:7, paddingVertical:2, borderRadius:5 },
-  dueText:   { fontSize:10, fontFamily:theme.fontBold, letterSpacing:0.2 },
+  metaRow:   { flexDirection:'row', alignItems:'baseline', gap:8 },
+  // Quiet "· today" / "· in 3d" marker — accentRed only when isToday
+  dueText:   { fontSize:11, fontFamily:theme.fontMono, letterSpacing:0.2 },
   cat:       { fontSize:10, fontFamily:theme.fontRegular },
-  right:     { alignItems:'flex-end', gap:3 },
-  price:     { fontSize:theme.textBase, fontFamily:theme.fontMonoBold, letterSpacing:-0.5 },
-  cycle:     { fontSize:10, fontFamily:theme.fontMono },
-  removeBtn: { width:28, height:28, borderRadius:14, alignItems:'center', justifyContent:'center' },
-  removeLine:{ width:12, height:1.5, borderRadius:1 },
+  right:     { alignItems:'flex-end', gap:2 },
+  price:     { fontSize:theme.textBase, fontFamily:theme.fontMono, letterSpacing:-0.5 },
+  cycle:     { fontSize:10, fontFamily:theme.fontMono, opacity:0.7 },
+  removeBtn: { width:24, height:24, borderRadius:12, alignItems:'center', justifyContent:'center', opacity:0.5 },
+  removeLine:{ width:10, height:StyleSheet.hairlineWidth, borderRadius:1 },
 })
 
 // ── Task row ───────────────────────────────────────────────────────────
@@ -210,15 +217,15 @@ function TaskRow({ task, delay, onToggle, onRemove, colors }: { task: any; delay
         <Text style={[sr.name, { color:colors.text }, task.done && { color:colors.textMuted, textDecorationLine:'line-through' }]}>{task.name}</Text>
         {task.note ? <Text style={[sr.cat, { color:colors.textFaint }]}>{task.note}</Text> : null}
       </View>
-      <TouchableOpacity style={[sr.removeBtn, { backgroundColor:colors.surfaceEl }]} onPress={onRemove}>
+      <IconButton variant="secondary" size="sm" onPress={onRemove} accessibilityLabel="Remove">
         <View style={[sr.removeLine, { backgroundColor:colors.textMuted }]} />
         <View style={[sr.removeLine, { backgroundColor:colors.textMuted, transform:[{rotate:'90deg'}], position:'absolute' }]} />
-      </TouchableOpacity>
+      </IconButton>
     </Animated.View>
   )
 }
 const tr = StyleSheet.create({
-  box:   { width:22, height:22, borderRadius:7, borderWidth:1.5, alignItems:'center', justifyContent:'center' },
+  box:   { width:20, height:20, borderRadius:6, borderWidth:StyleSheet.hairlineWidth, alignItems:'center', justifyContent:'center' },
   check: { fontSize:12, fontFamily:theme.fontBold },
 })
 
@@ -243,15 +250,41 @@ const statS = StyleSheet.create({
   numRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
   value:  { fontFamily: theme.fontMono, fontSize: 30, letterSpacing: -1, lineHeight: 32 },
   unit:   { fontFamily: theme.fontMono, fontSize: 13 },
-  label:  { fontFamily: theme.fontMedium, fontSize: 10, letterSpacing: 1.4 },
+  label:  { fontFamily: theme.fontMedium, fontSize: 10, letterSpacing: 1.6, textTransform: 'lowercase' },
 })
 
 // ── Dashboard ──────────────────────────────────────────────────────────
-type WKey = 'kpi' | 'heatmap' | 'due' | 'stats'
-const WIDGET_DELAY: Record<WKey, number> = { kpi: 60, heatmap: 120, due: 180, stats: 240 }
+// MONO widget grid: each entry is either a 'square' (1×1, paired in rows of 2)
+// or a 'rectangle' (2×1, full row).
+type WKey =
+  | 'active' | 'spend' | 'coffees' | 'events' | 'topExpense' | 'ytd' | 'monthGoal' | 'clock'
+  | 'heatmap' | 'due' | 'category' | 'upcoming' | 'spendTrend'
+
+const WIDGET_SIZE: Record<WKey, 'square' | 'rectangle'> = {
+  active:     'square',
+  spend:      'square',
+  coffees:    'square',
+  events:     'square',
+  topExpense: 'square',
+  ytd:        'square',
+  monthGoal:  'square',
+  clock:      'square',
+  heatmap:    'rectangle',
+  due:        'rectangle',
+  category:   'rectangle',
+  upcoming:   'rectangle',
+  spendTrend: 'rectangle',
+}
+
+const WIDGET_DELAY: Record<WKey, number> = {
+  active: 60,  spend: 90,    monthGoal: 120, clock: 150,
+  heatmap: 180, due: 210,    spendTrend: 240, category: 270,
+  coffees: 300, events: 330, upcoming: 360,
+  topExpense: 390, ytd: 420,
+}
 
 export function Dashboard() {
-  const { colors, themeKey } = useTheme()
+  const { colors } = useTheme()
   const store = useDataStore()
   const toast = useToastStore()
   const { width } = useWindowDimensions()
@@ -275,13 +308,86 @@ export function Dashboard() {
   }), [store.subscriptions])
   const activeSubs  = useMemo(() => store.subscriptions.filter((s: any) => s.active !== false), [store.subscriptions])
 
+  // Top expense (square widget)
+  const topExpense = useMemo(() => {
+    return [...activeSubs].sort((a: any, b: any) => (b.price || 0) - (a.price || 0))[0] ?? null
+  }, [activeSubs])
+
+  // Year-to-date approximation: monthly × months elapsed
+  const ytdSpend = useMemo(() => monthly * (now.getMonth() + 1), [monthly, now])
+
+  // Monthly target — soft goal = 1.25× current monthly spend (until a real budget exists)
+  const monthlyTarget = useMemo(() => Math.max(Math.ceil(monthly * 1.25 / 10) * 10, 50), [monthly])
+
+  // 6-month spend series — approximate using current monthly with light variance
+  const spendSeries = useMemo(() => {
+    if (monthly <= 0) return [0, 0, 0, 0, 0, 0]
+    const variants = [0.86, 0.92, 1.04, 0.97, 1.08, 1.0]
+    return variants.map(v => Math.round(monthly * v))
+  }, [monthly])
+
+  const spendLabels = useMemo(() => {
+    const out: string[] = []
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now); d.setMonth(d.getMonth() - i)
+      out.push(format(d, 'MMM').toLowerCase())
+    }
+    return out
+  }, [now])
+
+  const spendDeltaPct = useMemo(() => {
+    const prev = spendSeries[spendSeries.length - 2] || 0
+    const curr = spendSeries[spendSeries.length - 1] || 0
+    if (prev === 0) return 0
+    return ((curr - prev) / prev) * 100
+  }, [spendSeries])
+
+  // Category breakdown — for the Breakdown widget (Traffic-source style)
+  const categoryBreakdown = useMemo<BreakdownItem[]>(() => {
+    const byCat: Record<string, { value: number; color: string }> = {}
+    for (const sub of activeSubs as any[]) {
+      const cat = sub.category || 'Other'
+      if (!byCat[cat]) byCat[cat] = { value: 0, color: sub.color || colors.accent }
+      byCat[cat].value += (sub.price || 0)
+    }
+    return Object.entries(byCat)
+      .map(([label, { value, color }]) => ({ label, value, color }))
+      .sort((a, b) => b.value - a.value)
+  }, [activeSubs, colors.accent])
+
+  // Upcoming next 30 days
+  const upcomingList = useMemo(() => {
+    const out: Array<{ emoji: string; name: string; date: string; kind: 'sub' | 'event' | 'task'; price?: number; currency?: string }> = []
+    for (const sub of activeSubs as any[]) {
+      if (!sub.nextChargeDate) continue
+      const d = differenceInCalendarDays(parseISO(sub.nextChargeDate), now)
+      if (d >= 0 && d <= 30) out.push({ emoji: sub.emoji ?? '💳', name: sub.name, date: sub.nextChargeDate, kind: 'sub', price: sub.price, currency: sub.currency })
+    }
+    for (const ev of store.events as any[]) {
+      if (!ev.date) continue
+      const d = differenceInCalendarDays(parseISO(ev.date), now)
+      if (d >= 0 && d <= 30) out.push({ emoji: ev.emoji ?? '📅', name: ev.name, date: ev.date, kind: 'event' })
+    }
+    return out.sort((a, b) => a.date.localeCompare(b.date)).slice(0, 5)
+  }, [activeSubs, store.events, now])
+
   const [showAddTrack, setShowAddTrack] = useState(false)
   const [showAddTask, setShowAddTask]   = useState(false)
   const [confirm, setConfirm]           = useState<{ kind: string; id: string; name: string } | null>(null)
 
   // ── Widget ordering ────────────────────────────────────────────────
   const [editMode, setEditMode] = useState(false)
-  const [order, setOrder]       = useState<WKey[]>(['kpi', 'heatmap', 'due', 'stats'])
+  const [order, setOrder]       = useState<WKey[]>([
+    'active', 'spend',         // squares row
+    'monthGoal', 'clock',      // squares row (ring goal + analog clock)
+    'heatmap',                 // rectangle
+    'due',                     // rectangle
+    'spendTrend',              // rectangle (line chart — LineTrend)
+    'coffees', 'events',       // squares row
+    'category',                // rectangle (Breakdown — Traffic source style)
+    'upcoming',                // rectangle
+    'topExpense', 'ytd',       // squares row
+  ])
 
   function moveWidget(id: WKey, dir: -1 | 1) {
     setOrder(prev => {
@@ -295,31 +401,20 @@ export function Dashboard() {
     })
   }
 
-  // ── Reorder controls (shown in edit mode) ─────────────────────────
+  // ── Reorder controls (shown in edit mode) — Button DNA ─────────────
   function ReorderBar({ id }: { id: WKey }) {
     if (!editMode) return null
     const idx = order.indexOf(id)
     const canUp   = idx > 0
     const canDown = idx < order.length - 1
     return (
-      <View style={[gh.bar, { backgroundColor: colors.surfaceEl, borderColor: colors.border }]}>
-        <PressCard
-          style={gh.btn}
-          hoverStyle={{ backgroundColor: colors.surfaceHigh }}
-          onPress={() => moveWidget(id, -1)}
-          disabled={!canUp}
-        >
-          <Text style={[gh.btnText, { color: canUp ? colors.text : colors.textFaint }]}>↑</Text>
-        </PressCard>
-        <View style={[gh.divider, { backgroundColor: colors.border }]} />
-        <PressCard
-          style={gh.btn}
-          hoverStyle={{ backgroundColor: colors.surfaceHigh }}
-          onPress={() => moveWidget(id, 1)}
-          disabled={!canDown}
-        >
-          <Text style={[gh.btnText, { color: canDown ? colors.text : colors.textFaint }]}>↓</Text>
-        </PressCard>
+      <View style={gh.bar}>
+        <IconButton variant="primary" size="sm" onPress={() => moveWidget(id, -1)} disabled={!canUp} accessibilityLabel="Move up">
+          <Text style={[gh.btnText, { color: '#FFFFFF' }]}>↑</Text>
+        </IconButton>
+        <IconButton variant="primary" size="sm" onPress={() => moveWidget(id, 1)} disabled={!canDown} accessibilityLabel="Move down">
+          <Text style={[gh.btnText, { color: '#FFFFFF' }]}>↓</Text>
+        </IconButton>
       </View>
     )
   }
@@ -338,139 +433,267 @@ export function Dashboard() {
     setConfirm(null)
   }
 
-  const isNothing = themeKey === 'nothing'
-  const dotColor  = isNothing ? colors.accentRed : colors.text
+  const dotColor  = colors.text
   const hasItems  = dueSubs.length > 0 || todayTasks.length > 0
 
-  // ── Desktop notebook data ────────────────────────────────────────────
-  const desktopData = useMemo(() => {
-    const byCat: Record<string, number> = {}
-    for (const sub of store.subscriptions as any[]) {
-      if (sub.active === false) continue
-      const cat = sub.category || 'Other'
-      byCat[cat] = (byCat[cat] || 0) + (sub.price || 0)
+  // ── Single widget content (no wrapper) ────────────────────────────
+  function renderSingle(id: WKey): React.ReactNode {
+    switch (id) {
+      case 'active':
+        return (
+          <Widget tag="active subscriptions" size="square">
+            <View style={s.metricCenter}>
+              <RingBadge value={activeSubs.length} max={Math.max(activeSubs.length+4, 10)} size={110} colors={colors} />
+            </View>
+          </Widget>
+        )
+      case 'spend':
+        return (
+          <Widget tag="this month" size="square">
+            <View style={s.metricCenter}>
+              <View style={s.spendBlock}>
+                <Text style={[s.spendMain, { color:colors.text }]}>{monthly.toFixed(0)}</Text>
+                <Text style={[s.spendUnit, { color:colors.textMuted }]}>{symbol}</Text>
+              </View>
+            </View>
+          </Widget>
+        )
+      case 'coffees':
+        return (
+          <Widget tag="coffees / mo" size="square">
+            <View style={s.metricCenter}>
+              <Text style={[s.statNum, { color:colors.text }]}>{coffeeCount}</Text>
+              <Text style={[s.statSub, { color:colors.textFaint }]}>at {symbol}{store.settings.coffeePrice?.toFixed(2)}</Text>
+            </View>
+          </Widget>
+        )
+      case 'events':
+        return (
+          <Widget tag="events this month" size="square">
+            <View style={s.metricCenter}>
+              <Animated.Text entering={ZoomIn.delay(280).springify().damping(12).stiffness(260)} style={[s.statNum, { color:colors.text }]}>{monthEvents.length}</Animated.Text>
+              <Text style={[s.statSub, { color:colors.textFaint }]}>{format(now, 'MMMM').toLowerCase()}</Text>
+            </View>
+          </Widget>
+        )
+      case 'topExpense':
+        return (
+          <Widget tag="top expense" size="square">
+            <View style={s.metricCenter}>
+              {topExpense ? (
+                <>
+                  <Text style={[s.topName, { color:colors.text }]} numberOfLines={1}>
+                    {topExpense.emoji ?? '💳'}  {topExpense.name}
+                  </Text>
+                  <Text style={[s.topPrice, { color:colors.text }]}>
+                    {symbol}{Number(topExpense.price || 0).toFixed(2)}
+                  </Text>
+                </>
+              ) : (
+                <Text style={[s.statSub, { color:colors.textFaint }]}>no active subs</Text>
+              )}
+            </View>
+          </Widget>
+        )
+      case 'ytd':
+        return (
+          <Widget tag="year-to-date" size="square">
+            <View style={s.metricCenter}>
+              <View style={s.spendBlock}>
+                <Text style={[s.spendMain, { color:colors.text }]}>{ytdSpend.toFixed(0)}</Text>
+                <Text style={[s.spendUnit, { color:colors.textMuted }]}>{symbol}</Text>
+              </View>
+              <Text style={[s.statSub, { color:colors.textFaint }]}>jan → {format(now, 'MMM').toLowerCase()}</Text>
+            </View>
+          </Widget>
+        )
+      case 'monthGoal':
+        return (
+          <RingGoalWidget
+            tag="monthly target"
+            value={monthly}
+            target={monthlyTarget}
+            unit={symbol}
+            label="this month"
+          />
+        )
+      case 'clock':
+        return <ClockWidget tag="now" />
+      case 'spendTrend':
+        return (
+          <LineTrendWidget
+            tag="trend"
+            title="spend"
+            value={monthly}
+            unit={symbol}
+            deltaPct={spendDeltaPct}
+            deltaLabel="vs last month"
+            series={spendSeries}
+            labels={spendLabels}
+          />
+        )
+      case 'heatmap':
+        return (
+          <Widget tag="the year, in dots" size="rectangle">
+            <ActivityHeatmap subs={store.subscriptions} events={store.events} colors={colors} />
+          </Widget>
+        )
+      case 'due':
+        return (
+          <Widget
+            tag="this week"
+            size="rectangle"
+            action={<Button label="+ add" variant="primary" size="sm" onPress={() => setShowAddTrack(true)} />}
+          >
+            {!hasItems && <Text style={[s.empty, { color:colors.textFaint }]}>nothing due in the next 7 days</Text>}
+            {dueSubs.map((sub: any, i: number) => (
+              <SubRow key={sub.id} sub={sub} symbol={symbol} diff={differenceInCalendarDays(parseISO(sub.nextChargeDate), now)} delay={200+i*40} colors={colors} onRemove={() => setConfirm({ kind:'sub', id:sub.id, name:sub.name })} />
+            ))}
+            {todayTasks.map((task: any, i: number) => (
+              <TaskRow key={task.id} task={task} delay={300+i*40} colors={colors} onToggle={() => store.updateTask(task.id, { done: !task.done })} onRemove={() => setConfirm({ kind:'task', id:task.id, name:task.name })} />
+            ))}
+          </Widget>
+        )
+      case 'category':
+        return (
+          <BreakdownWidget
+            tag="stats"
+            title="by category"
+            items={categoryBreakdown}
+            unit={symbol}
+          />
+        )
+      case 'upcoming':
+        return (
+          <Widget tag="upcoming · next 30 days" size="rectangle">
+            {upcomingList.length === 0 ? (
+              <Text style={[s.empty, { color:colors.textFaint }]}>nothing in the next 30 days</Text>
+            ) : upcomingList.map((it, i) => {
+              const isLast = i === upcomingList.length - 1
+              const dt = parseISO(it.date)
+              const diff = differenceInCalendarDays(dt, now)
+              const when = diff === 0 ? 'today' : diff === 1 ? 'tomorrow' : `in ${diff}d`
+              return (
+                <View key={`${it.date}-${i}`}>
+                  <View style={s.upRow}>
+                    <Text style={s.upEmoji}>{it.emoji}</Text>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={[s.upName, { color: colors.text }]} numberOfLines={1}>{it.name}</Text>
+                      <Text style={[s.upMeta, { color: colors.textMuted }]}>{format(dt, 'EEE · d MMM').toLowerCase()} · {when}</Text>
+                    </View>
+                    {it.kind === 'sub' && it.price != null ? (
+                      <Text style={[s.upPrice, { color: colors.text }]}>{symbol}{it.price.toFixed(2)}</Text>
+                    ) : (
+                      <Text style={[s.upTag, { color: colors.textMuted }]}>event</Text>
+                    )}
+                  </View>
+                  {!isLast && <View style={[s.upRule, { backgroundColor: colors.border }]} />}
+                </View>
+              )
+            })}
+          </Widget>
+        )
     }
-    const breakdown = Object.entries(byCat).sort((a, b) => b[1] - a[1])
-    return { breakdown }
-  }, [store.subscriptions])
+  }
 
-  // ── Widget renderers ───────────────────────────────────────────────
-  function renderWidget(id: WKey, _idx: number) {
+  // Wrap a widget with reorder bar + animation. `fill` propagates flex:1
+  // through both wrappers so square widgets actually take half the row.
+  function wrapWidget(id: WKey, content: React.ReactNode, _idx: number, fill = false): React.ReactNode {
+    const fillStyle = fill ? { flex: 1 } : undefined
     return (
       <Animated.View
         key={id}
         layout={LinearTransition.springify().damping(22).stiffness(220)}
+        style={fillStyle}
       >
         <MotiView
           from={{ opacity:0, translateY:16 }}
           animate={{ opacity:1, translateY:0 }}
           transition={{ type:'spring', damping:20, stiffness:200, delay: WIDGET_DELAY[id] }}
+          style={fillStyle}
         >
           <ReorderBar id={id} />
-          {id === 'kpi' && (
-            <View style={s.row2}>
-              <PressCard style={[s.card, s.kpiCard, { backgroundColor: colors.surface }]}>
-                {isNothing && <DotGrid color={dotColor} opacity={0.08} />}
-                <View style={s.kpiTopRow}>
-                  <RingBadge value={activeSubs.length} max={Math.max(activeSubs.length+4, 10)} colors={colors} />
-                  <View style={[s.adjustBtn, { backgroundColor: colors.surfaceEl }]}>
-                    {[14,10,14].map((w,i) => <View key={i} style={{ width:w, height:1.5, backgroundColor:colors.text+'55', borderRadius:1 }} />)}
-                  </View>
-                </View>
-                <View style={s.kpiBottom}>
-                  <Text style={[s.kpiName, { color:colors.text }]}>Active</Text>
-                  <Text style={[s.kpiSub, { color:colors.textMuted }]}>subscriptions</Text>
-                </View>
-              </PressCard>
-              <PressCard style={[s.card, s.kpiCard, { backgroundColor: colors.surface }]}>
-                {isNothing && <DotGrid color={dotColor} opacity={0.08} />}
-                <View style={s.kpiTopRow}>
-                  <View style={s.spendBlock}>
-                    <Text style={[s.spendMain, { color:colors.text }]}>{monthly.toFixed(0)}</Text>
-                    <Text style={[s.spendUnit, { color:colors.textMuted }]}>{symbol}</Text>
-                  </View>
-                  <View style={[s.adjustBtn, { backgroundColor: colors.surfaceEl }]}>
-                    {[14,10,14].map((w,i) => <View key={i} style={{ width:w, height:1.5, backgroundColor:colors.text+'55', borderRadius:1 }} />)}
-                  </View>
-                </View>
-                <View style={s.kpiBottom}>
-                  <Text style={[s.kpiName, { color:colors.text }]}>Monthly</Text>
-                  <Text style={[s.kpiSub, { color:colors.textMuted }]}>spend</Text>
-                </View>
-              </PressCard>
-            </View>
-          )}
-          {id === 'heatmap' && (
-            <View style={[s.card, { backgroundColor: colors.surface }]}>
-              <ActivityHeatmap subs={store.subscriptions} events={store.events} colors={colors} />
-            </View>
-          )}
-          {id === 'due' && (
-            <View style={[s.card, { backgroundColor: colors.surface }]}>
-              <View style={s.sectionHeader}>
-                <Text style={[s.sectionTitle, { color:colors.text }]}>Due this week</Text>
-                <PressCard style={[s.addPill, { backgroundColor:colors.surfaceEl }]} onPress={() => setShowAddTrack(true)}>
-                  <Text style={[s.addPillText, { color:colors.textMuted }]}>+ Add</Text>
-                </PressCard>
-              </View>
-              {!hasItems && <Text style={[s.empty, { color:colors.textFaint }]}>Nothing due in the next 7 days</Text>}
-              {dueSubs.map((sub: any, i: number) => (
-                <SubRow key={sub.id} sub={sub} symbol={symbol} diff={differenceInCalendarDays(parseISO(sub.nextChargeDate), now)} delay={200+i*40} colors={colors} onRemove={() => setConfirm({ kind:'sub', id:sub.id, name:sub.name })} />
-              ))}
-              {todayTasks.map((task: any, i: number) => (
-                <TaskRow key={task.id} task={task} delay={300+i*40} colors={colors} onToggle={() => store.updateTask(task.id, { done: !task.done })} onRemove={() => setConfirm({ kind:'task', id:task.id, name:task.name })} />
-              ))}
-            </View>
-          )}
-          {id === 'stats' && (
-            <View style={s.row2}>
-              <PressCard style={[s.card, s.statCard, { backgroundColor:colors.surface }]}>
-                {isNothing && <DotGrid color={dotColor} opacity={0.07} />}
-                <Text style={[s.statNum, { color:colors.text }]}>{coffeeCount}</Text>
-                <Text style={[s.statLabel, { color:colors.text }]}>coffees / mo</Text>
-                <Text style={[s.statSub, { color:colors.textMuted }]}>at {symbol}{store.settings.coffeePrice?.toFixed(2)}</Text>
-              </PressCard>
-              <PressCard style={[s.card, s.statCard, { backgroundColor:colors.surface }]}>
-                {isNothing && <DotGrid color={dotColor} opacity={0.07} />}
-                <Animated.Text entering={ZoomIn.delay(280).springify().damping(12).stiffness(260)} style={[s.statNum, { color:colors.text }]}>{monthEvents.length}</Animated.Text>
-                <Text style={[s.statLabel, { color:colors.text }]}>events</Text>
-                <Text style={[s.statSub, { color:colors.textMuted }]}>{format(now, 'MMMM')}</Text>
-              </PressCard>
-            </View>
-          )}
+          {content}
         </MotiView>
       </Animated.View>
     )
   }
 
+  // Auto-pair consecutive squares into rows (mono layout rule)
+  function renderAll(): React.ReactNode[] {
+    const out: React.ReactNode[] = []
+    let pending: { id: WKey; node: React.ReactNode; idx: number } | null = null
+
+    order.forEach((id, idx) => {
+      const node = renderSingle(id)
+      if (WIDGET_SIZE[id] === 'square') {
+        if (pending) {
+          out.push(
+            <View key={`row-${pending.id}-${id}`} style={s.squareRow}>
+              {wrapWidget(pending.id, pending.node, pending.idx, true)}
+              {wrapWidget(id, node, idx, true)}
+            </View>
+          )
+          pending = null
+        } else {
+          pending = { id, node, idx }
+        }
+      } else {
+        if (pending) {
+          // Lone trailing square: render on its own (half row, left-aligned)
+          out.push(
+            <View key={`row-${pending.id}-solo`} style={s.squareRow}>
+              {wrapWidget(pending.id, pending.node, pending.idx, true)}
+              <View style={{ flex: 1 }} />
+            </View>
+          )
+          pending = null
+        }
+        out.push(wrapWidget(id, node, idx, false))
+      }
+    })
+    if (pending) {
+      out.push(
+        <View key={`row-${pending.id}-solo`} style={s.squareRow}>
+          {wrapWidget(pending.id, pending.node, pending.idx, true)}
+          <View style={{ flex: 1 }} />
+        </View>
+      )
+    }
+    return out
+  }
+
   const header = (
     <MotiView from={{ opacity:0, translateY:-8 }} animate={{ opacity:1, translateY:0 }} transition={{ type:'spring', damping:20, stiffness:200 }} style={s.header}>
-      <Text style={[s.pageTitle, { color:colors.text }]}>{isNothing ? '⬡ Track' : 'Track'}</Text>
+      <Text style={[s.pageTitle, { color:colors.text }]}>Track</Text>
       <View style={s.headerBtns}>
         {!editMode && (
-          <PressCard style={[s.iconBtn, { backgroundColor:colors.surface }]} onPress={() => setShowAddTask(true)}>
-            <View style={{ width:14, height:1.5, backgroundColor:colors.text, borderRadius:1 }} />
-            <View style={{ width:10, height:1.5, backgroundColor:colors.text, borderRadius:1 }} />
-            <View style={{ width:14, height:1.5, backgroundColor:colors.text, borderRadius:1 }} />
-          </PressCard>
+          <IconButton variant="primary" size="md" onPress={() => setShowAddTask(true)} accessibilityLabel="Add task">
+            <View style={{ gap:3, alignItems:'center' }}>
+              <View style={{ width:14, height:1.5, backgroundColor:'#FFFFFF', borderRadius:1 }} />
+              <View style={{ width:10, height:1.5, backgroundColor:'#FFFFFF', borderRadius:1 }} />
+              <View style={{ width:14, height:1.5, backgroundColor:'#FFFFFF', borderRadius:1 }} />
+            </View>
+          </IconButton>
         )}
-        <PressCard style={[s.iconBtn, { backgroundColor: editMode ? colors.accent : colors.surface }]} onPress={() => setEditMode(e => !e)}>
-          {editMode
-            ? <Text style={{ color:colors.accentFg, fontSize:12, fontFamily:theme.fontBold }}>Done</Text>
-            : <>
-                <View style={{ flexDirection:'row', gap:3 }}>
-                  {[8,8].map((w,i) => <View key={i} style={{ width:w, height:8, borderRadius:2, backgroundColor:colors.text+'88' }} />)}
-                </View>
-                <View style={{ flexDirection:'row', gap:3 }}>
-                  {[8,8].map((w,i) => <View key={i} style={{ width:w, height:8, borderRadius:2, backgroundColor:colors.text+'88' }} />)}
-                </View>
-              </>
-          }
-        </PressCard>
+        {editMode ? (
+          <Button label="Done" variant="primary" size="sm" onPress={() => setEditMode(false)} />
+        ) : (
+          <IconButton variant="primary" size="md" onPress={() => setEditMode(true)} accessibilityLabel="Edit layout">
+            <View style={{ gap:3 }}>
+              <View style={{ flexDirection:'row', gap:3 }}>
+                {[8,8].map((w,i) => <View key={i} style={{ width:w, height:8, borderRadius:2, backgroundColor:'#FFFFFF' }} />)}
+              </View>
+              <View style={{ flexDirection:'row', gap:3 }}>
+                {[8,8].map((w,i) => <View key={i} style={{ width:w, height:8, borderRadius:2, backgroundColor:'#FFFFFF' }} />)}
+              </View>
+            </View>
+          </IconButton>
+        )}
         {!editMode && (
-          <PressCard style={[s.iconBtn, { backgroundColor:colors.surface }]} onPress={() => setShowAddTrack(true)}>
-            <Text style={[s.iconBtnPlus, { color:colors.text }]}>+</Text>
-          </PressCard>
+          <IconButton variant="primary" size="md" onPress={() => setShowAddTrack(true)} accessibilityLabel="Add track">
+            <Text style={{ color:'#FFFFFF', fontSize:22, fontFamily:theme.fontLight, lineHeight:24 }}>+</Text>
+          </IconButton>
         )}
       </View>
     </MotiView>
@@ -500,102 +723,18 @@ export function Dashboard() {
     </>
   )
 
-  if (isDesktop) {
-    const monthName = format(now, 'MMMM')
-    const dateLine  = format(now, "EEEE · d LLL · yyyy")
-    return (
-      <ScrollView style={[s.page, { backgroundColor:colors.bg }]} contentContainerStyle={nb.scroll} showsVerticalScrollIndicator={false}>
-        <View style={nb.page}>
-          {/* Masthead — month + date + quiet "+" */}
-          <MotiView from={{ opacity:0, translateY:-6 }} animate={{ opacity:1, translateY:0 }} transition={{ type:'timing', duration:260 }} style={nb.masthead}>
-            <View style={{ flex:1 }}>
-              <Text style={[nb.month, { color:colors.text }]}>{monthName}</Text>
-              <Text style={[nb.dateLine, { color:colors.textMuted }]}>{dateLine.toLowerCase()}</Text>
-            </View>
-            <PressCard
-              onPress={() => setShowAddTrack(true)}
-              style={nb.plusBtn}
-              hoverStyle={{ backgroundColor: colors.surfaceEl }}
-            >
-              <Text style={[nb.plus, { color:colors.text }]}>+</Text>
-            </PressCard>
-          </MotiView>
-
-          <View style={[nb.rule, { backgroundColor:colors.border }]} />
-
-          {/* Ledger row — 4 numbers in Space Mono */}
-          <View style={nb.ledger}>
-            <Stat value={String(activeSubs.length)} label="subscribed" colors={colors} />
-            <Stat value={monthly.toFixed(0)} unit={symbol} label="this month" colors={colors} />
-            <Stat value={String(monthEvents.length)} label="events" colors={colors} />
-            <Stat value={String(coffeeCount)} label="coffees" colors={colors} />
-          </View>
-
-          <View style={[nb.rule, { backgroundColor:colors.border }]} />
-
-          {/* The year, in dots */}
-          <View style={nb.section}>
-            <Text style={[nb.sectionTag, { color:colors.textMuted }]}>the year, in dots</Text>
-            <View style={nb.heatmapHolder}>
-              <ActivityHeatmap subs={store.subscriptions} events={store.events} colors={colors} />
-            </View>
-          </View>
-
-          <View style={[nb.rule, { backgroundColor:colors.border }]} />
-
-          {/* This week */}
-          <View style={nb.section}>
-            <Text style={[nb.sectionTag, { color:colors.textMuted }]}>this week</Text>
-            {!hasItems && <Text style={[nb.empty, { color:colors.textFaint }]}>nothing due in the next 7 days</Text>}
-            {dueSubs.map((sub: any, i: number) => (
-              <SubRow
-                key={sub.id}
-                sub={sub}
-                symbol={symbol}
-                diff={differenceInCalendarDays(parseISO(sub.nextChargeDate), now)}
-                delay={120 + i * 40}
-                colors={colors}
-                onRemove={() => setConfirm({ kind:'sub', id:sub.id, name:sub.name })}
-              />
-            ))}
-            {todayTasks.map((task: any, i: number) => (
-              <TaskRow
-                key={task.id}
-                task={task}
-                delay={180 + i * 40}
-                colors={colors}
-                onToggle={() => store.updateTask(task.id, { done: !task.done })}
-                onRemove={() => setConfirm({ kind:'task', id:task.id, name:task.name })}
-              />
-            ))}
-          </View>
-
-          <View style={[nb.rule, { backgroundColor:colors.border }]} />
-
-          {/* By category — dotted leader lines, mono prices */}
-          <View style={nb.section}>
-            <Text style={[nb.sectionTag, { color:colors.textMuted }]}>by category</Text>
-            {desktopData.breakdown.length === 0 ? (
-              <Text style={[nb.empty, { color:colors.textFaint }]}>no active subscriptions</Text>
-            ) : desktopData.breakdown.map(([cat, val]) => (
-              <View key={cat} style={nb.catRow}>
-                <Text style={[nb.catName, { color:colors.text }]} numberOfLines={1}>{cat}</Text>
-                <View style={[nb.catLeader, { borderBottomColor: colors.border }]} />
-                <Text style={[nb.catValue, { color:colors.text }]}>{symbol}{val.toFixed(2)}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-
-        {modals}
-      </ScrollView>
-    )
-  }
-
+  // Unified — same widgets on mobile and web (centered column on desktop)
   return (
-    <ScrollView style={[s.page, { backgroundColor:colors.bg }]} contentContainerStyle={s.content} showsVerticalScrollIndicator={false} scrollEnabled={!editMode}>
-      {header}
-      {order.map((id, idx) => renderWidget(id, idx))}
+    <ScrollView
+      style={[s.page, { backgroundColor:colors.bg }]}
+      contentContainerStyle={[s.content, isDesktop && s.contentDesktop]}
+      showsVerticalScrollIndicator={false}
+      scrollEnabled={!editMode}
+    >
+      <View style={isDesktop ? s.widgetColumn : undefined}>
+        {header}
+        {renderAll()}
+      </View>
       {modals}
     </ScrollView>
   )
@@ -603,45 +742,46 @@ export function Dashboard() {
 
 // ── Reorder bar styles ─────────────────────────────────────────────────
 const gh = StyleSheet.create({
-  bar:        { height:40, borderRadius:12, borderWidth:1, marginBottom:8, flexDirection:'row', alignItems:'center', justifyContent:'center', overflow:'hidden' },
-  btn:        { flex:1, height:'100%', alignItems:'center', justifyContent:'center' },
-  btnDisabled:{ opacity:0.4 },
-  btnText:    { fontSize:18, lineHeight:20, fontFamily:theme.fontMedium },
-  divider:    { width:1, height:18, opacity:0.7 },
+  bar:        { marginBottom:8, flexDirection:'row', alignItems:'center', justifyContent:'center', gap:theme.sp2 },
+  btnText:    { fontSize:16, lineHeight:18, fontFamily:theme.fontMono },
 })
 
 const s = StyleSheet.create({
   page: { flex: 1 },
   content: { padding:theme.sp4, gap:theme.sp3, paddingBottom:110 },
-  contentDesktop: { padding:theme.sp5, gap:theme.sp4, paddingBottom:40 },
-  desktopGrid:  { flexDirection:'row', gap:theme.sp4, alignItems:'flex-start' },
-  desktopLeft:  { flex:3, gap:theme.sp4 },
-  desktopRight: { flex:2, gap:theme.sp4 },
+  // Same widget grid on web — centered, single column matching mobile width
+  contentDesktop: { paddingHorizontal: 32, paddingVertical: 40, paddingBottom: 80, alignItems: 'center' },
+  widgetColumn: { width: '100%', maxWidth: 480, gap: theme.sp3 },
   header: { flexDirection:'row', justifyContent:'space-between', alignItems:'center', paddingHorizontal:4, paddingTop:theme.sp2, marginBottom:theme.sp2 },
   pageTitle: { fontSize:34, fontFamily:theme.fontBlack, letterSpacing:-1 },
   headerBtns: { flexDirection:'row', gap:theme.sp2 },
   iconBtn: { width:38, height:38, borderRadius:19, alignItems:'center', justifyContent:'center', gap:3 },
   iconBtnPlus: { fontSize:22, fontFamily:theme.fontLight, lineHeight:26 },
-  card: { borderRadius:theme.radiusXl, padding:theme.sp5, overflow:'hidden' },
-  row2: { flexDirection:'row', gap:theme.sp3 },
-  kpiCard: { flex:1, justifyContent:'space-between', minHeight:140 },
-  kpiTopRow: { flexDirection:'row', justifyContent:'space-between', alignItems:'flex-start' },
-  kpiBottom: { marginTop:theme.sp3 },
-  kpiName: { fontSize:theme.textBase, fontFamily:theme.fontBold, letterSpacing:-0.3 },
-  kpiSub: { fontSize:theme.textXs, fontFamily:theme.fontRegular, marginTop:2 },
-  spendBlock: { flexDirection:'row', alignItems:'flex-end', gap:3 },
-  spendMain: { fontSize:48, fontFamily:theme.fontBlack, letterSpacing:-2, lineHeight:52 },
-  spendUnit: { fontSize:18, fontFamily:theme.fontMono, marginBottom:4 },
-  adjustBtn: { width:30, height:30, borderRadius:15, alignItems:'center', justifyContent:'center' },
-  sectionHeader: { flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom:theme.sp4 },
-  sectionTitle: { fontSize:theme.textBase, fontFamily:theme.fontBold, letterSpacing:-0.3 },
-  addPill: { paddingHorizontal:12, paddingVertical:6, borderRadius:theme.radiusFull },
-  addPillText: { fontSize:theme.textXs, fontFamily:theme.fontBold },
-  empty: { fontSize:theme.textSm, fontFamily:theme.fontRegular, paddingVertical:theme.sp3 },
-  statCard: { flex:1, gap:4, overflow:'hidden' },
-  statNum: { fontSize:32, fontFamily:theme.fontBlack, letterSpacing:-1.5 },
-  statLabel: { fontSize:theme.textSm, fontFamily:theme.fontBold },
-  statSub: { fontSize:theme.textXs, fontFamily:theme.fontMono },
+  // Centered hero content area inside a Widget (for metric widgets) —
+  // both axes centered, fills the widget body
+  metricCenter: { flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center', gap: theme.sp1 },
+  // Row of two square widgets — mono spacing matches theme.sp3
+  squareRow: { flexDirection: 'row', gap: theme.sp3 },
+  spendBlock: { flexDirection:'row', alignItems:'flex-end', gap:6 },
+  // Hero numbers — Space Mono BOLD, sized to fill the widget (§Widget hero typo)
+  spendMain: { fontSize:56, fontFamily:theme.fontMonoBold, letterSpacing:-2.5, lineHeight:60 },
+  spendUnit: { fontSize:20, fontFamily:theme.fontMonoBold, marginBottom:6 },
+  empty: { fontSize:theme.textSm, fontFamily:theme.fontMono, fontStyle:'italic', paddingVertical:theme.sp3 },
+  statNum: { fontSize:48, fontFamily:theme.fontMonoBold, letterSpacing:-2, lineHeight:52 },
+  statSub: { fontSize:12, fontFamily:theme.fontMono, marginTop:4 },
+
+  // Top expense widget
+  topName: { fontSize:18, fontFamily:theme.fontBold, letterSpacing:-0.3, textAlign:'center' },
+  topPrice: { fontSize:32, fontFamily:theme.fontMonoBold, letterSpacing:-1.4, marginTop:6 },
+
+  // Upcoming widget rows
+  upRow: { flexDirection:'row', alignItems:'center', gap:10, paddingVertical:8 },
+  upEmoji: { fontSize:18, width:22, textAlign:'center' },
+  upName: { fontSize:13, fontFamily:theme.fontBold, letterSpacing:-0.2 },
+  upMeta: { fontSize:11, fontFamily:theme.fontMono, letterSpacing:0.1, marginTop:1 },
+  upPrice: { fontSize:13, fontFamily:theme.fontMono, letterSpacing:-0.2 },
+  upTag: { fontSize:10, fontFamily:theme.fontMono, letterSpacing:0.4, textTransform:'lowercase' },
+  upRule: { height: StyleSheet.hairlineWidth },
   confirmText: { fontSize:theme.textSm, marginBottom:theme.sp5, lineHeight:22 },
   confirmActions: { flexDirection:'row', gap:theme.sp3 },
   btnSec: { flex:1, paddingVertical:theme.sp3, borderRadius:theme.radiusMd, alignItems:'center' },
@@ -650,30 +790,3 @@ const s = StyleSheet.create({
   btnDangerTxt: { fontSize:theme.textSm, fontFamily:theme.fontBold, color:'#fff' },
 })
 
-// ── Notebook desktop styles ────────────────────────────────────────────
-const nb = StyleSheet.create({
-  scroll:       { paddingVertical: 56, paddingHorizontal: 32, alignItems: 'center' },
-  page:         { width: '100%', maxWidth: 720, gap: 28 },
-
-  masthead:     { flexDirection: 'row', alignItems: 'flex-end', gap: 16 },
-  month:        { fontSize: 56, fontFamily: theme.fontBlack, letterSpacing: -2.5, lineHeight: 58, textTransform: 'capitalize' },
-  dateLine:     { fontSize: 12, fontFamily: theme.fontMono, letterSpacing: 0.2, marginTop: 6 },
-  plusBtn:      { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
-  plus:         { fontSize: 24, fontFamily: theme.fontLight, lineHeight: 28 },
-
-  rule:         { height: StyleSheet.hairlineWidth, width: '100%' },
-
-  ledger:       { flexDirection: 'row', gap: 24, paddingVertical: 4 },
-
-  section:      { gap: 14 },
-  sectionTag:   { fontSize: 10, fontFamily: theme.fontMedium, letterSpacing: 1.6, textTransform: 'lowercase' },
-
-  heatmapHolder:{ paddingVertical: 4 },
-
-  empty:        { fontSize: 13, fontFamily: theme.fontMono, fontStyle: 'italic', paddingVertical: 12 },
-
-  catRow:       { flexDirection: 'row', alignItems: 'flex-end', gap: 10, paddingVertical: 6 },
-  catName:      { fontFamily: theme.fontMedium, fontSize: 14, letterSpacing: -0.2 },
-  catLeader:    { flex: 1, borderBottomWidth: StyleSheet.hairlineWidth, borderStyle: 'dotted', marginBottom: 4, opacity: 0.6 },
-  catValue:     { fontFamily: theme.fontMono, fontSize: 14, letterSpacing: -0.3 },
-})

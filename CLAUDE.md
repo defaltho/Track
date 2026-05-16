@@ -1,5 +1,21 @@
 # Ruflo — Claude Code Configuration
 
+## Contributors
+
+This repository has more than one human contributor. When you see a commit author that is **not** the current user, treat that work as a peer's:
+
+| Author | GitHub | Role / scope |
+|--------|--------|--------------|
+| defaltho | `defaltho` | Project owner. UI/UX, design system, dashboard, widgets, calendar, settings. Default contributor. |
+| Luis Miguel | `luisjsmiguel-tech` (`237356165+luisjsmiguel-tech@users.noreply.github.com`) | Co-contributor. Owns the **Analytics tab** (`src/pages/Analytics.tsx`) and chart helpers (`src/utils/chart.ts`). |
+
+### Rules when working with another contributor's code
+
+1. **Don't silently restyle another contributor's surface.** Luis owns Analytics. Don't refactor `Analytics.tsx` to match the design system unless the current user explicitly says so — flag drift instead of fixing it.
+2. **Cherry-pick over merge.** When the current user asks to "pull only X's changes" or "bring just the analytics tab", use `git checkout origin/main -- <path>` for the specific files, not `git pull` which would merge everything. The user's local branch usually has heavy WIP that a full merge would tangle.
+3. **Identify ownership before editing.** Before touching `Analytics.tsx` or `chart.ts`, run `git log -n 3 -- <file>` to see who last wrote it. If it's a peer's code, ask the current user whether the change is wanted on this branch or should be left for the peer.
+4. **Don't credit yourself for a peer's work.** When summarising changes after a cherry-pick, attribute the file's logic to the original author ("Luis's Analytics implementation"), not to the current session.
+
 ## On Conversation Start
 
 When starting a new conversation in this project, ALWAYS check for remote updates first:
@@ -8,6 +24,7 @@ When starting a new conversation in this project, ALWAYS check for remote update
 3. If there are remote updates available, ask the user: "Há atualizações no repositório remoto. Queres fazer git pull para atualizar?"
 4. If the user says yes, run `git pull origin main`
 5. If already up to date, proceed normally without mentioning it
+6. **Mention WHO authored the new commits** when reporting remote updates — e.g. "2 novos commits do Luis no Analytics" — so the user can decide whether to pull everything or cherry-pick.
 
 ## Rules
 

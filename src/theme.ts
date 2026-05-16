@@ -44,28 +44,6 @@ export const darkColors = {
   warning: '#F59E0B',
 }
 
-export const nothingColors: typeof darkColors = {
-  bg: '#0A0A0A',
-  surface: '#111111',
-  surfaceEl: '#1A1A1A',
-  surfaceHigh: '#222222',
-  border: '#1E1E1E',
-  borderStrong: '#2E2E2E',
-  text: '#FFFFFF',
-  textMuted: '#666666',
-  textFaint: '#2A2A2A',
-  accent: '#FF2B2B',
-  accentFg: '#FFFFFF',
-  accentSoft: '#1A1A1A',
-  accentRed: '#FF2B2B',
-  accentRedFg: '#FFFFFF',
-  success: '#22C55E',
-  successBg: '#0A1F0F',
-  danger: '#EF4444',
-  dangerBg: '#1F0707',
-  warning: '#F59E0B',
-}
-
 export type Colors = typeof lightColors
 
 // Static design tokens — never change with theme
@@ -78,7 +56,7 @@ export const theme = {
   fontBold: 'Roboto_700Bold',
   fontBlack: 'Roboto_900Black',
   fontMono: 'SpaceMono_400Regular',
-  fontMonoBold: 'Roboto_700Bold',
+  fontMonoBold: 'SpaceMono_700Bold',
 
   sp1: 4, sp2: 8, sp3: 12, sp4: 16, sp5: 20, sp6: 24, sp8: 32,
 
@@ -113,7 +91,7 @@ export const fonts = {
   fontBold: 'Roboto_700Bold',
   fontBlack: 'Roboto_900Black',
   fontMono: 'SpaceMono_400Regular',
-  fontMonoBold: 'Roboto_700Bold',
+  fontMonoBold: 'SpaceMono_700Bold',
 }
 
 export const sp = { sp1: 4, sp2: 8, sp3: 12, sp4: 16, sp5: 20, sp6: 24, sp8: 32 }

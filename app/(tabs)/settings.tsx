@@ -18,13 +18,13 @@ import { useTheme } from '../../src/context/ThemeContext'
 import { theme } from '../../src/theme'
 import { Modal as TrackModal } from '../../src/components/ui/Modal'
 import { Button } from '../../src/components/ui/Button'
+import { Segmented } from '../../src/components/ui/Segmented'
 import { VERSION } from '../../src/data/version'
 import { CHANGELOG } from '../../src/data/changelog'
 import { loadSeedData } from '../../src/utils/seedData'
 
 const CURRENCIES = ['EUR', 'USD', 'GBP', 'BRL']
 
-const NOTHING_RED = '#FF2B2B'
 
 export default function Settings() {
   const router = useRouter()
@@ -105,10 +105,9 @@ export default function Settings() {
     toast.push('All data cleared', 'info')
   }
 
-  const themeOptions: Array<{ key: 'light' | 'dark' | 'nothing'; label: string; dot: string; desc: string }> = [
+  const themeOptions: Array<{ key: 'light' | 'dark'; label: string; dot: string; desc: string }> = [
     { key: 'light', label: 'Light', dot: colors.accent, desc: 'Clean, minimal' },
     { key: 'dark', label: 'Dark', dot: '#FFFFFF', desc: 'Easy on the eyes' },
-    { key: 'nothing', label: 'Nothing', dot: NOTHING_RED, desc: 'High contrast · red accent' },
   ]
 
   return (
@@ -120,11 +119,11 @@ export default function Settings() {
       <Text style={[s.pageTitle, { color: colors.text }]}>Settings</Text>
 
       {/* ── Appearance ── */}
-      <Text style={[s.sectionLabel, { color: colors.textMuted }]}>Appearance</Text>
+      <Text style={[s.sectionLabel, { color: colors.textMuted }]}>appearance</Text>
       <View style={[s.card, { backgroundColor: colors.surface }]}>
         {themeOptions.map((opt, i) => {
           const selected = themeKey === opt.key
-          const accentColor = opt.key === 'nothing' ? NOTHING_RED : colors.accent
+          const accentColor = colors.accent
           return (
             <React.Fragment key={opt.key}>
               {i > 0 && <View style={[s.divider, { backgroundColor: colors.border }]} />}
@@ -146,37 +145,22 @@ export default function Settings() {
       </View>
 
       {/* ── Preferences ── */}
-      <Text style={[s.sectionLabel, { color: colors.textMuted }]}>Preferences</Text>
+      <Text style={[s.sectionLabel, { color: colors.textMuted }]}>preferences</Text>
       <View style={[s.card, { backgroundColor: colors.surface }]}>
         <View style={s.row}>
           <Text style={[s.rowLabel, { color: colors.text }]}>Currency</Text>
-          <View style={s.pillRow}>
-            {CURRENCIES.map(c => (
-              <TouchableOpacity
-                key={c}
-                style={[
-                  s.pill,
-                  {
-                    backgroundColor: store.settings.defaultCurrency === c ? colors.accent : colors.surfaceEl,
-                    borderColor: store.settings.defaultCurrency === c ? colors.accent : colors.border,
-                  },
-                ]}
-                onPress={() => store.updateSettings({ defaultCurrency: c })}
-              >
-                <Text style={[
-                  s.pillText,
-                  { color: store.settings.defaultCurrency === c ? colors.accentFg : colors.textMuted },
-                ]}>
-                  {c}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          <Segmented
+            options={CURRENCIES}
+            value={store.settings.defaultCurrency}
+            onChange={c => store.updateSettings({ defaultCurrency: c })}
+            layout="fit"
+            size="sm"
+          />
         </View>
       </View>
 
       {/* ── Data ── */}
-      <Text style={[s.sectionLabel, { color: colors.textMuted }]}>Data</Text>
+      <Text style={[s.sectionLabel, { color: colors.textMuted }]}>data</Text>
       <View style={[s.card, { backgroundColor: colors.surface }]}>
         <TouchableOpacity style={s.row} onPress={handleExport} activeOpacity={0.6}>
           <Text style={[s.rowLabel, { color: colors.text }]}>Export Data</Text>
@@ -209,18 +193,10 @@ export default function Settings() {
                 <Text style={[s.errorText, { color: colors.danger }]}>{importError}</Text>
               ) : null}
               <View style={s.importActions}>
-                <TouchableOpacity
-                  style={[s.btn, { backgroundColor: colors.surfaceEl, borderColor: colors.border, borderWidth: 1 }]}
-                  onPress={() => { setShowImport(false); setImportText(''); setImportError('') }}
-                >
-                  <Text style={[s.btnText, { color: colors.textMuted }]}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[s.btn, { backgroundColor: colors.accent, flex: 1 }]}
-                  onPress={handleImport}
-                >
-                  <Text style={[s.btnText, { color: colors.accentFg }]}>Import</Text>
-                </TouchableOpacity>
+                <Button label="Cancel" variant="secondary" size="md" onPress={() => { setShowImport(false); setImportText(''); setImportError('') }} />
+                <View style={{ flex: 1 }}>
+                  <Button label="Import" variant="primary" size="md" onPress={handleImport} fullWidth />
+                </View>
               </View>
             </View>
           </View>
@@ -228,12 +204,12 @@ export default function Settings() {
       </View>
 
       {/* ── About ── */}
-      <Text style={[s.sectionLabel, { color: colors.textMuted }]}>About</Text>
+      <Text style={[s.sectionLabel, { color: colors.textMuted }]}>about</Text>
       <View style={[s.card, { backgroundColor: colors.surface }]}>
         <TouchableOpacity style={s.row} onPress={() => setShowChangelog(true)} activeOpacity={0.6}>
           <View>
             <Text style={[s.rowLabel, { color: colors.text }]}>What's new</Text>
-            <Text style={[s.rowSub, { color: colors.textMuted }]}>Changelog · v{VERSION}</Text>
+            <Text style={[s.rowSub, { color: colors.textMuted }]}>Changelog · <Text style={{ fontFamily: theme.fontMono }}>v{VERSION}</Text></Text>
           </View>
           <Text style={[s.chevron, { color: colors.textMuted }]}>›</Text>
         </TouchableOpacity>
@@ -252,7 +228,7 @@ export default function Settings() {
       {/* ── Developer (only when devMode) ── */}
       {devMode && (
         <>
-          <Text style={[s.sectionLabel, { color: colors.textMuted }]}>Developer</Text>
+          <Text style={[s.sectionLabel, { color: colors.textMuted }]}>developer</Text>
           <View style={[s.card, { backgroundColor: colors.surface }]}>
             <TouchableOpacity style={s.row} onPress={resetOnboarding} activeOpacity={0.6}>
               <Text style={[s.rowLabel, { color: colors.text }]}>Reset onboarding</Text>
@@ -273,7 +249,7 @@ export default function Settings() {
       )}
 
       {/* ── Danger Zone ── */}
-      <Text style={[s.sectionLabel, { color: colors.danger }]}>Danger Zone</Text>
+      <Text style={[s.sectionLabel, { color: colors.danger }]}>danger zone</Text>
       <View style={[s.card, { backgroundColor: colors.surface }]}>
         {!showClear ? (
           <TouchableOpacity style={s.row} onPress={() => setShowClear(true)} activeOpacity={0.6}>
@@ -286,18 +262,10 @@ export default function Settings() {
               This will permanently delete all subscriptions, apps, events, and tasks. This cannot be undone.
             </Text>
             <View style={s.importActions}>
-              <TouchableOpacity
-                style={[s.btn, { backgroundColor: colors.surfaceEl, borderColor: colors.border, borderWidth: 1 }]}
-                onPress={() => setShowClear(false)}
-              >
-                <Text style={[s.btnText, { color: colors.textMuted }]}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[s.btn, { backgroundColor: colors.danger, flex: 1 }]}
-                onPress={handleClear}
-              >
-                <Text style={[s.btnText, { color: '#fff' }]}>Delete Everything</Text>
-              </TouchableOpacity>
+              <Button label="Cancel" variant="secondary" size="md" onPress={() => setShowClear(false)} />
+              <View style={{ flex: 1 }}>
+                <Button label="Delete Everything" variant="danger" size="md" onPress={handleClear} fullWidth />
+              </View>
             </View>
           </View>
         )}
@@ -319,7 +287,7 @@ export default function Settings() {
           </TouchableOpacity>
         </View>
         <Text style={[s.footerVersion, { color: colors.textFaint }]}>
-          Track v{VERSION}
+          Track <Text style={{ fontFamily: theme.fontMono }}>v{VERSION}</Text>
         </Text>
         <Text style={[s.footerCopy, { color: colors.textFaint }]}>
           © 2026 defaltho & Luis Miguel. All rights reserved.
@@ -378,10 +346,9 @@ const s = StyleSheet.create({
   },
 
   sectionLabel: {
-    fontSize: theme.textXs,
-    fontFamily: theme.fontBold,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
+    fontSize: 10,
+    fontFamily: theme.fontMedium,
+    letterSpacing: 1.6,
     marginTop: theme.sp4,
     marginBottom: theme.sp2,
     marginLeft: theme.sp1,
@@ -391,9 +358,11 @@ const s = StyleSheet.create({
     borderRadius: theme.radiusXl,
     overflow: 'hidden',
     ...Platform.select({
+      // Mobile keeps a faint card lift (different surface model per system spec)
       ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 6 },
       android: { elevation: 1 },
-      web: { boxShadow: '0 1px 4px rgba(0,0,0,0.06)' },
+      // Desktop notebook: borders-only — no shadow on content
+      web: {},
     }),
   },
 
@@ -440,7 +409,7 @@ const s = StyleSheet.create({
   },
 
   divider: {
-    height: 1,
+    height: StyleSheet.hairlineWidth,
     marginHorizontal: theme.sp5,
   },
 
@@ -509,10 +478,10 @@ const s = StyleSheet.create({
   footer: {
     marginTop: theme.sp6 * 2,
     paddingTop: theme.sp5,
-    borderTopWidth: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     gap: theme.sp2,
-    paddingBottom: 12,
+    paddingBottom: theme.sp3,
   },
   footerLinks: {
     flexDirection: 'row',

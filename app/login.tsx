@@ -6,6 +6,7 @@ import {
 import { useRouter } from 'expo-router'
 import { useAuthStore } from '../src/stores/auth'
 import { theme } from '../src/theme'
+import { Button } from '../src/components/ui/Button'
 
 // ── Google account-picker modal ──────────────────────────────────────────────
 function GoogleModal({ visible, onClose, onContinue }: {
@@ -138,9 +139,7 @@ export default function LoginScreen() {
           onChangeText={setPw}
         />
 
-        <TouchableOpacity style={s.btnPrimary} onPress={emailSignIn}>
-          <Text style={s.btnPrimaryTxt}>Entrar</Text>
-        </TouchableOpacity>
+        <Button label="Entrar" variant="primary" size="md" onPress={emailSignIn} fullWidth />
 
         <View style={s.divider}>
           <View style={s.dividerLine} />
@@ -148,14 +147,23 @@ export default function LoginScreen() {
           <View style={s.dividerLine} />
         </View>
 
-        <TouchableOpacity style={s.socialBtn} onPress={() => setGoogleVis(true)}>
-          <Text style={s.gIcon}>G</Text>
-          <Text style={s.socialTxt}>Continuar com Google</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={s.socialBtn} onPress={() => setAppleVis(true)}>
-          <Text style={s.aIcon}>🍎</Text>
-          <Text style={s.socialTxt}>Continuar com Apple</Text>
-        </TouchableOpacity>
+        <Button
+          label="Continuar com Google"
+          variant="secondary"
+          size="md"
+          onPress={() => setGoogleVis(true)}
+          iconLeft={<Text style={s.gIcon}>G</Text>}
+          fullWidth
+        />
+        <View style={{ height: 10 }} />
+        <Button
+          label="Continuar com Apple"
+          variant="secondary"
+          size="md"
+          onPress={() => setAppleVis(true)}
+          iconLeft={<Text style={s.aIcon}>🍎</Text>}
+          fullWidth
+        />
 
         <Text style={s.footer}>
           Não tens conta?{' '}
@@ -238,8 +246,28 @@ const s = StyleSheet.create({
 
   input: { borderWidth: 1.5, borderColor: '#e8e8e8', borderRadius: 12, padding: 13, paddingHorizontal: 16, fontFamily: theme.fontRegular, fontSize: 15, color: '#111', backgroundColor: '#fafafa', marginBottom: 12 },
 
-  btnPrimary: { backgroundColor: '#111', borderRadius: 12, padding: 14, alignItems: 'center', marginTop: 4 },
-  btnPrimaryTxt: { fontFamily: theme.fontMedium, fontSize: 15, color: '#fff' },
+  btnPrimary: {
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#3a3942',
+    ...Platform.select({
+      web: {
+        backgroundColor: '#262428',
+        background: 'linear-gradient(180deg, #201E25 0%, #323137 100%)',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.10), 0 0 0 1px #0D0D0D',
+        transition: 'box-shadow 160ms ease, background 160ms ease',
+      } as any,
+      ios:     { backgroundColor: '#262428', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.18, shadowRadius: 4 },
+      android: { backgroundColor: '#262428', elevation: 3 },
+      default: { backgroundColor: '#262428' },
+    }),
+  },
+  btnPrimaryTxt: { fontFamily: theme.fontBold, fontSize: 14, color: '#FFFFFF', letterSpacing: -0.2 },
 
   divider: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 18 },
   dividerLine: { flex: 1, height: 1, backgroundColor: '#ebebeb' },

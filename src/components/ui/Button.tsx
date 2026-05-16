@@ -123,6 +123,7 @@ const PRIMARY = {
         backgroundColor: '#262428',
         background: 'linear-gradient(180deg, #201E25 0%, #323137 100%)',
         boxShadow: '0 2px 4px rgba(0,0,0,0.10), 0 0 0 1px #0D0D0D',
+        transition: 'box-shadow 160ms ease, background 160ms ease',
       } as any,
       ios: {
         backgroundColor: '#262428',
@@ -140,7 +141,7 @@ const PRIMARY = {
 
 const PRIMARY_HOVER = {
   container: Platform.select({
-    web: { background: 'linear-gradient(180deg, #2A282F 0%, #3A393F 100%)', boxShadow: '0 4px 8px rgba(0,0,0,0.18), 0 0 0 1px #0D0D0D' } as any,
+    web: { background: 'linear-gradient(180deg, #2A282F 0%, #3A393F 100%)', boxShadow: '0 3px 6px rgba(0,0,0,0.12), 0 0 0 1px #0D0D0D' } as any,
     default: {},
   }) as object,
 }
@@ -208,4 +209,59 @@ const HOVER = {
   secondary: SECONDARY_HOVER,
   ghost:     GHOST_HOVER,
   danger:    DANGER_HOVER,
+}
+
+// ─── IconButton — icon-only variant of the same DNA ────────────────────
+interface IconButtonProps {
+  children: React.ReactNode
+  onPress?: () => void
+  variant?: ButtonVariant
+  size?: ButtonSize
+  disabled?: boolean
+  style?: any
+  accessibilityLabel?: string
+}
+
+const ICON_DIM: Record<ButtonSize, number> = { sm: 32, md: 38, lg: 44 }
+
+export function IconButton({
+  children, onPress, variant = 'secondary', size = 'md', disabled, style, accessibilityLabel,
+}: IconButtonProps) {
+  const scale = useSharedValue(1)
+  const [hovered, setHovered] = useState(false)
+  const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }))
+  const isWeb = Platform.OS === 'web'
+  const variantBase = VARIANT[variant]
+  const variantHover = HOVER[variant]
+  const dim = ICON_DIM[size]
+  const isInteractive = !disabled
+
+  return (
+    <Pressable
+      onPressIn={()  => { if (isInteractive) scale.value = withSpring(0.94, { damping: 18, stiffness: 420 }) }}
+      onPressOut={() => { scale.value = withSpring(1, { damping: 18, stiffness: 420 }) }}
+      onHoverIn={()  => { if (isInteractive && isWeb) { setHovered(true);  scale.value = withSpring(1.04, { damping: 22, stiffness: 360 }) } }}
+      onHoverOut={() => { if (isWeb) { setHovered(false); scale.value = withSpring(1, { damping: 22, stiffness: 360 }) } }}
+      onPress={isInteractive ? onPress : undefined}
+      disabled={!isInteractive}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+    >
+      <Animated.View
+        style={[
+          base.btn,
+          { width: dim, height: dim, paddingHorizontal: 0, paddingVertical: 0 },
+          variantBase.container,
+          hovered && isWeb && variantHover.container,
+          disabled && base.disabled,
+          animStyle,
+          style,
+        ]}
+      >
+        {/* Top highlight on primary/danger (button DNA) */}
+        {(variant === 'primary' || variant === 'danger') && <View style={base.topHighlight} pointerEvents="none" />}
+        {children}
+      </Animated.View>
+    </Pressable>
+  )
 }
