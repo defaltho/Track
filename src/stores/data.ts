@@ -75,6 +75,7 @@ interface Settings {
   theme: string
   startOfWeek: number
   version: string
+  devMode: boolean
 }
 
 interface DataStore {
@@ -110,6 +111,7 @@ const defaultSettings: Settings = {
   theme: 'light',
   startOfWeek: 1,
   version: '0.1.0',
+  devMode: false,
 }
 
 // BUG M4 fix: fallback UUID generator when crypto.randomUUID is unavailable

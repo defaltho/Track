@@ -10,6 +10,7 @@ import {
 } from 'react-native'
 import { useTheme } from '../../context/ThemeContext'
 import { theme } from '../../theme'
+import { Button } from '../ui/Button'
 
 const PRIORITIES = ['low', 'medium', 'high'] as const
 const CATEGORIES = ['Personal', 'Work', 'Finance', 'Health', 'Travel', 'Other']
@@ -136,18 +137,10 @@ export function AddTaskForm({ onSubmit, onCancel }: Props) {
       </View>
 
       <View style={s.actions}>
-        <TouchableOpacity
-          style={[s.btnSecondary, { backgroundColor: colors.surfaceEl, borderColor: colors.border }]}
-          onPress={onCancel}
-        >
-          <Text style={[s.btnSecondaryText, { color: colors.textMuted }]}>Cancel</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[s.btnPrimary, { backgroundColor: colors.accent }]}
-          onPress={submit}
-        >
-          <Text style={[s.btnPrimaryText, { color: colors.accentFg }]}>Add Task</Text>
-        </TouchableOpacity>
+        <Button label="Cancel" variant="secondary" size="md" onPress={onCancel} />
+        <View style={{ flex: 1 }}>
+          <Button label="Add Task" variant="primary" size="md" onPress={submit} fullWidth />
+        </View>
       </View>
     </View>
   )

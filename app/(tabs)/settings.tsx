@@ -10,25 +10,60 @@ import {
   Share,
   Linking,
 } from 'react-native'
+import { useRouter } from 'expo-router'
 import { useDataStore } from '../../src/stores/data'
+import { useAuthStore } from '../../src/stores/auth'
 import { useToastStore } from '../../src/stores/toasts'
 import { useTheme } from '../../src/context/ThemeContext'
 import { theme } from '../../src/theme'
+import { Modal as TrackModal } from '../../src/components/ui/Modal'
+import { Button } from '../../src/components/ui/Button'
+import { VERSION } from '../../src/data/version'
+import { CHANGELOG } from '../../src/data/changelog'
+import { loadSeedData } from '../../src/utils/seedData'
 
 const CURRENCIES = ['EUR', 'USD', 'GBP', 'BRL']
 
 const NOTHING_RED = '#FF2B2B'
 
-const APP_VERSION = '1.0.0'
-
 export default function Settings() {
+  const router = useRouter()
   const { colors, themeKey, setTheme } = useTheme()
   const store = useDataStore()
+  const auth = useAuthStore()
   const toast = useToastStore()
   const [showClear, setShowClear] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [importText, setImportText] = useState('')
   const [importError, setImportError] = useState('')
+  const [showChangelog, setShowChangelog] = useState(false)
+  const [showNewAccount, setShowNewAccount] = useState(false)
+  const devMode = store.settings.devMode
+
+  function toggleDev() {
+    store.updateSettings({ devMode: !devMode })
+    toast.push(devMode ? 'Developer mode off' : 'Developer mode on', 'info')
+  }
+
+  function resetOnboarding() {
+    auth.completeOnboarding(null as any)
+    toast.push('Onboarding reset', 'info')
+    router.replace('/onboarding')
+  }
+
+  function reloadSeed() {
+    store.clearAll()
+    setTimeout(() => loadSeedData(store), 50)
+    toast.push('Seed data reloaded', 'success')
+  }
+
+  function newAccount() {
+    store.clearAll()
+    auth.logout()
+    setShowNewAccount(false)
+    toast.push('Signed out. Set up new account.', 'info')
+    router.replace('/login')
+  }
 
   async function handleExport() {
     const data = {
@@ -192,6 +227,51 @@ export default function Settings() {
         )}
       </View>
 
+      {/* ── About ── */}
+      <Text style={[s.sectionLabel, { color: colors.textMuted }]}>About</Text>
+      <View style={[s.card, { backgroundColor: colors.surface }]}>
+        <TouchableOpacity style={s.row} onPress={() => setShowChangelog(true)} activeOpacity={0.6}>
+          <View>
+            <Text style={[s.rowLabel, { color: colors.text }]}>What's new</Text>
+            <Text style={[s.rowSub, { color: colors.textMuted }]}>Changelog · v{VERSION}</Text>
+          </View>
+          <Text style={[s.chevron, { color: colors.textMuted }]}>›</Text>
+        </TouchableOpacity>
+        <View style={[s.divider, { backgroundColor: colors.border }]} />
+        <TouchableOpacity style={s.row} onPress={toggleDev} activeOpacity={0.6}>
+          <View>
+            <Text style={[s.rowLabel, { color: colors.text }]}>Developer mode</Text>
+            <Text style={[s.rowSub, { color: colors.textMuted }]}>{devMode ? 'Active — extra actions shown below' : 'Show advanced actions'}</Text>
+          </View>
+          <View style={[s.toggle, { backgroundColor: devMode ? colors.accent : colors.surfaceEl, borderColor: colors.border }]}>
+            <View style={[s.toggleKnob, { backgroundColor: devMode ? colors.accentFg : colors.textMuted, transform: [{ translateX: devMode ? 16 : 0 }] }]} />
+          </View>
+        </TouchableOpacity>
+      </View>
+
+      {/* ── Developer (only when devMode) ── */}
+      {devMode && (
+        <>
+          <Text style={[s.sectionLabel, { color: colors.textMuted }]}>Developer</Text>
+          <View style={[s.card, { backgroundColor: colors.surface }]}>
+            <TouchableOpacity style={s.row} onPress={resetOnboarding} activeOpacity={0.6}>
+              <Text style={[s.rowLabel, { color: colors.text }]}>Reset onboarding</Text>
+              <Text style={[s.chevron, { color: colors.textMuted }]}>↻</Text>
+            </TouchableOpacity>
+            <View style={[s.divider, { backgroundColor: colors.border }]} />
+            <TouchableOpacity style={s.row} onPress={reloadSeed} activeOpacity={0.6}>
+              <Text style={[s.rowLabel, { color: colors.text }]}>Reload placeholder data</Text>
+              <Text style={[s.chevron, { color: colors.textMuted }]}>↻</Text>
+            </TouchableOpacity>
+            <View style={[s.divider, { backgroundColor: colors.border }]} />
+            <TouchableOpacity style={s.row} onPress={() => setShowNewAccount(true)} activeOpacity={0.6}>
+              <Text style={[s.rowLabel, { color: colors.text }]}>Set up new account</Text>
+              <Text style={[s.rowSub, { color: colors.textMuted }]}>Sign out + wipe local data</Text>
+            </TouchableOpacity>
+          </View>
+        </>
+      )}
+
       {/* ── Danger Zone ── */}
       <Text style={[s.sectionLabel, { color: colors.danger }]}>Danger Zone</Text>
       <View style={[s.card, { backgroundColor: colors.surface }]}>
@@ -239,12 +319,49 @@ export default function Settings() {
           </TouchableOpacity>
         </View>
         <Text style={[s.footerVersion, { color: colors.textFaint }]}>
-          Track v{APP_VERSION}
+          Track v{VERSION}
         </Text>
         <Text style={[s.footerCopy, { color: colors.textFaint }]}>
           © 2026 defaltho. All rights reserved.
         </Text>
       </View>
+
+      {/* Changelog modal */}
+      <TrackModal open={showChangelog} title="What's new" onClose={() => setShowChangelog(false)}>
+        <View style={{ gap: 18 }}>
+          {CHANGELOG.map(entry => (
+            <View key={entry.version} style={{ gap: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
+                <Text style={{ fontSize: 18, fontFamily: theme.fontBlack, color: colors.text, letterSpacing: -0.4 }}>v{entry.version}</Text>
+                <Text style={{ fontSize: 12, fontFamily: theme.fontMono, color: colors.textMuted }}>{entry.date}</Text>
+              </View>
+              <Text style={{ fontSize: 14, fontFamily: theme.fontBold, color: colors.text }}>{entry.summary}</Text>
+              {entry.notes && entry.notes.length > 0 && (
+                <View style={{ gap: 4, marginTop: 4 }}>
+                  {entry.notes.map((n, i) => (
+                    <Text key={i} style={{ fontSize: 13, fontFamily: theme.fontRegular, color: colors.textMuted, lineHeight: 20 }}>· {n}</Text>
+                  ))}
+                </View>
+              )}
+            </View>
+          ))}
+        </View>
+      </TrackModal>
+
+      {/* New account confirm */}
+      <TrackModal open={showNewAccount} title="Set up new account?" onClose={() => setShowNewAccount(false)}>
+        <View style={{ gap: 16 }}>
+          <Text style={{ fontSize: 14, color: colors.text, fontFamily: theme.fontRegular, lineHeight: 22 }}>
+            This signs you out and wipes all local data (subscriptions, events, tasks). You'll be sent to the login screen to create a fresh account.
+          </Text>
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <Button label="Cancel" variant="secondary" size="md" onPress={() => setShowNewAccount(false)} />
+            <View style={{ flex: 1 }}>
+              <Button label="Wipe & sign out" variant="danger" size="md" onPress={newAccount} fullWidth />
+            </View>
+          </View>
+        </View>
+      </TrackModal>
     </ScrollView>
   )
 }
@@ -312,6 +429,14 @@ const s = StyleSheet.create({
     height: 20,
     borderRadius: 10,
     borderWidth: 1,
+  },
+
+  toggle: {
+    width: 36, height: 20, borderRadius: 12, borderWidth: 1,
+    padding: 2, justifyContent: 'center',
+  },
+  toggleKnob: {
+    width: 14, height: 14, borderRadius: 7,
   },
 
   divider: {

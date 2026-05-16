@@ -4,6 +4,8 @@ import { Toast } from '../src/components/ui/Toast'
 import { View, StyleSheet, Platform } from 'react-native'
 import { ThemeProvider, useTheme } from '../src/context/ThemeContext'
 import { useAuthStore } from '../src/stores/auth'
+import { useDataStore } from '../src/stores/data'
+import { loadSeedData } from '../src/utils/seedData'
 import {
   useFonts,
   Roboto_300Light,
@@ -43,6 +45,21 @@ function AppShell() {
   useEffect(() => {
     if (fontsLoaded && hydrated) SplashScreen.hideAsync()
   }, [fontsLoaded, hydrated])
+
+  // Seed placeholder data on first launch when data store is empty
+  useEffect(() => {
+    function maybeSeed() {
+      const s = useDataStore.getState()
+      const empty = s.subscriptions.length === 0 && s.apps.length === 0 && s.events.length === 0 && s.tasks.length === 0
+      if (empty) loadSeedData(s)
+    }
+    if (useDataStore.persist.hasHydrated()) {
+      maybeSeed()
+      return
+    }
+    const unsub = useDataStore.persist.onFinishHydration(() => maybeSeed())
+    return unsub
+  }, [])
 
   // Auth routing guard
   useEffect(() => {

@@ -27,7 +27,7 @@ export function Modal({ open, title, onClose, children }: Props) {
   const { colors } = useTheme()
 
   return (
-    <RNModal visible={open} transparent animationType="slide" onRequestClose={onClose}>
+    <RNModal visible={open} transparent animationType="fade" onRequestClose={onClose}>
       <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={onClose}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -69,9 +69,13 @@ export function Modal({ open, title, onClose, children }: Props) {
 const s = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: 'rgba(0,0,0,0.42)',
     justifyContent: 'flex-end',
     alignItems: 'center',
+    ...Platform.select({
+      web: { backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' } as any,
+      default: {},
+    }),
   },
   kav: {
     width: '100%',

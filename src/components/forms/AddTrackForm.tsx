@@ -11,6 +11,7 @@ import {
 } from 'react-native'
 import { useTheme } from '../../context/ThemeContext'
 import { theme } from '../../theme'
+import { Button } from '../ui/Button'
 
 const TYPES = ['subscription', 'app', 'event'] as const
 const CURRENCIES = ['EUR', 'USD', 'GBP', 'BRL']
@@ -18,6 +19,12 @@ const CURRENCY_SYM: Record<string, string> = { EUR: '€', USD: '$', GBP: '£', 
 const CYCLES = ['weekly', 'monthly', 'yearly']
 const CATEGORIES = ['Streaming', 'Music', 'Gaming', 'Cloud', 'Productivity', 'News', 'Fitness', 'Education', 'Other']
 const PAYMENTS = ['Card', 'PayPal', 'Apple Pay', 'Google Pay', 'Bank Transfer', 'Other']
+
+const COLOR_PALETTE = [
+  '#111111', '#FF2B2B', '#E50914', '#FF6B35', '#F59E0B', '#84CC16',
+  '#22C55E', '#10B981', '#0EA5E9', '#1E88E5', '#0071E3', '#6366F1',
+  '#9333EA', '#EC4899', '#A0522D', '#171515',
+]
 
 const EMOJI_SETS: Record<string, string[]> = {
   Finance:   ['💳', '💰', '💵', '💴', '💶', '💷', '🏦', '📈', '📉', '🪙', '💎', '🏧'],
@@ -52,6 +59,8 @@ export function AddTrackForm({ onSubmit, onCancel }: Props) {
   const [category, setCategory]       = useState('Other')
   const [payment, setPayment]         = useState('Card')
   const [note, setNote]               = useState('')
+  const [color, setColor]             = useState<string>(COLOR_PALETTE[0])
+  const [customColor, setCustomColor] = useState('')
   const [error, setError]             = useState('')
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const [emojiCategory, setEmojiCategory]     = useState('Finance')
@@ -66,7 +75,8 @@ export function AddTrackForm({ onSubmit, onCancel }: Props) {
 
   function submit() {
     setError('')
-    const base = { type, name: name.trim(), emoji, color: '#000000', currency, category, note: note.trim(), active: true }
+    const finalColor = customColor.trim() || color
+    const base = { type, name: name.trim(), emoji, color: finalColor, currency, category, note: note.trim(), active: true }
     if (type === 'event') {
       onSubmit({ ...base, date: nextDate })
     } else {
@@ -252,6 +262,35 @@ export function AddTrackForm({ onSubmit, onCancel }: Props) {
             </View>
           )}
 
+          {/* Color */}
+          <View>
+            <Text style={[s.label, { color: colors.textMuted }]}>Color</Text>
+            <View style={s.colorRow}>
+              {COLOR_PALETTE.map(c => {
+                const selected = (customColor.trim() || color) === c
+                return (
+                  <TouchableOpacity
+                    key={c}
+                    style={[
+                      s.colorSwatch,
+                      { backgroundColor: c, borderColor: selected ? colors.text : 'transparent' },
+                    ]}
+                    onPress={() => { setColor(c); setCustomColor('') }}
+                    accessibilityLabel={`Color ${c}`}
+                  />
+                )
+              })}
+            </View>
+            <TextInput
+              style={[s.input, inputStyle, { marginTop: 8 }]}
+              value={customColor}
+              onChangeText={setCustomColor}
+              placeholder="Or custom hex (e.g. #FF00AA)"
+              placeholderTextColor={colors.textFaint}
+              autoCapitalize="characters"
+            />
+          </View>
+
           {/* Note */}
           <View>
             <Text style={[s.label, { color: colors.textMuted }]}>Note</Text>
@@ -273,22 +312,21 @@ export function AddTrackForm({ onSubmit, onCancel }: Props) {
 
       {/* ── Actions ── */}
       <View style={s.actions}>
-        <TouchableOpacity
-          style={[s.btnSecondary, { backgroundColor: colors.surfaceEl, borderColor: colors.border }]}
+        <Button
+          label={step === 1 ? 'Cancel' : '← Back'}
+          variant="secondary"
+          size="md"
           onPress={step === 1 ? onCancel : () => setStep(1)}
-        >
-          <Text style={[s.btnSecondaryText, { color: colors.textMuted }]}>
-            {step === 1 ? 'Cancel' : '← Back'}
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[s.btnPrimary, { backgroundColor: colors.accent }]}
-          onPress={step === 1 ? goNext : submit}
-        >
-          <Text style={[s.btnPrimaryText, { color: colors.accentFg }]}>
-            {step === 1 ? 'Next →' : 'Add'}
-          </Text>
-        </TouchableOpacity>
+        />
+        <View style={{ flex: 1 }}>
+          <Button
+            label={step === 1 ? 'Next →' : 'Add'}
+            variant="primary"
+            size="md"
+            onPress={step === 1 ? goNext : submit}
+            fullWidth
+          />
+        </View>
       </View>
 
       {/* ── Emoji Picker ── */}
@@ -366,6 +404,8 @@ const s = StyleSheet.create({
     fontFamily: theme.fontRegular,
   },
   noteInput: { minHeight: 72, paddingTop: theme.sp3 },
+  colorRow:   { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  colorSwatch:{ width: 28, height: 28, borderRadius: 8, borderWidth: 2 },
 
   emojiField: { width: 64 },
   emojiInput: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 0 },

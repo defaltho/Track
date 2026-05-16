@@ -1,0 +1,31 @@
+// New entries are prepended automatically by the pre-commit hook.
+// Each entry: { version, date (YYYY-MM-DD), summary (commit subject), notes? }
+export interface ChangelogEntry {
+  version: string
+  date: string
+  summary: string
+  notes?: string[]
+}
+
+export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '0.1.1',
+    date: '2026-05-16',
+    summary: 'feat: Nothing.tech design overhaul — Moti animations, Space Mono, dynamic theming, iCloud-style footer',
+  },
+  {
+    version: '0.1.0',
+    date: '2026-05-16',
+    summary: 'Notebook redesign + design system',
+    notes: [
+      'Desktop dashboard rewritten as a centered notebook page',
+      'New Button component (gradient + double shadow + hover scale)',
+      'Modal: fade animation + backdrop blur on web',
+      'Drag system replaced with up/down buttons + LinearTransition',
+      'Count-up animation on the ledger stats',
+      'Calendar redesigned (Cal.com-style cells, emojis inside, hover lift)',
+      'Sidebar segmented with section labels',
+      'Auto-seed of placeholder data on first launch',
+    ],
+  },
+]

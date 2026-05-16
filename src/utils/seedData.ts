@@ -216,18 +216,83 @@ export const seedTasks: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>[] = [
   },
 ]
 
+// ─── Historical event pool (random sampling) ─────────────────────────────────
+
+const PAST_EVENT_POOL: Array<Omit<EventEntry, 'id' | 'createdAt' | 'updatedAt' | 'date'>> = [
+  { type: 'event', name: 'Coffee with Ana',    emoji: '☕', currency: 'EUR', category: 'Personal', color: '#A0522D', active: true },
+  { type: 'event', name: 'Gym session',         emoji: '🏋️', currency: 'EUR', category: 'Fitness', color: '#FF6B35', active: true },
+  { type: 'event', name: 'Dentist check-up',    emoji: '🦷', currency: 'EUR', category: 'Health', color: '#1E88E5', active: true },
+  { type: 'event', name: 'Movie night',         emoji: '🎬', currency: 'EUR', category: 'Personal', color: '#E50914', active: true },
+  { type: 'event', name: 'Run',                 emoji: '🏃', currency: 'EUR', category: 'Fitness', color: '#22C55E', active: true },
+  { type: 'event', name: 'Dinner out',          emoji: '🍕', currency: 'EUR', category: 'Personal', color: '#F59E0B', active: true },
+  { type: 'event', name: 'Concert',             emoji: '🎸', currency: 'EUR', category: 'Personal', color: '#9333EA', active: true },
+  { type: 'event', name: 'Doctor visit',        emoji: '🏥', currency: 'EUR', category: 'Health', color: '#0EA5E9', active: true },
+  { type: 'event', name: 'Birthday party',      emoji: '🎉', currency: 'EUR', category: 'Personal', color: '#EC4899', active: true },
+  { type: 'event', name: 'Yoga class',          emoji: '🧘', currency: 'EUR', category: 'Fitness', color: '#10B981', active: true },
+  { type: 'event', name: 'Concert tickets',     emoji: '🎟️', currency: 'EUR', category: 'Personal', color: '#FF2B2B', active: true },
+  { type: 'event', name: 'Family lunch',        emoji: '🥗', currency: 'EUR', category: 'Personal', color: '#84CC16', active: true },
+]
+
+const PAST_SUB_CHARGES: Array<{ name: string; emoji: string; price: number; category: string; color: string }> = [
+  { name: 'Netflix',    emoji: '🎬', price: 15.99, category: 'Streaming', color: '#E50914' },
+  { name: 'Spotify',    emoji: '🎵', price: 9.99,  category: 'Music',     color: '#1DB954' },
+  { name: 'iCloud+',    emoji: '☁️', price: 2.99,  category: 'Cloud',     color: '#0071E3' },
+  { name: 'GitHub Pro', emoji: '🐙', price: 4.00,  category: 'Productivity', color: '#171515' },
+]
+
+function randomDateBetween(start: Date, end: Date): string {
+  const t = start.getTime() + Math.random() * (end.getTime() - start.getTime())
+  return fmt(new Date(t))
+}
+
+function generateHistoricalEvents(years: number = 3, perMonth: number = 6): Omit<EventEntry, 'id' | 'createdAt' | 'updatedAt'>[] {
+  const out: Omit<EventEntry, 'id' | 'createdAt' | 'updatedAt'>[] = []
+  const end = new Date()
+  const start = new Date(end.getFullYear() - years, end.getMonth(), 1)
+  const months = years * 12
+  for (let m = 0; m < months; m++) {
+    const monthStart = new Date(start.getFullYear(), start.getMonth() + m, 1)
+    const monthEnd   = new Date(start.getFullYear(), start.getMonth() + m + 1, 0)
+    const n = Math.floor(perMonth * (0.6 + Math.random() * 0.8)) // 60–140% variance
+    for (let i = 0; i < n; i++) {
+      const template = PAST_EVENT_POOL[Math.floor(Math.random() * PAST_EVENT_POOL.length)]
+      out.push({ ...template, date: randomDateBetween(monthStart, monthEnd) })
+    }
+  }
+  return out
+}
+
+function generateHistoricalCharges(years: number = 3): Omit<Subscription, 'id' | 'createdAt' | 'updatedAt'>[] {
+  const out: Omit<Subscription, 'id' | 'createdAt' | 'updatedAt'>[] = []
+  const end = new Date()
+  // For each historical sub charge template, generate one charge per month
+  for (const tpl of PAST_SUB_CHARGES) {
+    for (let monthsAgo = 1; monthsAgo <= years * 12; monthsAgo++) {
+      const d = new Date(end.getFullYear(), end.getMonth() - monthsAgo, 5 + Math.floor(Math.random() * 20))
+      out.push({
+        type: 'subscription',
+        name: tpl.name,
+        emoji: tpl.emoji,
+        price: tpl.price,
+        billingCycle: 'monthly',
+        currency: 'EUR',
+        category: tpl.category,
+        color: tpl.color,
+        active: false,  // historical charges, marked inactive so they don't count in dueSubs/monthlySpend
+        nextChargeDate: fmt(d),
+        paymentMethod: 'Card',
+        note: 'Historical charge',
+      })
+    }
+  }
+  return out
+}
+
 // ─── Loader helper ────────────────────────────────────────────────────────────
 
 /**
  * Call this once (e.g., from a dev button or store init) to populate the store
  * with realistic test data. Safe to call multiple times — generates new IDs each time.
- *
- * Usage:
- *   import { loadSeedData } from '../utils/seedData'
- *   import { useDataStore } from '../stores/data'
- *
- *   const store = useDataStore.getState()
- *   loadSeedData(store)
  */
 export function loadSeedData(store: {
   addSubscription: (item: Omit<Subscription, 'id' | 'createdAt' | 'updatedAt'>) => void
@@ -235,10 +300,15 @@ export function loadSeedData(store: {
   addEvent: (item: Omit<EventEntry, 'id' | 'createdAt' | 'updatedAt'>) => void
   addTask: (item: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => void
 }) {
+  // Current active data
   seedSubscriptions.forEach(s => store.addSubscription(s))
   seedApps.forEach(a => store.addApp(a))
   seedEvents.forEach(e => store.addEvent(e))
   seedTasks.forEach(t => store.addTask(t))
+
+  // 3 years of history — historical events + dormant subscription charges
+  generateHistoricalEvents(3, 6).forEach(e => store.addEvent(e))
+  generateHistoricalCharges(3).forEach(s => store.addSubscription(s))
 }
 
 // ─── Expected computation results (for manual verification) ──────────────────
