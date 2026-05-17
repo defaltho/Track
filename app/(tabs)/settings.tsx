@@ -11,6 +11,7 @@ import {
   Linking,
 } from 'react-native'
 import { useRouter } from 'expo-router'
+import { Ionicons } from '@expo/vector-icons'
 import { useDataStore } from '../../src/stores/data'
 import { useAuthStore } from '../../src/stores/auth'
 import { useToastStore } from '../../src/stores/toasts'
@@ -38,7 +39,21 @@ export default function Settings() {
   const [importError, setImportError] = useState('')
   const [showChangelog, setShowChangelog] = useState(false)
   const [showNewAccount, setShowNewAccount] = useState(false)
+  const [budgetText, setBudgetText] = useState(
+    store.settings.monthlyBudget != null ? String(store.settings.monthlyBudget) : ''
+  )
   const devMode = store.settings.devMode
+
+  function handleBudgetBlur() {
+    const n = parseFloat(budgetText.replace(',', '.'))
+    if (budgetText.trim() === '') {
+      store.updateSettings({ monthlyBudget: null })
+    } else if (!isNaN(n) && n >= 0) {
+      store.updateSettings({ monthlyBudget: Math.round(n * 100) / 100 })
+    } else {
+      setBudgetText(store.settings.monthlyBudget != null ? String(store.settings.monthlyBudget) : '')
+    }
+  }
 
   function toggleDev() {
     store.updateSettings({ devMode: !devMode })
@@ -105,9 +120,9 @@ export default function Settings() {
     toast.push('All data cleared', 'info')
   }
 
-  const themeOptions: Array<{ key: 'light' | 'dark'; label: string; dot: string; desc: string }> = [
-    { key: 'light', label: 'Light', dot: colors.accent, desc: 'Clean, minimal' },
-    { key: 'dark', label: 'Dark', dot: '#FFFFFF', desc: 'Easy on the eyes' },
+  const themeOptions: Array<{ key: 'light' | 'dark'; label: string; icon: 'sunny' | 'moon'; desc: string }> = [
+    { key: 'light', label: 'Light', icon: 'sunny', desc: 'Clean, minimal' },
+    { key: 'dark',  label: 'Dark',  icon: 'moon',  desc: 'Easy on the eyes' },
   ]
 
   return (
@@ -129,7 +144,19 @@ export default function Settings() {
               {i > 0 && <View style={[s.divider, { backgroundColor: colors.border }]} />}
               <TouchableOpacity style={s.row} onPress={() => setTheme(opt.key)} activeOpacity={0.6}>
                 <View style={s.themeRowLeft}>
-                  <View style={[s.themeSwatchDot, { backgroundColor: opt.dot, borderColor: opt.key === 'light' ? colors.border : 'transparent' }]} />
+                  <View style={[
+                    s.themeIconCircle,
+                    {
+                      backgroundColor: opt.key === 'dark' ? '#0A0A0A' : colors.surfaceEl,
+                      borderColor: opt.key === 'light' ? colors.border : 'transparent',
+                    },
+                  ]}>
+                    <Ionicons
+                      name={opt.icon}
+                      size={16}
+                      color={opt.key === 'dark' ? '#FFFFFF' : colors.text}
+                    />
+                  </View>
                   <View>
                     <Text style={[s.rowLabel, { color: colors.text }]}>{opt.label}</Text>
                     <Text style={[s.rowSub, { color: colors.textMuted }]}>{opt.desc}</Text>
@@ -155,6 +182,27 @@ export default function Settings() {
             onChange={c => store.updateSettings({ defaultCurrency: c })}
             layout="fit"
             size="sm"
+          />
+        </View>
+        <View style={[s.divider, { backgroundColor: colors.border }]} />
+        <View style={s.row}>
+          <View>
+            <Text style={[s.rowLabel, { color: colors.text }]}>Monthly Budget</Text>
+            <Text style={[s.rowSub, { color: colors.textMuted }]}>shown in the budget widget</Text>
+          </View>
+          <TextInput
+            style={[s.budgetInput, {
+              color: colors.text,
+              borderColor: colors.border,
+              backgroundColor: colors.surfaceEl,
+            }]}
+            value={budgetText}
+            onChangeText={setBudgetText}
+            onBlur={handleBudgetBlur}
+            keyboardType="decimal-pad"
+            placeholder="—"
+            placeholderTextColor={colors.textFaint}
+            returnKeyType="done"
           />
         </View>
       </View>
@@ -393,11 +441,13 @@ const s = StyleSheet.create({
     alignItems: 'center',
     gap: theme.sp3,
   },
-  themeSwatchDot: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 1,
+  themeIconCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   toggle: {
@@ -425,6 +475,17 @@ const s = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
+  },
+
+  budgetInput: {
+    width: 88,
+    height: 36,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: theme.radiusMd,
+    paddingHorizontal: theme.sp3,
+    fontSize: theme.textBase,
+    fontFamily: theme.fontMono,
+    textAlign: 'right',
   },
 
   pillRow: {

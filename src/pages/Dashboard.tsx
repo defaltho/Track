@@ -1,26 +1,38 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react'
 import {
   View, Text, ScrollView, TouchableOpacity, Pressable, StyleSheet,
-  Platform, useWindowDimensions,
+  Platform, useWindowDimensions, Dimensions,
 } from 'react-native'
 import { MotiView } from 'moti'
 import Animated, {
   FadeInRight, ZoomIn, LinearTransition,
   useSharedValue, useAnimatedStyle, withSpring,
 } from 'react-native-reanimated'
+import { TapGestureHandler, State as GestureState } from 'react-native-gesture-handler'
 import Svg, { Circle as SvgCircle } from 'react-native-svg'
 import { format, differenceInCalendarDays, parseISO, subDays, eachDayOfInterval, getMonth } from 'date-fns'
 import { useDataStore } from '../stores/data'
 import { useToastStore } from '../stores/toasts'
 import { useTheme } from '../context/ThemeContext'
 import { totalMonthlySpend, coffees } from '../utils/calculations'
+import { buildMonthlyBars } from '../utils/chart'
+import { computeDropIndex } from '../utils/dragReorder'
 import { Modal } from '../components/ui/Modal'
-import { Button, IconButton } from '../components/ui/Button'
+import { Button, IconButton, usePrimaryFg } from '../components/ui/Button'
 import { Widget, WidgetRow } from '../components/ui/Widget'
+import { EditableWidget } from '../components/dashboard/EditableWidget'
+import { HiddenWidgetTray } from '../components/dashboard/HiddenWidgetTray'
 import { BreakdownWidget, BreakdownItem } from '../components/widgets/BreakdownWidget'
 import { RingGoalWidget } from '../components/widgets/RingGoalWidget'
 import { LineTrendWidget } from '../components/widgets/LineTrendWidget'
+import { CategoryRingsWidget, RingItem } from '../components/widgets/CategoryRingsWidget'
+import { SpendTrendWidget } from '../components/widgets/SpendTrendWidget'
 import { ClockWidget } from '../components/widgets/ClockWidget'
+import { RadarWidget, RadarCategory } from '../components/widgets/RadarWidget'
+import { BudgetWidget }    from '../components/widgets/BudgetWidget'
+import { ForecastWidget } from '../components/widgets/ForecastWidget'
+import { ScoreWidget }    from '../components/widgets/ScoreWidget'
+import { buildForecast }  from '../utils/forecast'
 import { AddTrackForm } from '../components/forms/AddTrackForm'
 import { AddTaskForm } from '../components/forms/AddTaskForm'
 import { theme, CURRENCY_SYMBOL, Colors } from '../theme'
@@ -258,33 +270,65 @@ const statS = StyleSheet.create({
 // or a 'rectangle' (2×1, full row).
 type WKey =
   | 'active' | 'spend' | 'coffees' | 'events' | 'topExpense' | 'ytd' | 'monthGoal' | 'clock'
-  | 'heatmap' | 'due' | 'category' | 'upcoming' | 'spendTrend'
+  | 'categoryRings'
+  | 'heatmap' | 'due' | 'category' | 'upcoming' | 'spendTrend' | 'radar' | 'budget' | 'forecast'
+  | 'score'
 
 const WIDGET_SIZE: Record<WKey, 'square' | 'rectangle'> = {
-  active:     'square',
-  spend:      'square',
-  coffees:    'square',
-  events:     'square',
-  topExpense: 'square',
-  ytd:        'square',
-  monthGoal:  'square',
-  clock:      'square',
-  heatmap:    'rectangle',
-  due:        'rectangle',
-  category:   'rectangle',
-  upcoming:   'rectangle',
-  spendTrend: 'rectangle',
+  active:        'square',
+  spend:         'square',
+  coffees:       'square',
+  events:        'square',
+  topExpense:    'square',
+  ytd:           'square',
+  monthGoal:     'square',
+  clock:         'square',
+  categoryRings: 'square',
+  heatmap:       'rectangle',
+  due:           'rectangle',
+  category:      'rectangle',
+  upcoming:      'rectangle',
+  spendTrend:    'rectangle',
+  radar:         'rectangle',
+  budget:        'rectangle',
+  forecast:      'rectangle',
+  score:         'square',
 }
 
 const WIDGET_DELAY: Record<WKey, number> = {
   active: 60,  spend: 90,    monthGoal: 120, clock: 150,
   heatmap: 180, due: 210,    spendTrend: 240, category: 270,
   coffees: 300, events: 330, upcoming: 360,
-  topExpense: 390, ytd: 420,
+  topExpense: 390, ytd: 420,  radar: 450, categoryRings: 480,
+  budget: 500, forecast: 520, score: 540,
+}
+
+const ALL_KEYS: WKey[] = Object.keys(WIDGET_SIZE) as WKey[]
+
+const WIDGET_META: Record<WKey, { label: string; emoji: string }> = {
+  active:        { label: 'active',         emoji: '📊' },
+  spend:         { label: 'spend',          emoji: '💸' },
+  coffees:       { label: 'coffees',        emoji: '☕' },
+  events:        { label: 'events',         emoji: '📅' },
+  topExpense:    { label: 'top expense',    emoji: '🥇' },
+  ytd:           { label: 'YTD',            emoji: '🗓️' },
+  monthGoal:     { label: 'month goal',     emoji: '🎯' },
+  clock:         { label: 'clock',          emoji: '🕐' },
+  categoryRings: { label: 'top categories', emoji: '⭕' },
+  heatmap:       { label: 'heatmap',        emoji: '🟩' },
+  due:           { label: 'this week',      emoji: '📌' },
+  category:      { label: 'by category',    emoji: '📈' },
+  upcoming:      { label: 'upcoming',       emoji: '⏭️' },
+  spendTrend:    { label: 'spend trend',    emoji: '📉' },
+  radar:         { label: 'radar',          emoji: '🕸️' },
+  budget:        { label: 'budget',         emoji: '🎯' },
+  forecast:      { label: 'forecast',       emoji: '📆' },
+  score:         { label: 'score',          emoji: '🏅' },
 }
 
 export function Dashboard() {
   const { colors } = useTheme()
+  const primaryFg = usePrimaryFg()
   const store = useDataStore()
   const toast = useToastStore()
   const { width } = useWindowDimensions()
@@ -308,6 +352,15 @@ export function Dashboard() {
   }), [store.subscriptions])
   const activeSubs  = useMemo(() => store.subscriptions.filter((s: any) => s.active !== false), [store.subscriptions])
 
+  const forecastItems = useMemo(() => activeSubs.map((s: any) => ({
+    name:           s.name,
+    emoji:          s.emoji ?? '💳',
+    price:          s.price ?? 0,
+    billingCycle:   s.billingCycle ?? 'monthly',
+    nextChargeDate: s.nextChargeDate ?? format(new Date(), 'yyyy-MM-dd'),
+    active:         true,
+  })), [activeSubs])
+
   // Top expense (square widget)
   const topExpense = useMemo(() => {
     return [...activeSubs].sort((a: any, b: any) => (b.price || 0) - (a.price || 0))[0] ?? null
@@ -319,28 +372,33 @@ export function Dashboard() {
   // Monthly target — soft goal = 1.25× current monthly spend (until a real budget exists)
   const monthlyTarget = useMemo(() => Math.max(Math.ceil(monthly * 1.25 / 10) * 10, 50), [monthly])
 
-  // 6-month spend series — approximate using current monthly with light variance
-  const spendSeries = useMemo(() => {
-    if (monthly <= 0) return [0, 0, 0, 0, 0, 0]
-    const variants = [0.86, 0.92, 1.04, 0.97, 1.08, 1.0]
-    return variants.map(v => Math.round(monthly * v))
-  }, [monthly])
+  // Spend trend — driven by the SAME `buildMonthlyBars` the Analytics
+  // page uses, with both `bars` (this period) and `compBars` (previous
+  // period) so the dashboard widget can render the same dashed
+  // comparison line. Matches Analytics' default '6M' range:
+  // back=4, ahead=2 → 7 bars, current month centered at index 4.
+  const spendBars = useMemo(
+    () => buildMonthlyBars(store.subscriptions, 4, 2, 0),
+    [store.subscriptions]
+  )
+  const spendCompBars = useMemo(
+    () => buildMonthlyBars(store.subscriptions, 4, 2, 7),
+    [store.subscriptions]
+  )
 
-  const spendLabels = useMemo(() => {
-    const out: string[] = []
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(now); d.setMonth(d.getMonth() - i)
-      out.push(format(d, 'MMM').toLowerCase())
+  // Radar — spending share per category (normalized to 0..1 vs the top category)
+  const radarCategories = useMemo<RadarCategory[]>(() => {
+    const totals: Record<string, number> = {}
+    for (const sub of activeSubs as any[]) {
+      const cat = sub.category || 'Other'
+      totals[cat] = (totals[cat] || 0) + (sub.price || 0)
     }
-    return out
-  }, [now])
-
-  const spendDeltaPct = useMemo(() => {
-    const prev = spendSeries[spendSeries.length - 2] || 0
-    const curr = spendSeries[spendSeries.length - 1] || 0
-    if (prev === 0) return 0
-    return ((curr - prev) / prev) * 100
-  }, [spendSeries])
+    const entries = Object.entries(totals).filter(([, v]) => v > 0)
+    const max = Math.max(...entries.map(([, v]) => v), 0.01)
+    return entries
+      .sort((a, b) => b[1] - a[1])
+      .map(([label, value]) => ({ label, value, pct: value / max }))
+  }, [activeSubs])
 
   // Category breakdown — for the Breakdown widget (Traffic-source style)
   const categoryBreakdown = useMemo<BreakdownItem[]>(() => {
@@ -354,6 +412,22 @@ export function Dashboard() {
       .map(([label, { value, color }]) => ({ label, value, color }))
       .sort((a, b) => b.value - a.value)
   }, [activeSubs, colors.accent])
+
+  // Top 4 categories as rings — share of total monthly spend (0..1)
+  const categoryRingItems = useMemo<RingItem[]>(() => {
+    const total = categoryBreakdown.reduce((s, it) => s + it.value, 0)
+    if (total <= 0) return []
+    const emojiByCat: Record<string, string> = {
+      Productivity: '💼', Gaming: '🎮', Streaming: '📺', Music: '🎵',
+      Fitness: '💪', Other: '📦', Food: '🍽️', Travel: '✈️', Health: '⚕️',
+    }
+    return categoryBreakdown.slice(0, 4).map(it => ({
+      label: it.label,
+      pct:   it.value / total,
+      color: it.color,
+      emoji: emojiByCat[it.label],
+    }))
+  }, [categoryBreakdown])
 
   // Upcoming next 30 days
   const upcomingList = useMemo(() => {
@@ -377,47 +451,96 @@ export function Dashboard() {
 
   // ── Widget ordering ────────────────────────────────────────────────
   const [editMode, setEditMode] = useState(false)
+  const [draggingId, setDraggingId] = useState<WKey | null>(null)
+  // Per-widget measured rectangle in CONTENT-relative coordinates (window-Y at
+  // measure time + scrollY at measure time). Stable across scroll.
+  const layoutsRef = useRef<Map<WKey, { top: number; height: number }>>(new Map())
+  // Current page scroll offset, tracked from ScrollView.onScroll.
+  const scrollYRef = useRef(0)
+  // Last reported drag cursor in window coordinates (viewport-Y). Updated on
+  // every dragMove; consumed by the auto-scroll RAF loop.
+  const cursorAbsYRef = useRef(0)
+  // Ref to the dashboard ScrollView so auto-scroll can call scrollTo.
+  const scrollRef = useRef<ScrollView>(null)
   const [order, setOrder]       = useState<WKey[]>([
-    'active', 'spend',         // squares row
-    'monthGoal', 'clock',      // squares row (ring goal + analog clock)
-    'heatmap',                 // rectangle
-    'due',                     // rectangle
-    'spendTrend',              // rectangle (line chart — LineTrend)
-    'coffees', 'events',       // squares row
-    'category',                // rectangle (Breakdown — Traffic source style)
-    'upcoming',                // rectangle
-    'topExpense', 'ytd',       // squares row
+    'active', 'spend',              // squares row
+    'monthGoal', 'clock',           // squares row (ring goal + analog clock)
+    'heatmap',                      // rectangle
+    'budget',                       // rectangle (monthly budget vs spend)
+    'forecast',                     // rectangle (30-day charge forecast)
+    'due',                          // rectangle
+    'spendTrend',                   // rectangle (line chart — LineTrend)
+    'coffees', 'events',            // squares row
+    'category',                     // rectangle (Breakdown — Traffic source style)
+    'categoryRings', 'topExpense',  // squares row (rings + top expense)
+    'radar',                        // rectangle (Radar — by category)
+    'upcoming',                     // rectangle
+    'score', 'ytd',                 // squares row (financial score + year-to-date)
   ])
 
-  function moveWidget(id: WKey, dir: -1 | 1) {
+  const handleEnterEdit = React.useCallback(() => {
+    setEditMode(true)
+  }, [])
+
+  const handleDragStart = React.useCallback((id: WKey) => {
+    setDraggingId(id)
+  }, [])
+
+  const handleDragMove = React.useCallback((id: WKey, absoluteY: number) => {
+    cursorAbsYRef.current = absoluteY
+    // Convert window-Y to content-Y so the comparison against stored layouts
+    // (also content-Y) remains correct as the page scrolls during the drag.
+    const contentY = absoluteY + scrollYRef.current
     setOrder(prev => {
-      const idx = prev.indexOf(id)
-      const next = idx + dir
-      if (idx === -1 || next < 0 || next >= prev.length) return prev
+      const target = computeDropIndex(layoutsRef.current, contentY, id, prev)
+      const fromIdx = prev.indexOf(id)
+      if (fromIdx === -1 || target === -1 || fromIdx === target) return prev
       const out = [...prev]
-      out.splice(idx, 1)
-      out.splice(next, 0, id)
+      out.splice(fromIdx, 1)
+      out.splice(target, 0, id)
       return out
     })
-  }
+  }, [])
 
-  // ── Reorder controls (shown in edit mode) — Button DNA ─────────────
-  function ReorderBar({ id }: { id: WKey }) {
-    if (!editMode) return null
-    const idx = order.indexOf(id)
-    const canUp   = idx > 0
-    const canDown = idx < order.length - 1
-    return (
-      <View style={gh.bar}>
-        <IconButton variant="primary" size="sm" onPress={() => moveWidget(id, -1)} disabled={!canUp} accessibilityLabel="Move up">
-          <Text style={[gh.btnText, { color: '#FFFFFF' }]}>↑</Text>
-        </IconButton>
-        <IconButton variant="primary" size="sm" onPress={() => moveWidget(id, 1)} disabled={!canDown} accessibilityLabel="Move down">
-          <Text style={[gh.btnText, { color: '#FFFFFF' }]}>↓</Text>
-        </IconButton>
-      </View>
-    )
-  }
+  const handleDragEnd = React.useCallback(() => {
+    setDraggingId(null)
+  }, [])
+
+  const handleMeasure = React.useCallback((id: WKey, top: number, height: number) => {
+    // Store content-relative top (window-Y + current scroll offset). Invariant
+    // across subsequent scrolls.
+    layoutsRef.current.set(id, { top: top + scrollYRef.current, height })
+  }, [])
+
+  // Auto-scroll: while dragging, if the cursor is within EDGE_THRESHOLD of the
+  // viewport top or bottom, programmatically scroll the page so the user can
+  // drop a widget into positions that are currently off-screen.
+  useEffect(() => {
+    if (!draggingId) return
+    const EDGE_THRESHOLD = 90
+    const MAX_SPEED      = 14   // px per frame at the very edge
+    let raf = 0
+    function step() {
+      const viewportH = Dimensions.get('window').height
+      const y = cursorAbsYRef.current
+      let dy = 0
+      if (y < EDGE_THRESHOLD) {
+        // Linearly ramp speed: 0 at threshold, MAX at edge
+        const k = 1 - y / EDGE_THRESHOLD
+        dy = -Math.round(MAX_SPEED * k)
+      } else if (y > viewportH - EDGE_THRESHOLD) {
+        const k = (y - (viewportH - EDGE_THRESHOLD)) / EDGE_THRESHOLD
+        dy =  Math.round(MAX_SPEED * Math.min(k, 1))
+      }
+      if (dy !== 0 && scrollRef.current) {
+        const next = Math.max(0, scrollYRef.current + dy)
+        scrollRef.current.scrollTo({ y: next, animated: false })
+      }
+      raf = requestAnimationFrame(step)
+    }
+    raf = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(raf)
+  }, [draggingId])
 
   function handleAddTrack(data: any) {
     if (data.type === 'subscription') { store.addSubscription(data); toast.push('Subscription added', 'success') }
@@ -521,15 +644,13 @@ export function Dashboard() {
         return <ClockWidget tag="now" />
       case 'spendTrend':
         return (
-          <LineTrendWidget
+          <SpendTrendWidget
             tag="trend"
             title="spend"
-            value={monthly}
+            bars={spendBars}
+            compBars={spendCompBars}
             unit={symbol}
-            deltaPct={spendDeltaPct}
-            deltaLabel="vs last month"
-            series={spendSeries}
-            labels={spendLabels}
+            invertDelta
           />
         )
       case 'heatmap':
@@ -563,6 +684,21 @@ export function Dashboard() {
             unit={symbol}
           />
         )
+      case 'categoryRings':
+        return (
+          <CategoryRingsWidget
+            tag="top categories"
+            items={categoryRingItems}
+          />
+        )
+      case 'radar':
+        return (
+          <RadarWidget
+            tag="stats"
+            title="Breakdown by category"
+            categories={radarCategories}
+          />
+        )
       case 'upcoming':
         return (
           <Widget tag="upcoming · next 30 days" size="rectangle">
@@ -593,6 +729,30 @@ export function Dashboard() {
             })}
           </Widget>
         )
+      case 'budget':
+        return (
+          <BudgetWidget
+            spent={monthly}
+            budget={store.settings.monthlyBudget ?? null}
+            currency={currency}
+          />
+        )
+      case 'forecast':
+        return (
+          <ForecastWidget
+            items={forecastItems}
+            symbol={symbol}
+          />
+        )
+      case 'score':
+        return (
+          <ScoreWidget
+            subscriptions={store.subscriptions}
+            tasks={store.tasks}
+            monthlyBudget={store.settings.monthlyBudget ?? null}
+            monthlySpend={monthly}
+          />
+        )
     }
   }
 
@@ -612,8 +772,19 @@ export function Dashboard() {
           transition={{ type:'spring', damping:20, stiffness:200, delay: WIDGET_DELAY[id] }}
           style={fillStyle}
         >
-          <ReorderBar id={id} />
-          {content}
+          <EditableWidget
+            id={id}
+            editMode={editMode}
+            isDragging={draggingId === id}
+            onRemove={() => setOrder(prev => prev.filter(k => k !== id))}
+            onEnterEdit={handleEnterEdit}
+            onDragStart={handleDragStart}
+            onDragMove={handleDragMove}
+            onDragEnd={handleDragEnd}
+            onMeasure={handleMeasure}
+          >
+            {content}
+          </EditableWidget>
         </MotiView>
       </Animated.View>
     )
@@ -624,7 +795,7 @@ export function Dashboard() {
     const out: React.ReactNode[] = []
     let pending: { id: WKey; node: React.ReactNode; idx: number } | null = null
 
-    order.forEach((id, idx) => {
+    for (const [idx, id] of order.entries()) {
       const node = renderSingle(id)
       if (WIDGET_SIZE[id] === 'square') {
         if (pending) {
@@ -651,7 +822,7 @@ export function Dashboard() {
         }
         out.push(wrapWidget(id, node, idx, false))
       }
-    })
+    }
     if (pending) {
       out.push(
         <View key={`row-${pending.id}-solo`} style={s.squareRow}>
@@ -670,29 +841,31 @@ export function Dashboard() {
         {!editMode && (
           <IconButton variant="primary" size="md" onPress={() => setShowAddTask(true)} accessibilityLabel="Add task">
             <View style={{ gap:3, alignItems:'center' }}>
-              <View style={{ width:14, height:1.5, backgroundColor:'#FFFFFF', borderRadius:1 }} />
-              <View style={{ width:10, height:1.5, backgroundColor:'#FFFFFF', borderRadius:1 }} />
-              <View style={{ width:14, height:1.5, backgroundColor:'#FFFFFF', borderRadius:1 }} />
+              <View style={{ width:14, height:1.5, backgroundColor:primaryFg, borderRadius:1 }} />
+              <View style={{ width:10, height:1.5, backgroundColor:primaryFg, borderRadius:1 }} />
+              <View style={{ width:14, height:1.5, backgroundColor:primaryFg, borderRadius:1 }} />
             </View>
           </IconButton>
         )}
         {editMode ? (
-          <Button label="Done" variant="primary" size="sm" onPress={() => setEditMode(false)} />
+          <IconButton variant="primary" size="md" onPress={() => setEditMode(false)} accessibilityLabel="Done editing layout">
+            <Text style={{ color: primaryFg, fontSize: 13, fontFamily: theme.fontBold, paddingHorizontal: 6 }}>Done</Text>
+          </IconButton>
         ) : (
           <IconButton variant="primary" size="md" onPress={() => setEditMode(true)} accessibilityLabel="Edit layout">
             <View style={{ gap:3 }}>
               <View style={{ flexDirection:'row', gap:3 }}>
-                {[8,8].map((w,i) => <View key={i} style={{ width:w, height:8, borderRadius:2, backgroundColor:'#FFFFFF' }} />)}
+                {[8,8].map((w,i) => <View key={i} style={{ width:w, height:8, borderRadius:2, backgroundColor:primaryFg }} />)}
               </View>
               <View style={{ flexDirection:'row', gap:3 }}>
-                {[8,8].map((w,i) => <View key={i} style={{ width:w, height:8, borderRadius:2, backgroundColor:'#FFFFFF' }} />)}
+                {[8,8].map((w,i) => <View key={i} style={{ width:w, height:8, borderRadius:2, backgroundColor:primaryFg }} />)}
               </View>
             </View>
           </IconButton>
         )}
         {!editMode && (
           <IconButton variant="primary" size="md" onPress={() => setShowAddTrack(true)} accessibilityLabel="Add track">
-            <Text style={{ color:'#FFFFFF', fontSize:22, fontFamily:theme.fontLight, lineHeight:24 }}>+</Text>
+            <Text style={{ color:primaryFg, fontSize:22, fontFamily:theme.fontLight, lineHeight:24 }}>+</Text>
           </IconButton>
         )}
       </View>
@@ -714,8 +887,12 @@ export function Dashboard() {
               Remove <Text style={{ fontFamily:theme.fontBold }}>{confirm.name}</Text>? This cannot be undone.
             </Text>
             <View style={s.confirmActions}>
-              <Button label="Cancel" variant="secondary" size="md" onPress={() => setConfirm(null)} fullWidth />
-              <Button label="Remove" variant="danger" size="md" onPress={confirmRemove} fullWidth />
+              <View style={{ flex: 1 }}>
+                <Button label="Cancel" variant="secondary" size="md" onPress={() => setConfirm(null)} fullWidth />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Button label="Remove" variant="danger" size="md" onPress={confirmRemove} fullWidth />
+              </View>
             </View>
           </View>
         )}
@@ -726,33 +903,50 @@ export function Dashboard() {
   // Unified — same widgets on mobile and web (centered column on desktop)
   return (
     <ScrollView
+      ref={scrollRef}
       style={[s.page, { backgroundColor:colors.bg }]}
       contentContainerStyle={[s.content, isDesktop && s.contentDesktop]}
       showsVerticalScrollIndicator={false}
-      scrollEnabled={!editMode}
+      onScroll={(e) => { scrollYRef.current = e.nativeEvent.contentOffset.y }}
+      scrollEventThrottle={16}
     >
-      <View style={isDesktop ? s.widgetColumn : undefined}>
-        {header}
-        {renderAll()}
-      </View>
+      <TapGestureHandler
+        enabled={editMode}
+        onHandlerStateChange={(e) => {
+          if (e.nativeEvent.state === GestureState.ACTIVE) {
+            setEditMode(false)
+          }
+        }}
+      >
+        <Animated.View>
+          <View style={isDesktop ? s.widgetColumn : undefined}>
+            {header}
+            {renderAll()}
+            <HiddenWidgetTray
+              visible={editMode}
+              items={ALL_KEYS
+                .filter(k => !order.includes(k))
+                .map(k => ({ id: k, label: WIDGET_META[k].label, emoji: WIDGET_META[k].emoji }))}
+              onAdd={(id) => setOrder(prev => [...prev, id as WKey])}
+            />
+          </View>
+        </Animated.View>
+      </TapGestureHandler>
       {modals}
     </ScrollView>
   )
 }
 
-// ── Reorder bar styles ─────────────────────────────────────────────────
-const gh = StyleSheet.create({
-  bar:        { marginBottom:8, flexDirection:'row', alignItems:'center', justifyContent:'center', gap:theme.sp2 },
-  btnText:    { fontSize:16, lineHeight:18, fontFamily:theme.fontMono },
-})
-
 const s = StyleSheet.create({
   page: { flex: 1 },
-  content: { padding:theme.sp4, gap:theme.sp3, paddingBottom:110 },
+  content: { padding:theme.sp4, gap:theme.sp4, paddingBottom:130 },
   // Same widget grid on web — centered, single column matching mobile width
   contentDesktop: { paddingHorizontal: 32, paddingVertical: 40, paddingBottom: 80, alignItems: 'center' },
-  widgetColumn: { width: '100%', maxWidth: 480, gap: theme.sp3 },
-  header: { flexDirection:'row', justifyContent:'space-between', alignItems:'center', paddingHorizontal:4, paddingTop:theme.sp2, marginBottom:theme.sp2 },
+  widgetColumn: { width: '100%', maxWidth: 480, gap: theme.sp4 },
+  // Header aligns flush with widgets (no inner padding) and relies on the
+  // parent column's `gap: sp4` for breathing room below — keeps the rhythm
+  // uniform between header→first-widget and between adjacent widgets.
+  header: { flexDirection:'row', justifyContent:'space-between', alignItems:'center' },
   pageTitle: { fontSize:34, fontFamily:theme.fontBlack, letterSpacing:-1 },
   headerBtns: { flexDirection:'row', gap:theme.sp2 },
   iconBtn: { width:38, height:38, borderRadius:19, alignItems:'center', justifyContent:'center', gap:3 },
@@ -760,8 +954,8 @@ const s = StyleSheet.create({
   // Centered hero content area inside a Widget (for metric widgets) —
   // both axes centered, fills the widget body
   metricCenter: { flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center', gap: theme.sp1 },
-  // Row of two square widgets — mono spacing matches theme.sp3
-  squareRow: { flexDirection: 'row', gap: theme.sp3 },
+  // Row of two square widgets — mono spacing matches theme.sp4 (consistent vertical/horizontal rhythm)
+  squareRow: { flexDirection: 'row', gap: theme.sp4 },
   spendBlock: { flexDirection:'row', alignItems:'flex-end', gap:6 },
   // Hero numbers — Space Mono BOLD, sized to fill the widget (§Widget hero typo)
   spendMain: { fontSize:56, fontFamily:theme.fontMonoBold, letterSpacing:-2.5, lineHeight:60 },

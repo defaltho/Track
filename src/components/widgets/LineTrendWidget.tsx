@@ -19,10 +19,13 @@ interface Props {
   deltaLabel?: string        // e.g. "vs last month"
   series: number[]           // chart data
   labels?: string[]          // x-axis labels (one per point)
+  // For "lower is better" metrics like spend: negative delta = success (green),
+  // positive delta = danger (red). Default false (more is better — sales, engagement).
+  invertDelta?: boolean
 }
 
 export function LineTrendWidget({
-  tag, title, value, unit, deltaPct, deltaLabel, series, labels,
+  tag, title, value, unit, deltaPct, deltaLabel, series, labels, invertDelta = false,
 }: Props) {
   const { colors } = useTheme()
   const w = 280, h = 70, pad = 6
@@ -38,10 +41,14 @@ export function LineTrendWidget({
   const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ')
   const last = pts[pts.length - 1]
   const fmt = (n: number) => Math.round(n).toLocaleString()
+  // For "lower is better" metrics (spend), invert the green/red so a
+  // negative delta reads as success.
+  const isGood = (p: number) => (invertDelta ? p < 0 : p > 0)
+  const isBad  = (p: number) => (invertDelta ? p > 0 : p < 0)
   const trendColor =
     deltaPct === undefined ? colors.textMuted :
-    deltaPct > 0 ? colors.success :
-    deltaPct < 0 ? colors.danger :
+    isGood(deltaPct) ? colors.success :
+    isBad(deltaPct)  ? colors.danger :
     colors.textMuted
   const arrow =
     deltaPct === undefined ? '' :

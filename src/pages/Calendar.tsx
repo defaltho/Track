@@ -204,13 +204,6 @@ export function Calendar() {
 
   return (
     <View style={[cs.page, { backgroundColor: colors.bg }]}>
-      {/* Shared frame — wraps both SidePanel and Calendar grid on desktop */}
-      {isDesktop && (
-        <View
-          style={[cs.desktopFrame, { borderColor: colors.border }]}
-          pointerEvents="none"
-        />
-      )}
       {isDesktop && (
         <SidePanel
           colors={colors}
@@ -306,15 +299,22 @@ export function Calendar() {
             const dt   = parseISO(item.date)
             const diff = differenceInCalendarDays(dt, today)
             const when = diff === 0 ? 'today' : diff === 1 ? 'tomorrow' : diff > 0 ? `in ${diff}d` : `${Math.abs(diff)}d ago`
+            // Payment status color: overdue = danger, today = warning, ≤3d = warning, future = muted
+            const statusColor =
+              item.kind !== 'charge' ? colors.textMuted :
+              diff < 0              ? colors.danger  :
+              diff === 0            ? colors.warning :
+              diff <= 3             ? colors.warning :
+              colors.textMuted
             return (
               <View key={i} style={cs.upRow}>
                 <Text style={cs.upEmoji}>{item.emoji}</Text>
                 <View style={cs.upBody}>
                   <Text style={[cs.upName, { color: colors.text }]} numberOfLines={1}>{item.name}</Text>
-                  <Text style={[cs.upMeta, { color: colors.textMuted }]}>{format(dt, 'EEE · d MMM').toLowerCase()} · {when}</Text>
+                  <Text style={[cs.upMeta, { color: statusColor }]}>{format(dt, 'EEE · d MMM').toLowerCase()} · {when}</Text>
                 </View>
                 {item.kind === 'charge' && item.price != null ? (
-                  <Text style={[cs.upPrice, { color: colors.text }]}>{symFor(item.currency)}{item.price.toFixed(2)}</Text>
+                  <Text style={[cs.upPrice, { color: diff < 0 ? colors.danger : colors.text }]}>{symFor(item.currency)}{item.price.toFixed(2)}</Text>
                 ) : (
                   <View style={[cs.upPill, { backgroundColor: colors.surfaceEl }]}>
                     <Text style={[cs.upPillText, { color: colors.textMuted }]}>event</Text>
@@ -399,7 +399,7 @@ function SidePanel({
 
   return (
     <View style={sp.root} pointerEvents="box-none">
-      <View style={[sp.card, { backgroundColor: colors.surfaceEl, borderColor: colors.border }]}>
+      <View style={[sp.card, { backgroundColor: colors.surface, borderColor: colors.borderStrong }]}>
         {/* Kicker row */}
         <View style={sp.kickerRow}>
           <View style={[sp.kickerDot, { backgroundColor: kickerDotColor }]} />
@@ -413,10 +413,10 @@ function SidePanel({
 
         {/* Meta subtitle with extra context */}
         <View style={sp.metaRow}>
-          <Text style={[sp.metaTag, { color: colors.textMuted, backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={[sp.metaTag, { color: colors.textMuted, backgroundColor: colors.surfaceEl, borderColor: colors.border }]}>
             week {week}
           </Text>
-          <Text style={[sp.metaTag, { color: colors.textMuted, backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={[sp.metaTag, { color: colors.textMuted, backgroundColor: colors.surfaceEl, borderColor: colors.border }]}>
             day {doy}/365
           </Text>
         </View>
@@ -489,7 +489,7 @@ function SidePanel({
         </View>
 
         {isPinned && (
-          <Pressable onPress={onUnpin} style={({ hovered }: any) => [sp.unpin, { backgroundColor: hovered && Platform.OS === 'web' ? colors.surface : 'transparent', borderColor: colors.border }]}>
+          <Pressable onPress={onUnpin} style={({ hovered }: any) => [sp.unpin, { backgroundColor: hovered && Platform.OS === 'web' ? colors.surfaceEl : 'transparent', borderColor: colors.border }]}>
             <Ionicons name="arrow-back-outline" size={13} color={colors.textMuted} />
             <Text style={[sp.unpinLabel, { color: colors.textMuted }]}>back to today</Text>
           </Pressable>
@@ -502,8 +502,8 @@ function SidePanel({
 // ── Nav button (chevron) — Button DNA via IconButton ──────────────────
 function NavBtn({ icon, onPress, colors }: { icon: any; onPress: () => void; colors: Colors }) {
   return (
-    <IconButton variant="primary" size="sm" onPress={onPress} accessibilityLabel={String(icon)}>
-      <Ionicons name={icon} size={16} color="#FFFFFF" />
+    <IconButton variant="surface" size="sm" onPress={onPress} accessibilityLabel={String(icon)}>
+      <Ionicons name={icon} size={16} color={colors.text} />
     </IconButton>
   )
 }
@@ -516,25 +516,9 @@ const symFor = (c?: string) => {
 
 const cs = StyleSheet.create({
   page:           { flex: 1 },
-  scroll:         { padding: theme.sp4, gap: theme.sp4, paddingBottom: 110 },
+  scroll:         { padding: theme.sp4, gap: theme.sp4, paddingBottom: 130 },
   scrollDesktop:  { paddingVertical: 56, paddingLeft: 420, paddingRight: 32, alignItems: 'center' },
 
-  // Shared bordered frame wrapping SidePanel + Calendar grid on desktop
-  desktopFrame: {
-    ...Platform.select({
-      web: {
-        position: 'fixed' as any,
-        top: 40,
-        bottom: 40,
-        left: 280,        // matches SidePanel.left (sidebar 240 + 40 breathing)
-        right: 32,        // matches calendar paddingRight
-        borderRadius: 14,
-        borderWidth: StyleSheet.hairlineWidth,
-        zIndex: 1,
-      },
-      default: {},
-    }) as object,
-  },
   container:      { width: '100%', gap: 24 },
   containerDesktop:{ maxWidth: 760 },
 
@@ -621,9 +605,22 @@ const sp = StyleSheet.create({
   },
   card: {
     flex: 1,
-    borderRadius: 10,
+    borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
     padding: 28,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 2px 12px rgba(0,0,0,0.05), 0 1px 3px rgba(0,0,0,0.03)',
+      } as any,
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 12,
+      },
+      android: { elevation: 2 },
+      default: {},
+    }),
   },
 
   kickerRow:  { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
