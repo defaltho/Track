@@ -14,13 +14,18 @@ import { useDataStore } from '../stores/data'
 import { useToastStore } from '../stores/toasts'
 import { useTheme } from '../context/ThemeContext'
 import { totalMonthlySpend, coffees } from '../utils/calculations'
+import { buildMonthlyBars } from '../utils/chart'
 import { Modal } from '../components/ui/Modal'
-import { Button, IconButton } from '../components/ui/Button'
+import { Button, IconButton, usePrimaryFg } from '../components/ui/Button'
 import { Widget, WidgetRow } from '../components/ui/Widget'
+import { EditableWidget } from '../components/dashboard/EditableWidget'
 import { BreakdownWidget, BreakdownItem } from '../components/widgets/BreakdownWidget'
 import { RingGoalWidget } from '../components/widgets/RingGoalWidget'
 import { LineTrendWidget } from '../components/widgets/LineTrendWidget'
+import { CategoryRingsWidget, RingItem } from '../components/widgets/CategoryRingsWidget'
+import { SpendTrendWidget } from '../components/widgets/SpendTrendWidget'
 import { ClockWidget } from '../components/widgets/ClockWidget'
+import { RadarWidget, RadarCategory } from '../components/widgets/RadarWidget'
 import { AddTrackForm } from '../components/forms/AddTrackForm'
 import { AddTaskForm } from '../components/forms/AddTaskForm'
 import { theme, CURRENCY_SYMBOL, Colors } from '../theme'
@@ -258,33 +263,37 @@ const statS = StyleSheet.create({
 // or a 'rectangle' (2×1, full row).
 type WKey =
   | 'active' | 'spend' | 'coffees' | 'events' | 'topExpense' | 'ytd' | 'monthGoal' | 'clock'
-  | 'heatmap' | 'due' | 'category' | 'upcoming' | 'spendTrend'
+  | 'categoryRings'
+  | 'heatmap' | 'due' | 'category' | 'upcoming' | 'spendTrend' | 'radar'
 
 const WIDGET_SIZE: Record<WKey, 'square' | 'rectangle'> = {
-  active:     'square',
-  spend:      'square',
-  coffees:    'square',
-  events:     'square',
-  topExpense: 'square',
-  ytd:        'square',
-  monthGoal:  'square',
-  clock:      'square',
-  heatmap:    'rectangle',
-  due:        'rectangle',
-  category:   'rectangle',
-  upcoming:   'rectangle',
-  spendTrend: 'rectangle',
+  active:        'square',
+  spend:         'square',
+  coffees:       'square',
+  events:        'square',
+  topExpense:    'square',
+  ytd:           'square',
+  monthGoal:     'square',
+  clock:         'square',
+  categoryRings: 'square',
+  heatmap:       'rectangle',
+  due:           'rectangle',
+  category:      'rectangle',
+  upcoming:      'rectangle',
+  spendTrend:    'rectangle',
+  radar:         'rectangle',
 }
 
 const WIDGET_DELAY: Record<WKey, number> = {
   active: 60,  spend: 90,    monthGoal: 120, clock: 150,
   heatmap: 180, due: 210,    spendTrend: 240, category: 270,
   coffees: 300, events: 330, upcoming: 360,
-  topExpense: 390, ytd: 420,
+  topExpense: 390, ytd: 420,  radar: 450, categoryRings: 480,
 }
 
 export function Dashboard() {
   const { colors } = useTheme()
+  const primaryFg = usePrimaryFg()
   const store = useDataStore()
   const toast = useToastStore()
   const { width } = useWindowDimensions()
@@ -319,28 +328,33 @@ export function Dashboard() {
   // Monthly target — soft goal = 1.25× current monthly spend (until a real budget exists)
   const monthlyTarget = useMemo(() => Math.max(Math.ceil(monthly * 1.25 / 10) * 10, 50), [monthly])
 
-  // 6-month spend series — approximate using current monthly with light variance
-  const spendSeries = useMemo(() => {
-    if (monthly <= 0) return [0, 0, 0, 0, 0, 0]
-    const variants = [0.86, 0.92, 1.04, 0.97, 1.08, 1.0]
-    return variants.map(v => Math.round(monthly * v))
-  }, [monthly])
+  // Spend trend — driven by the SAME `buildMonthlyBars` the Analytics
+  // page uses, with both `bars` (this period) and `compBars` (previous
+  // period) so the dashboard widget can render the same dashed
+  // comparison line. Matches Analytics' default '6M' range:
+  // back=4, ahead=2 → 7 bars, current month centered at index 4.
+  const spendBars = useMemo(
+    () => buildMonthlyBars(store.subscriptions, 4, 2, 0),
+    [store.subscriptions]
+  )
+  const spendCompBars = useMemo(
+    () => buildMonthlyBars(store.subscriptions, 4, 2, 7),
+    [store.subscriptions]
+  )
 
-  const spendLabels = useMemo(() => {
-    const out: string[] = []
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(now); d.setMonth(d.getMonth() - i)
-      out.push(format(d, 'MMM').toLowerCase())
+  // Radar — spending share per category (normalized to 0..1 vs the top category)
+  const radarCategories = useMemo<RadarCategory[]>(() => {
+    const totals: Record<string, number> = {}
+    for (const sub of activeSubs as any[]) {
+      const cat = sub.category || 'Other'
+      totals[cat] = (totals[cat] || 0) + (sub.price || 0)
     }
-    return out
-  }, [now])
-
-  const spendDeltaPct = useMemo(() => {
-    const prev = spendSeries[spendSeries.length - 2] || 0
-    const curr = spendSeries[spendSeries.length - 1] || 0
-    if (prev === 0) return 0
-    return ((curr - prev) / prev) * 100
-  }, [spendSeries])
+    const entries = Object.entries(totals).filter(([, v]) => v > 0)
+    const max = Math.max(...entries.map(([, v]) => v), 0.01)
+    return entries
+      .sort((a, b) => b[1] - a[1])
+      .map(([label, value]) => ({ label, value, pct: value / max }))
+  }, [activeSubs])
 
   // Category breakdown — for the Breakdown widget (Traffic-source style)
   const categoryBreakdown = useMemo<BreakdownItem[]>(() => {
@@ -354,6 +368,22 @@ export function Dashboard() {
       .map(([label, { value, color }]) => ({ label, value, color }))
       .sort((a, b) => b.value - a.value)
   }, [activeSubs, colors.accent])
+
+  // Top 4 categories as rings — share of total monthly spend (0..1)
+  const categoryRingItems = useMemo<RingItem[]>(() => {
+    const total = categoryBreakdown.reduce((s, it) => s + it.value, 0)
+    if (total <= 0) return []
+    const emojiByCat: Record<string, string> = {
+      Productivity: '💼', Gaming: '🎮', Streaming: '📺', Music: '🎵',
+      Fitness: '💪', Other: '📦', Food: '🍽️', Travel: '✈️', Health: '⚕️',
+    }
+    return categoryBreakdown.slice(0, 4).map(it => ({
+      label: it.label,
+      pct:   it.value / total,
+      color: it.color,
+      emoji: emojiByCat[it.label],
+    }))
+  }, [categoryBreakdown])
 
   // Upcoming next 30 days
   const upcomingList = useMemo(() => {
@@ -378,15 +408,17 @@ export function Dashboard() {
   // ── Widget ordering ────────────────────────────────────────────────
   const [editMode, setEditMode] = useState(false)
   const [order, setOrder]       = useState<WKey[]>([
-    'active', 'spend',         // squares row
-    'monthGoal', 'clock',      // squares row (ring goal + analog clock)
-    'heatmap',                 // rectangle
-    'due',                     // rectangle
-    'spendTrend',              // rectangle (line chart — LineTrend)
-    'coffees', 'events',       // squares row
-    'category',                // rectangle (Breakdown — Traffic source style)
-    'upcoming',                // rectangle
-    'topExpense', 'ytd',       // squares row
+    'active', 'spend',              // squares row
+    'monthGoal', 'clock',           // squares row (ring goal + analog clock)
+    'heatmap',                      // rectangle
+    'due',                          // rectangle
+    'spendTrend',                   // rectangle (line chart — LineTrend)
+    'coffees', 'events',            // squares row
+    'category',                     // rectangle (Breakdown — Traffic source style)
+    'categoryRings', 'topExpense',  // squares row (rings + top expense)
+    'radar',                        // rectangle (Radar — by category)
+    'upcoming',                     // rectangle
+    'ytd',                          // square (alone — will pair with future widget)
   ])
 
   function moveWidget(id: WKey, dir: -1 | 1) {
@@ -410,10 +442,10 @@ export function Dashboard() {
     return (
       <View style={gh.bar}>
         <IconButton variant="primary" size="sm" onPress={() => moveWidget(id, -1)} disabled={!canUp} accessibilityLabel="Move up">
-          <Text style={[gh.btnText, { color: '#FFFFFF' }]}>↑</Text>
+          <Text style={[gh.btnText, { color: primaryFg }]}>↑</Text>
         </IconButton>
         <IconButton variant="primary" size="sm" onPress={() => moveWidget(id, 1)} disabled={!canDown} accessibilityLabel="Move down">
-          <Text style={[gh.btnText, { color: '#FFFFFF' }]}>↓</Text>
+          <Text style={[gh.btnText, { color: primaryFg }]}>↓</Text>
         </IconButton>
       </View>
     )
@@ -521,15 +553,13 @@ export function Dashboard() {
         return <ClockWidget tag="now" />
       case 'spendTrend':
         return (
-          <LineTrendWidget
+          <SpendTrendWidget
             tag="trend"
             title="spend"
-            value={monthly}
+            bars={spendBars}
+            compBars={spendCompBars}
             unit={symbol}
-            deltaPct={spendDeltaPct}
-            deltaLabel="vs last month"
-            series={spendSeries}
-            labels={spendLabels}
+            invertDelta
           />
         )
       case 'heatmap':
@@ -561,6 +591,21 @@ export function Dashboard() {
             title="by category"
             items={categoryBreakdown}
             unit={symbol}
+          />
+        )
+      case 'categoryRings':
+        return (
+          <CategoryRingsWidget
+            tag="top categories"
+            items={categoryRingItems}
+          />
+        )
+      case 'radar':
+        return (
+          <RadarWidget
+            tag="stats"
+            title="Breakdown by category"
+            categories={radarCategories}
           />
         )
       case 'upcoming':
@@ -612,8 +657,14 @@ export function Dashboard() {
           transition={{ type:'spring', damping:20, stiffness:200, delay: WIDGET_DELAY[id] }}
           style={fillStyle}
         >
-          <ReorderBar id={id} />
-          {content}
+          <EditableWidget
+            editMode={editMode}
+            isDragging={false}
+            phase={_idx / Math.max(order.length, 1)}
+            onRemove={() => setOrder(prev => prev.filter(k => k !== id))}
+          >
+            {content}
+          </EditableWidget>
         </MotiView>
       </Animated.View>
     )
@@ -670,9 +721,9 @@ export function Dashboard() {
         {!editMode && (
           <IconButton variant="primary" size="md" onPress={() => setShowAddTask(true)} accessibilityLabel="Add task">
             <View style={{ gap:3, alignItems:'center' }}>
-              <View style={{ width:14, height:1.5, backgroundColor:'#FFFFFF', borderRadius:1 }} />
-              <View style={{ width:10, height:1.5, backgroundColor:'#FFFFFF', borderRadius:1 }} />
-              <View style={{ width:14, height:1.5, backgroundColor:'#FFFFFF', borderRadius:1 }} />
+              <View style={{ width:14, height:1.5, backgroundColor:primaryFg, borderRadius:1 }} />
+              <View style={{ width:10, height:1.5, backgroundColor:primaryFg, borderRadius:1 }} />
+              <View style={{ width:14, height:1.5, backgroundColor:primaryFg, borderRadius:1 }} />
             </View>
           </IconButton>
         )}
@@ -682,17 +733,17 @@ export function Dashboard() {
           <IconButton variant="primary" size="md" onPress={() => setEditMode(true)} accessibilityLabel="Edit layout">
             <View style={{ gap:3 }}>
               <View style={{ flexDirection:'row', gap:3 }}>
-                {[8,8].map((w,i) => <View key={i} style={{ width:w, height:8, borderRadius:2, backgroundColor:'#FFFFFF' }} />)}
+                {[8,8].map((w,i) => <View key={i} style={{ width:w, height:8, borderRadius:2, backgroundColor:primaryFg }} />)}
               </View>
               <View style={{ flexDirection:'row', gap:3 }}>
-                {[8,8].map((w,i) => <View key={i} style={{ width:w, height:8, borderRadius:2, backgroundColor:'#FFFFFF' }} />)}
+                {[8,8].map((w,i) => <View key={i} style={{ width:w, height:8, borderRadius:2, backgroundColor:primaryFg }} />)}
               </View>
             </View>
           </IconButton>
         )}
         {!editMode && (
           <IconButton variant="primary" size="md" onPress={() => setShowAddTrack(true)} accessibilityLabel="Add track">
-            <Text style={{ color:'#FFFFFF', fontSize:22, fontFamily:theme.fontLight, lineHeight:24 }}>+</Text>
+            <Text style={{ color:primaryFg, fontSize:22, fontFamily:theme.fontLight, lineHeight:24 }}>+</Text>
           </IconButton>
         )}
       </View>
@@ -714,8 +765,12 @@ export function Dashboard() {
               Remove <Text style={{ fontFamily:theme.fontBold }}>{confirm.name}</Text>? This cannot be undone.
             </Text>
             <View style={s.confirmActions}>
-              <Button label="Cancel" variant="secondary" size="md" onPress={() => setConfirm(null)} fullWidth />
-              <Button label="Remove" variant="danger" size="md" onPress={confirmRemove} fullWidth />
+              <View style={{ flex: 1 }}>
+                <Button label="Cancel" variant="secondary" size="md" onPress={() => setConfirm(null)} fullWidth />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Button label="Remove" variant="danger" size="md" onPress={confirmRemove} fullWidth />
+              </View>
             </View>
           </View>
         )}
@@ -748,10 +803,10 @@ const gh = StyleSheet.create({
 
 const s = StyleSheet.create({
   page: { flex: 1 },
-  content: { padding:theme.sp4, gap:theme.sp3, paddingBottom:110 },
+  content: { padding:theme.sp4, gap:theme.sp4, paddingBottom:130 },
   // Same widget grid on web — centered, single column matching mobile width
   contentDesktop: { paddingHorizontal: 32, paddingVertical: 40, paddingBottom: 80, alignItems: 'center' },
-  widgetColumn: { width: '100%', maxWidth: 480, gap: theme.sp3 },
+  widgetColumn: { width: '100%', maxWidth: 480, gap: theme.sp4 },
   header: { flexDirection:'row', justifyContent:'space-between', alignItems:'center', paddingHorizontal:4, paddingTop:theme.sp2, marginBottom:theme.sp2 },
   pageTitle: { fontSize:34, fontFamily:theme.fontBlack, letterSpacing:-1 },
   headerBtns: { flexDirection:'row', gap:theme.sp2 },
@@ -760,8 +815,8 @@ const s = StyleSheet.create({
   // Centered hero content area inside a Widget (for metric widgets) —
   // both axes centered, fills the widget body
   metricCenter: { flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center', gap: theme.sp1 },
-  // Row of two square widgets — mono spacing matches theme.sp3
-  squareRow: { flexDirection: 'row', gap: theme.sp3 },
+  // Row of two square widgets — mono spacing matches theme.sp4 (consistent vertical/horizontal rhythm)
+  squareRow: { flexDirection: 'row', gap: theme.sp4 },
   spendBlock: { flexDirection:'row', alignItems:'flex-end', gap:6 },
   // Hero numbers — Space Mono BOLD, sized to fill the widget (§Widget hero typo)
   spendMain: { fontSize:56, fontFamily:theme.fontMonoBold, letterSpacing:-2.5, lineHeight:60 },
