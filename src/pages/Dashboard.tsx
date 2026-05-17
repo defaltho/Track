@@ -20,6 +20,7 @@ import { Modal } from '../components/ui/Modal'
 import { Button, IconButton, usePrimaryFg } from '../components/ui/Button'
 import { Widget, WidgetRow } from '../components/ui/Widget'
 import { EditableWidget } from '../components/dashboard/EditableWidget'
+import { HiddenWidgetTray } from '../components/dashboard/HiddenWidgetTray'
 import { BreakdownWidget, BreakdownItem } from '../components/widgets/BreakdownWidget'
 import { RingGoalWidget } from '../components/widgets/RingGoalWidget'
 import { LineTrendWidget } from '../components/widgets/LineTrendWidget'
@@ -290,6 +291,26 @@ const WIDGET_DELAY: Record<WKey, number> = {
   heatmap: 180, due: 210,    spendTrend: 240, category: 270,
   coffees: 300, events: 330, upcoming: 360,
   topExpense: 390, ytd: 420,  radar: 450, categoryRings: 480,
+}
+
+const ALL_KEYS: WKey[] = Object.keys(WIDGET_SIZE) as WKey[]
+
+const WIDGET_META: Record<WKey, { label: string; emoji: string }> = {
+  active:        { label: 'active',         emoji: '📊' },
+  spend:         { label: 'spend',          emoji: '💸' },
+  coffees:       { label: 'coffees',        emoji: '☕' },
+  events:        { label: 'events',         emoji: '📅' },
+  topExpense:    { label: 'top expense',    emoji: '🥇' },
+  ytd:           { label: 'YTD',            emoji: '🗓️' },
+  monthGoal:     { label: 'month goal',     emoji: '🎯' },
+  clock:         { label: 'clock',          emoji: '🕐' },
+  categoryRings: { label: 'top categories', emoji: '⭕' },
+  heatmap:       { label: 'heatmap',        emoji: '🟩' },
+  due:           { label: 'this week',      emoji: '📌' },
+  category:      { label: 'by category',    emoji: '📈' },
+  upcoming:      { label: 'upcoming',       emoji: '⏭️' },
+  spendTrend:    { label: 'spend trend',    emoji: '📉' },
+  radar:         { label: 'radar',          emoji: '🕸️' },
 }
 
 export function Dashboard() {
@@ -801,6 +822,13 @@ export function Dashboard() {
           <View style={isDesktop ? s.widgetColumn : undefined}>
             {header}
             {renderAll()}
+            <HiddenWidgetTray
+              visible={editMode}
+              items={ALL_KEYS
+                .filter(k => !order.includes(k))
+                .map(k => ({ id: k, label: WIDGET_META[k].label, emoji: WIDGET_META[k].emoji }))}
+              onAdd={(id) => setOrder(prev => [...prev, id as WKey])}
+            />
           </View>
         </Animated.View>
       </TapGestureHandler>
