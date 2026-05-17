@@ -1,6 +1,6 @@
 # Track
 
-A minimalist PWA to track subscriptions, apps, events, tasks, and spending. Built with Svelte 5 + Vite + plain CSS + localStorage — no external database or API.
+A minimalist mobile app to track subscriptions, apps, events, tasks, and spending. Built with Expo + React Native + Zustand + AsyncStorage — no external database or API.
 
 **Pages:** Dashboard · Calendar · Analytics
 
