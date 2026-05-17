@@ -29,3 +29,6 @@ secrets.json
 expo-env.d.ts
 .expo/
 # @end expo-cli
+
+# @aictx/memory — local agent memory, never commit (contains project analysis)
+.memory/
