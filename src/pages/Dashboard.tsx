@@ -8,6 +8,7 @@ import Animated, {
   FadeInRight, ZoomIn, LinearTransition,
   useSharedValue, useAnimatedStyle, withSpring,
 } from 'react-native-reanimated'
+import { TapGestureHandler, State as GestureState } from 'react-native-gesture-handler'
 import Svg, { Circle as SvgCircle } from 'react-native-svg'
 import { format, differenceInCalendarDays, parseISO, subDays, eachDayOfInterval, getMonth } from 'date-fns'
 import { useDataStore } from '../stores/data'
@@ -728,7 +729,9 @@ export function Dashboard() {
           </IconButton>
         )}
         {editMode ? (
-          <Button label="Done" variant="primary" size="sm" onPress={() => setEditMode(false)} />
+          <IconButton variant="primary" size="md" onPress={() => setEditMode(false)} accessibilityLabel="Done editing layout">
+            <Text style={{ color: primaryFg, fontSize: 13, fontFamily: theme.fontBold, paddingHorizontal: 6 }}>Done</Text>
+          </IconButton>
         ) : (
           <IconButton variant="primary" size="md" onPress={() => setEditMode(true)} accessibilityLabel="Edit layout">
             <View style={{ gap:3 }}>
@@ -786,10 +789,21 @@ export function Dashboard() {
       showsVerticalScrollIndicator={false}
       scrollEnabled={!editMode}
     >
-      <View style={isDesktop ? s.widgetColumn : undefined}>
-        {header}
-        {renderAll()}
-      </View>
+      <TapGestureHandler
+        enabled={editMode}
+        onHandlerStateChange={(e) => {
+          if (e.nativeEvent.state === GestureState.ACTIVE) {
+            setEditMode(false)
+          }
+        }}
+      >
+        <Animated.View>
+          <View style={isDesktop ? s.widgetColumn : undefined}>
+            {header}
+            {renderAll()}
+          </View>
+        </Animated.View>
+      </TapGestureHandler>
       {modals}
     </ScrollView>
   )
