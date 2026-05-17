@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react'
 import {
   View, Text, ScrollView, TouchableOpacity, Pressable, StyleSheet,
-  Platform, useWindowDimensions,
+  Platform, useWindowDimensions, Dimensions,
 } from 'react-native'
 import { MotiView } from 'moti'
 import Animated, {
@@ -431,9 +431,16 @@ export function Dashboard() {
   // ── Widget ordering ────────────────────────────────────────────────
   const [editMode, setEditMode] = useState(false)
   const [draggingId, setDraggingId] = useState<WKey | null>(null)
-  // Per-widget measured rectangle in page-relative coordinates. We use a ref so
-  // mutations don't trigger re-renders — only the gesture handler reads it.
+  // Per-widget measured rectangle in CONTENT-relative coordinates (window-Y at
+  // measure time + scrollY at measure time). Stable across scroll.
   const layoutsRef = useRef<Map<WKey, { top: number; height: number }>>(new Map())
+  // Current page scroll offset, tracked from ScrollView.onScroll.
+  const scrollYRef = useRef(0)
+  // Last reported drag cursor in window coordinates (viewport-Y). Updated on
+  // every dragMove; consumed by the auto-scroll RAF loop.
+  const cursorAbsYRef = useRef(0)
+  // Ref to the dashboard ScrollView so auto-scroll can call scrollTo.
+  const scrollRef = useRef<ScrollView>(null)
   const [order, setOrder]       = useState<WKey[]>([
     'active', 'spend',              // squares row
     'monthGoal', 'clock',           // squares row (ring goal + analog clock)
@@ -448,14 +455,21 @@ export function Dashboard() {
     'ytd',                          // square (alone — will pair with future widget)
   ])
 
-  const handleDragStart = React.useCallback((id: WKey) => {
+  const handleEnterEdit = React.useCallback(() => {
     setEditMode(true)
+  }, [])
+
+  const handleDragStart = React.useCallback((id: WKey) => {
     setDraggingId(id)
   }, [])
 
   const handleDragMove = React.useCallback((id: WKey, absoluteY: number) => {
+    cursorAbsYRef.current = absoluteY
+    // Convert window-Y to content-Y so the comparison against stored layouts
+    // (also content-Y) remains correct as the page scrolls during the drag.
+    const contentY = absoluteY + scrollYRef.current
     setOrder(prev => {
-      const target = computeDropIndex(layoutsRef.current, absoluteY, id, prev)
+      const target = computeDropIndex(layoutsRef.current, contentY, id, prev)
       const fromIdx = prev.indexOf(id)
       if (fromIdx === -1 || target === -1 || fromIdx === target) return prev
       const out = [...prev]
@@ -470,8 +484,40 @@ export function Dashboard() {
   }, [])
 
   const handleMeasure = React.useCallback((id: WKey, top: number, height: number) => {
-    layoutsRef.current.set(id, { top, height })
+    // Store content-relative top (window-Y + current scroll offset). Invariant
+    // across subsequent scrolls.
+    layoutsRef.current.set(id, { top: top + scrollYRef.current, height })
   }, [])
+
+  // Auto-scroll: while dragging, if the cursor is within EDGE_THRESHOLD of the
+  // viewport top or bottom, programmatically scroll the page so the user can
+  // drop a widget into positions that are currently off-screen.
+  useEffect(() => {
+    if (!draggingId) return
+    const EDGE_THRESHOLD = 90
+    const MAX_SPEED      = 14   // px per frame at the very edge
+    let raf = 0
+    function step() {
+      const viewportH = Dimensions.get('window').height
+      const y = cursorAbsYRef.current
+      let dy = 0
+      if (y < EDGE_THRESHOLD) {
+        // Linearly ramp speed: 0 at threshold, MAX at edge
+        const k = 1 - y / EDGE_THRESHOLD
+        dy = -Math.round(MAX_SPEED * k)
+      } else if (y > viewportH - EDGE_THRESHOLD) {
+        const k = (y - (viewportH - EDGE_THRESHOLD)) / EDGE_THRESHOLD
+        dy =  Math.round(MAX_SPEED * Math.min(k, 1))
+      }
+      if (dy !== 0 && scrollRef.current) {
+        const next = Math.max(0, scrollYRef.current + dy)
+        scrollRef.current.scrollTo({ y: next, animated: false })
+      }
+      raf = requestAnimationFrame(step)
+    }
+    raf = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(raf)
+  }, [draggingId])
 
   function handleAddTrack(data: any) {
     if (data.type === 'subscription') { store.addSubscription(data); toast.push('Subscription added', 'success') }
@@ -683,8 +729,8 @@ export function Dashboard() {
             id={id}
             editMode={editMode}
             isDragging={draggingId === id}
-            phase={_idx / Math.max(order.length, 1)}
             onRemove={() => setOrder(prev => prev.filter(k => k !== id))}
+            onEnterEdit={handleEnterEdit}
             onDragStart={handleDragStart}
             onDragMove={handleDragMove}
             onDragEnd={handleDragEnd}
@@ -810,10 +856,12 @@ export function Dashboard() {
   // Unified — same widgets on mobile and web (centered column on desktop)
   return (
     <ScrollView
+      ref={scrollRef}
       style={[s.page, { backgroundColor:colors.bg }]}
       contentContainerStyle={[s.content, isDesktop && s.contentDesktop]}
       showsVerticalScrollIndicator={false}
-      scrollEnabled={!editMode}
+      onScroll={(e) => { scrollYRef.current = e.nativeEvent.contentOffset.y }}
+      scrollEventThrottle={16}
     >
       <TapGestureHandler
         enabled={editMode}

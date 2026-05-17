@@ -6,7 +6,6 @@ import Animated, {
   withRepeat,
   withTiming,
   withSequence,
-  withDelay,
   Easing,
   cancelAnimation,
   runOnJS,
@@ -18,51 +17,49 @@ interface Props<Id extends string> {
   editMode:     boolean
   isDragging:   boolean
   onRemove:     () => void
+  /** Long-press to enter edit mode (only fires when editMode === false). */
+  onEnterEdit:  () => void
   onDragStart:  (id: Id) => void
   onDragMove:   (id: Id, absoluteY: number) => void
   onDragEnd:    () => void
   onMeasure:    (id: Id, top: number, height: number) => void
-  phase?:       number
   children:     React.ReactNode
 }
 
-const JIGGLE_DEG     = 0.8
-const JIGGLE_PERIOD  = 240   // ms — duration of a half-swing
-const LONG_PRESS_MS  = 400
-const STOP_DURATION  = 120
+const JIGGLE_DEG     = 0.7
+const JIGGLE_PERIOD  = 200   // ms — half-swing duration
+const LONG_PRESS_MS  = 450
+const STOP_DURATION  = 140
 const SCALE_DURATION = 140
 
 export function EditableWidget<Id extends string> ({
-  id, editMode, isDragging, onRemove, onDragStart, onDragMove, onDragEnd, onMeasure, phase = 0, children,
+  id, editMode, isDragging, onRemove, onEnterEdit, onDragStart, onDragMove, onDragEnd, onMeasure, children,
 }: Props<Id>) {
   const rot   = useSharedValue(0)
   const scale = useSharedValue(1)
   const tx    = useSharedValue(0)
   const ty    = useSharedValue(0)
-  // Ref to the outer Animated.View — used for `measureInWindow` on layout.
   const viewRef = useRef<Animated.View>(null)
 
+  // Jiggle in unison (iOS Home Screen actually does this too — no phase offset).
+  // The loop is symmetric: +deg ↔ -deg with smooth sin easing. We seed with
+  // +deg so the first swing is a clean half-cycle to -deg, never starting from 0.
   useEffect(() => {
     if (editMode && !isDragging) {
-      // Phase-offset via withDelay so the swing duration stays constant
-      // (previous version warped the first segment, causing irregular timing).
-      const phaseShift = phase * JIGGLE_PERIOD
-      rot.value = withDelay(
-        phaseShift,
-        withRepeat(
-          withSequence(
-            withTiming( JIGGLE_DEG, { duration: JIGGLE_PERIOD, easing: Easing.inOut(Easing.quad) }),
-            withTiming(-JIGGLE_DEG, { duration: JIGGLE_PERIOD, easing: Easing.inOut(Easing.quad) }),
-          ),
-          -1,
-          false,
+      rot.value = JIGGLE_DEG
+      rot.value = withRepeat(
+        withSequence(
+          withTiming(-JIGGLE_DEG, { duration: JIGGLE_PERIOD, easing: Easing.inOut(Easing.sin) }),
+          withTiming( JIGGLE_DEG, { duration: JIGGLE_PERIOD, easing: Easing.inOut(Easing.sin) }),
         ),
+        -1,
+        false,
       )
     } else {
       cancelAnimation(rot)
       rot.value = withTiming(0, { duration: STOP_DURATION })
     }
-  }, [editMode, isDragging, phase, rot])
+  }, [editMode, isDragging, rot])
 
   useEffect(() => {
     scale.value = withTiming(isDragging ? 1.05 : 1, { duration: SCALE_DURATION })
@@ -72,26 +69,35 @@ export function EditableWidget<Id extends string> ({
     }
   }, [isDragging, scale, tx, ty])
 
-  // LongPress.onStart sets `draggingId`; if the user releases without dragging,
-  // LongPress.onEnd clears it. If Pan activates, its onEnd also clears (idempotent).
-  const longPress = Gesture.LongPress()
-    .minDuration(LONG_PRESS_MS)
-    .onStart(() => { runOnJS(onDragStart)(id) })
-    .onEnd(() => { runOnJS(onDragEnd)() })
+  // ── Gestures ────────────────────────────────────────────────────────
+  // Strategy: TWO independent gestures, mutually exclusive via `enabled` toggles:
+  //   1. enterEditPress  — long-press in NON-edit mode → enters edit mode.
+  //   2. dragPan         — pan in edit mode → drags & reorders immediately.
+  // No composite/chained gestures (those are flaky on RN-web).
 
-  const pan = Gesture.Pan()
-    .activateAfterLongPress(LONG_PRESS_MS)
+  const enterEditPress = Gesture.LongPress()
+    .minDuration(LONG_PRESS_MS)
+    .enabled(!editMode)
+    .onStart(() => { runOnJS(onEnterEdit)() })
+
+  // Pan only activates after a 180ms hold — short enough to feel snappy when
+  // intentionally grabbing, long enough that a quick vertical swipe is left
+  // alone and passes through to the underlying ScrollView.
+  const dragPan = Gesture.Pan()
+    .enabled(editMode)
+    .activateAfterLongPress(180)
+    .onStart(() => { runOnJS(onDragStart)(id) })
     .onUpdate((e) => {
       tx.value = e.translationX
       ty.value = e.translationY
       runOnJS(onDragMove)(id, e.absoluteY)
     })
     .onEnd(() => { runOnJS(onDragEnd)() })
+    .onFinalize(() => { runOnJS(onDragEnd)() })
 
-  // Run both gestures simultaneously: long-press always fires (sets edit mode +
-  // dragging state); pan also activates after the long-press threshold for
-  // continuous movement. Either ending clears draggingId.
-  const composed = Gesture.Simultaneous(longPress, pan)
+  // Race so only one fires at a time. enterEditPress is enabled outside edit
+  // mode; dragPan is enabled inside it. Cannot both be active.
+  const composed = Gesture.Race(enterEditPress, dragPan)
 
   const animStyle = useAnimatedStyle(() => ({
     transform: [
@@ -102,9 +108,6 @@ export function EditableWidget<Id extends string> ({
     ],
   }))
 
-  // Measure window-relative top + height after layout settles. Defer to next
-  // frame so React Native finalizes layout before measureInWindow returns
-  // coords (otherwise measurements can be 0 on initial mount).
   function handleLayout () {
     requestAnimationFrame(() => {
       viewRef.current?.measureInWindow((_x: number, top: number, _w: number, height: number) => {
@@ -151,6 +154,7 @@ const ew = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(0,0,0,0.18)',
     alignItems: 'center', justifyContent: 'center',
+    zIndex: 10,
     ...Platform.select({
       web: { boxShadow: '0 1px 3px rgba(0,0,0,0.20)' } as any,
       ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.20, shadowRadius: 3 },
