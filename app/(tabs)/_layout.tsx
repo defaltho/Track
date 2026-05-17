@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { Tabs, useRouter, usePathname } from 'expo-router'
-import { View, Text, Platform, StyleSheet, useWindowDimensions, TouchableOpacity, Pressable, Modal } from 'react-native'
+import { View, Text, Platform, StyleSheet, useWindowDimensions, TouchableOpacity, Pressable, Modal, TextInput } from 'react-native'
 import { MotiView } from 'moti'
 import { Ionicons } from '@expo/vector-icons'
+import { BottomTabBar } from '@react-navigation/bottom-tabs'
 import { useTheme } from '../../src/context/ThemeContext'
 import { useAuthStore } from '../../src/stores/auth'
 import { Colors } from '../../src/theme'
@@ -20,6 +21,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { name: 'index',     href: '/',          activeIc: 'home-outline'        as IoniconName, inactiveIc: 'home-outline'        as IoniconName, label: 'Dashboard' },
       { name: 'calendar',  href: '/calendar',  activeIc: 'calendar-outline'    as IoniconName, inactiveIc: 'calendar-outline'    as IoniconName, label: 'Calendar'  },
+      { name: 'family',    href: '/family',    activeIc: 'people-outline'      as IoniconName, inactiveIc: 'people-outline'      as IoniconName, label: 'Família'   },
       { name: 'analytics', href: '/analytics', activeIc: 'stats-chart-outline' as IoniconName, inactiveIc: 'stats-chart-outline' as IoniconName, label: 'Analytics' },
     ],
   },
@@ -32,18 +34,26 @@ const NAV_SECTIONS: NavSection[] = [
 ]
 
 const TAB_CFG: Record<string, { active: IoniconName; inactive: IoniconName; label: string }> = {
-  index:     { active: 'radio-button-on',   inactive: 'radio-button-off-outline', label: 'Track'    },
+  index:     { active: 'home',              inactive: 'home-outline',             label: 'Track'    },
   calendar:  { active: 'calendar',          inactive: 'calendar-outline',         label: 'Calendar' },
+  family:    { active: 'people',            inactive: 'people-outline',           label: 'Família'  },
   analytics: { active: 'bar-chart',         inactive: 'bar-chart-outline',        label: 'Analytics'},
   settings:  { active: 'settings',          inactive: 'settings-outline',         label: 'Settings' },
 }
 
+// Mock notification state — wire up real triggers later.
+const TAB_BADGES: Record<string, boolean> = {
+  index:    true,
+  calendar: true,
+}
+
 function TabIcon({ name, focused, colors }: { name: string; focused: boolean; colors: Colors }) {
   const cfg = TAB_CFG[name] ?? { active: 'ellipse', inactive: 'ellipse-outline', label: name }
+  const hasBadge = !!TAB_BADGES[name]
   return (
-    <View style={[s.iconWrap, focused && { backgroundColor: colors.accent }]}>
-      <Ionicons name={focused ? cfg.active : cfg.inactive} size={18} color={focused ? colors.accentFg : colors.textMuted} />
-      <Text style={[s.label, { color: focused ? colors.accentFg : colors.textMuted }]}>{cfg.label}</Text>
+    <View style={s.iconWrap}>
+      <Ionicons name={focused ? cfg.active : cfg.inactive} size={24} color={focused ? colors.text : colors.textMuted} />
+      {hasBadge && <View style={[s.badge, { borderColor: colors.surface }]} />}
     </View>
   )
 }
@@ -55,6 +65,8 @@ function Sidebar({ colors }: { colors: Colors }) {
   const logout = useAuthStore(s => s.logout)
   const { themeKey, setTheme, isDark } = useTheme()
   const [ccOpen, setCcOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const [searchFocused, setSearchFocused] = useState(false)
 
   const userName    = user?.name || 'Guest'
   const userEmail   = user?.email || 'no account'
@@ -66,8 +78,18 @@ function Sidebar({ colors }: { colors: Colors }) {
     router.replace('/login')
   }
 
+  const q = query.trim().toLowerCase()
+  const filteredSections = q
+    ? NAV_SECTIONS
+        .map(section => ({
+          ...section,
+          items: section.items.filter(it => it.label.toLowerCase().includes(q)),
+        }))
+        .filter(section => section.items.length > 0)
+    : NAV_SECTIONS
+
   return (
-    <View style={[sb.root, { backgroundColor: colors.bg, borderRightColor: colors.border }]}>
+    <View style={[sb.root, { backgroundColor: colors.surface }]}>
       {/* Brand card */}
       <View style={[sb.brandCard, { backgroundColor: colors.surfaceEl }]}>
         <View style={[sb.brandIcon, { backgroundColor: colors.text }]}>
@@ -83,9 +105,40 @@ function Sidebar({ colors }: { colors: Colors }) {
         </View>
       </View>
 
+      {/* Search */}
+      <View
+        style={[
+          sb.search,
+          { backgroundColor: colors.surfaceEl, borderColor: searchFocused ? colors.borderStrong : 'transparent' },
+        ]}
+      >
+        <Ionicons name="search-outline" size={15} color={colors.textMuted} />
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          onFocus={() => setSearchFocused(true)}
+          onBlur={() => setSearchFocused(false)}
+          placeholder="Search"
+          placeholderTextColor={colors.textMuted}
+          style={[sb.searchInput, { color: colors.text }, Platform.OS === 'web' ? ({ outlineStyle: 'none' } as any) : null]}
+          returnKeyType="search"
+        />
+        {query.length > 0 ? (
+          <Pressable onPress={() => setQuery('')} hitSlop={8}>
+            <Ionicons name="close-circle" size={14} color={colors.textMuted} />
+          </Pressable>
+        ) : (
+          <View style={[sb.kbd, { backgroundColor: colors.surfaceHigh }]}>
+            <Text style={[sb.kbdText, { color: colors.textMuted }]}>⌘K</Text>
+          </View>
+        )}
+      </View>
+
       {/* Sections */}
       <View style={sb.scroll}>
-        {NAV_SECTIONS.map(section => (
+        {filteredSections.length === 0 ? (
+          <Text style={[sb.empty, { color: colors.textMuted }]}>No results</Text>
+        ) : filteredSections.map(section => (
           <View key={section.section} style={sb.section}>
             <Text style={[sb.sectionTitle, { color: colors.text }]}>{section.section}</Text>
             <View style={sb.nav}>
@@ -274,10 +327,16 @@ export default function TabsLayout() {
   const isDesktop = Platform.OS === 'web' && width >= BREAK
 
   return (
-    <View style={{ flex: 1, flexDirection: isDesktop ? 'row' : 'column' }}>
+    <View style={{ flex: 1, flexDirection: isDesktop ? 'row' : 'column', backgroundColor: isDesktop ? colors.bg : undefined }}>
       {isDesktop && <Sidebar colors={colors} />}
       <View style={{ flex: 1 }}>
         <Tabs
+          tabBar={isDesktop ? () => null : (props) => (
+            <>
+              <View pointerEvents="none" style={s.bottomBlur} />
+              <BottomTabBar {...props} />
+            </>
+          )}
           screenOptions={({ route }) => ({
             headerShown: false,
             tabBarShowLabel: false,
@@ -294,21 +353,20 @@ export default function TabsLayout() {
         >
           <Tabs.Screen name="index"     options={{ title: 'Track'     }} />
           <Tabs.Screen name="calendar"  options={{ title: 'Calendar'  }} />
+          <Tabs.Screen name="family"    options={{ title: 'Família'   }} />
           <Tabs.Screen name="analytics" options={{ title: 'Analytics' }} />
-          <Tabs.Screen name="settings"  options={{ title: 'Settings'  }} />
+          <Tabs.Screen name="settings"  options={{ title: 'Settings', href: isDesktop ? '/settings' : null }} />
         </Tabs>
-
-        {/* Bottom blur-fade — softens scrolling content behind the floating tab bar (mobile only) */}
-        {!isDesktop && <View pointerEvents="none" style={s.bottomBlur} />}
       </View>
     </View>
   )
 }
 
-const BAR_H = 64
+const BAR_H = 62
+const BAR_W = 280
 
 const sb = StyleSheet.create({
-  root:         { width: 240, borderRightWidth: StyleSheet.hairlineWidth, paddingTop: 18, paddingHorizontal: 14, paddingBottom: 14, gap: 18 },
+  root:         { width: 240, marginVertical: 12, marginLeft: 12, borderRadius: 22, paddingTop: 18, paddingHorizontal: 14, paddingBottom: 14, gap: 14, overflow: 'hidden' },
 
   brandCard:    { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: 14 },
   brandIcon:    { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
@@ -316,6 +374,13 @@ const sb = StyleSheet.create({
   brandKicker:  { fontSize: 10, fontFamily: 'Roboto_500Medium', letterSpacing: 0.4 },
   brandName:    { fontSize: 14, fontFamily: 'Roboto_700Bold', letterSpacing: -0.3, marginTop: 1 },
   brandCarets:  { alignItems: 'center', justifyContent: 'center', gap: 2 },
+
+  search:       { flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 12, paddingRight: 5, height: 38, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth },
+  searchInput:  { flex: 1, fontSize: 13, fontFamily: 'Roboto_400Regular', letterSpacing: -0.1, paddingVertical: 0, ...Platform.select({ web: { outlineWidth: 0 } as any, default: {} }) },
+  kbd:          { paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6, minWidth: 30, alignItems: 'center' },
+  kbdText:      { fontSize: 10, fontFamily: 'Roboto_500Medium', letterSpacing: 0.3 },
+
+  empty:        { fontSize: 12, fontFamily: 'Roboto_400Regular', textAlign: 'center', paddingVertical: 12, paddingHorizontal: 14 },
 
   scroll:       { flex: 1, gap: 18 },
   section:      { gap: 6 },
@@ -418,7 +483,12 @@ const cc = StyleSheet.create({
 const s = StyleSheet.create({
   tabBar: {
     position: 'absolute',
-    bottom: 24, left: 20, right: 20,
+    bottom: 24,
+    // Center horizontally — alignSelf doesn't work for absolute positioning,
+    // so we use left:50% + negative marginLeft trick.
+    left: '50%' as any,
+    marginLeft: -BAR_W / 2,
+    width: BAR_W,
     height: BAR_H,
     borderRadius: BAR_H / 2,
     borderTopWidth: 0,
@@ -426,12 +496,12 @@ const s = StyleSheet.create({
     elevation: 0,
     overflow: 'hidden',
     ...Platform.select({
-      web: { boxShadow: '0 4px 24px rgba(0,0,0,0.10), 0 1px 6px rgba(0,0,0,0.06)' },
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 16 },
-      android: { elevation: 10 },
+      web: { boxShadow: '0 8px 28px rgba(0,0,0,0.28), 0 2px 8px rgba(0,0,0,0.18)' },
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.22, shadowRadius: 18 },
+      android: { elevation: 14 },
     }) as object,
   },
-  tabBarBg:       { flex: 1, borderRadius: BAR_H / 2, borderWidth: 1 },
+  tabBarBg:       { flex: 1, borderRadius: BAR_H / 2, borderWidth: StyleSheet.hairlineWidth },
   bottomBlur: {
     position: 'absolute',
     bottom: 0, left: 0, right: 0,
@@ -448,6 +518,12 @@ const s = StyleSheet.create({
   },
   tabItem:        { height: BAR_H, paddingVertical: 0, alignItems: 'center', justifyContent: 'center' },
   tabIconContainer: { flex: 1, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center' },
-  iconWrap:       { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, gap: 3, minWidth: 62 },
-  label:          { fontSize: 9, fontFamily: 'Roboto_700Bold', letterSpacing: 0.4 },
+  iconWrap:       { alignItems: 'center', justifyContent: 'center', width: 44, height: 44, borderRadius: 22, position: 'relative' },
+  badge: {
+    position: 'absolute',
+    top: 4, right: 4,
+    width: 8, height: 8, borderRadius: 4,
+    backgroundColor: '#2F7CFF',
+    borderWidth: 2,
+  },
 })
