@@ -8,7 +8,7 @@ import {
   coffees,
   monthlyEquivalent,
 } from '../utils/calculations'
-import { buildMonthlyBars, RANGE_CONFIG } from '../utils/chart'
+import { buildMonthlyBars, RANGE_CONFIG, curvePath } from '../utils/chart'
 import { useTheme } from '../context/ThemeContext'
 import { theme, CURRENCY_SYMBOL } from '../theme'
 
@@ -20,23 +20,6 @@ const PAD_B   = 20
 
 const COLOR_UP   = '#EF4444'
 const COLOR_DOWN = '#22C55E'
-
-function curvePath(pts: { x: number; y: number }[], t = 0.3): string {
-  if (pts.length < 2) return ''
-  let d = `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`
-  for (let i = 0; i < pts.length - 1; i++) {
-    const p0 = pts[Math.max(i - 1, 0)]
-    const p1 = pts[i]
-    const p2 = pts[i + 1]
-    const p3 = pts[Math.min(i + 2, pts.length - 1)]
-    const cp1x = p1.x + (p2.x - p0.x) * t
-    const cp1y = p1.y + (p2.y - p0.y) * t
-    const cp2x = p2.x - (p3.x - p1.x) * t
-    const cp2y = p2.y - (p3.y - p1.y) * t
-    d += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`
-  }
-  return d
-}
 
 // ── Line Chart ─────────────────────────────────────────────────────────────
 function SpendingChart({ bars, compBars, symbol, colors }: {
@@ -203,67 +186,7 @@ const lc = StyleSheet.create({
   legendTxt:    { fontSize: 10, fontFamily: theme.fontRegular },
 })
 
-// ── Radar Chart ────────────────────────────────────────────────────────────
-const RADAR_SIZE = 200
-const RADAR_CX   = RADAR_SIZE / 2
-const RADAR_CY   = RADAR_SIZE / 2
-const RADAR_R    = 78
-
-function radarPoint(angle: number, r: number) {
-  const a = angle - Math.PI / 2
-  return { x: RADAR_CX + r * Math.cos(a), y: RADAR_CY + r * Math.sin(a) }
-}
-
-function RadarChart({ categories, colors }: {
-  categories: { label: string; value: number; pct: number }[]
-  colors: any
-}) {
-  const n = categories.length
-  if (n < 3) return null
-
-  const rings   = [0.25, 0.5, 0.75, 1.0]
-  const angles  = categories.map((_, i) => (i / n) * 2 * Math.PI)
-
-  const dataPoints = categories.map((cat, i) => radarPoint(angles[i], cat.pct * RADAR_R))
-  const dataPath   = dataPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ') + ' Z'
-
-  return (
-    <Svg width={RADAR_SIZE} height={RADAR_SIZE} viewBox={`0 0 ${RADAR_SIZE} ${RADAR_SIZE}`}>
-      <Defs>
-        <LinearGradient id="radar-grad" x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0%" stopColor={colors.accent} stopOpacity={0.35} />
-          <Stop offset="100%" stopColor={colors.accent} stopOpacity={0.08} />
-        </LinearGradient>
-      </Defs>
-
-      {/* Ring gridlines */}
-      {rings.map((r, ri) => {
-        const pts = angles.map(a => radarPoint(a, r * RADAR_R))
-        const d   = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ') + ' Z'
-        return <Path key={ri} d={d} fill="none" stroke={colors.text} strokeOpacity={0.08} strokeWidth={1} />
-      })}
-
-      {/* Axis spokes */}
-      {angles.map((a, i) => {
-        const tip = radarPoint(a, RADAR_R)
-        return <Line key={i} x1={RADAR_CX} y1={RADAR_CY} x2={tip.x} y2={tip.y} stroke={colors.text} strokeOpacity={0.1} strokeWidth={1} />
-      })}
-
-      {/* Data polygon fill */}
-      <Path d={dataPath} fill="url(#radar-grad)" />
-      {/* Data polygon stroke */}
-      <Path d={dataPath} fill="none" stroke={colors.accent} strokeWidth={2} strokeLinejoin="round" />
-
-      {/* Data points */}
-      {dataPoints.map((p, i) => (
-        <Circle key={i} cx={p.x} cy={p.y} r={4} fill={colors.surface} stroke={colors.accent} strokeWidth={2} />
-      ))}
-    </Svg>
-  )
-}
-
 // ── Analytics ──────────────────────────────────────────────────────────────
-const CATEGORIES = ['Streaming','Music','Gaming','Cloud','Productivity','News','Fitness','Education','Other']
 
 export function Analytics() {
   const { colors } = useTheme()
@@ -283,19 +206,6 @@ export function Analytics() {
       .sort((a: any, b: any) => b.monthly - a.monthly),
     [store.subscriptions]
   )
-
-  // Radar data — spending per category
-  const radarData = useMemo(() => {
-    const totals: Record<string, number> = {}
-    for (const sub of breakdown) {
-      const cat = CATEGORIES.includes(sub.category) ? sub.category : 'Other'
-      totals[cat] = (totals[cat] || 0) + sub.monthly
-    }
-    const max = Math.max(...Object.values(totals), 0.01)
-    return CATEGORIES
-      .filter(c => totals[c] > 0)
-      .map(c => ({ label: c, value: totals[c], pct: totals[c] / max }))
-  }, [breakdown])
 
   const [timeRange, setTimeRange] = useState('6M')
   const bars = useMemo(() => {
@@ -351,49 +261,26 @@ export function Analytics() {
         }
       </View>
 
-      {/* Radar + Breakdown */}
+      {/* Breakdown list */}
       {breakdown.length > 0 ? (
         <View style={[s.card, { backgroundColor: colors.surface }]}>
-          <Text style={[s.cardTitle, { color: colors.text, marginBottom: theme.sp4 }]}>Breakdown by category</Text>
-          <View style={s.radarRow}>
-            {radarData.length >= 3 && (
-              <View style={s.radarWrap}>
-                <RadarChart categories={radarData} colors={colors} />
-                {/* Axis labels */}
-                {radarData.map((cat, i) => {
-                  const a = (i / radarData.length) * 2 * Math.PI - Math.PI / 2
-                  const labelR = RADAR_R + 18
-                  const lx = RADAR_CX + labelR * Math.cos(a)
-                  const ly = RADAR_CY + labelR * Math.sin(a)
-                  return (
-                    <Text key={i} style={[s.radarLabel, { color: colors.textMuted,
-                      position: 'absolute',
-                      left: lx - 28,
-                      top:  ly - 8,
-                      width: 56,
-                      textAlign: lx < RADAR_CX - 5 ? 'right' : lx > RADAR_CX + 5 ? 'left' : 'center',
-                    }]}>{cat.label}</Text>
-                  )
-                })}
-              </View>
-            )}
-            <View style={s.breakdownList}>
-              {breakdown.map((sub: any) => {
-                const pct = monthly > 0 ? (sub.monthly / monthly) * 100 : 0
-                return (
-                  <View key={sub.id} style={s.breakdownRow}>
-                    <View style={s.breakdownInfo}>
-                      <Text style={[s.breakdownName, { color: colors.text }]}>{sub.emoji ?? '💳'} {sub.name}</Text>
-                      <Text style={[s.breakdownPct, { color: colors.textMuted }]}>{symbol}{sub.monthly.toFixed(2)} · {pct.toFixed(0)}%</Text>
-                    </View>
-                    <View style={[s.barTrack, { backgroundColor: colors.surfaceHigh }]}>
-                      <View style={[s.barFill, { flex: pct, maxWidth: `${pct}%` as any, backgroundColor: colors.accent }]} />
-                      <View style={{ flex: 100 - pct }} />
-                    </View>
+          <Text style={[s.cardTitle, { color: colors.text, marginBottom: theme.sp4 }]}>Breakdown by subscription</Text>
+          <View style={s.breakdownList}>
+            {breakdown.map((sub: any) => {
+              const pct = monthly > 0 ? (sub.monthly / monthly) * 100 : 0
+              return (
+                <View key={sub.id} style={s.breakdownRow}>
+                  <View style={s.breakdownInfo}>
+                    <Text style={[s.breakdownName, { color: colors.text }]}>{sub.emoji ?? '💳'} {sub.name}</Text>
+                    <Text style={[s.breakdownPct, { color: colors.textMuted }]}>{symbol}{sub.monthly.toFixed(2)} · {pct.toFixed(0)}%</Text>
                   </View>
-                )
-              })}
-            </View>
+                  <View style={[s.barTrack, { backgroundColor: colors.surfaceHigh }]}>
+                    <View style={[s.barFill, { flex: pct, maxWidth: `${pct}%` as any, backgroundColor: colors.accent }]} />
+                    <View style={{ flex: 100 - pct }} />
+                  </View>
+                </View>
+              )
+            })}
           </View>
         </View>
       ) : (
@@ -407,7 +294,7 @@ export function Analytics() {
 
 const s = StyleSheet.create({
   page:    { flex: 1 },
-  content: { padding: theme.sp4, gap: theme.sp4, paddingBottom: 110 },
+  content: { padding: theme.sp4, gap: theme.sp4, paddingBottom: 130 },
   pageTitle: { fontSize: 34, fontFamily: theme.fontBlack, letterSpacing: -1, marginBottom: theme.sp4 },
   card: { borderRadius: theme.radiusXl, padding: theme.sp5, ...theme.shadow },
   summaryGrid: { flexDirection: 'row', justifyContent: 'space-between', gap: theme.sp3 },
@@ -421,10 +308,7 @@ const s = StyleSheet.create({
   filterPillText: { fontSize: theme.textXs, fontFamily: theme.fontMedium },
   chartEmpty:     { height: 160, alignItems: 'center', justifyContent: 'center' },
   chartEmptyText: { fontSize: 13, fontFamily: theme.fontRegular, opacity: 0.6 },
-  radarRow:     { flexDirection: 'row', gap: theme.sp4, alignItems: 'flex-start', flexWrap: 'wrap' },
-  radarWrap:    { width: RADAR_SIZE, height: RADAR_SIZE, position: 'relative' },
-  radarLabel:   { fontSize: 9, fontFamily: theme.fontMedium },
-  breakdownList:{ flex: 1, minWidth: 180, gap: 0 },
+  breakdownList:{ minWidth: 180, gap: 0 },
   breakdownRow: { marginBottom: theme.sp4 },
   breakdownInfo:{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: theme.sp1 },
   breakdownName:{ fontSize: theme.textSm, fontFamily: theme.fontMedium },

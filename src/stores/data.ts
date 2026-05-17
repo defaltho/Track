@@ -72,6 +72,7 @@ export interface EventEntry {
 interface Settings {
   defaultCurrency: string
   coffeePrice: number
+  monthlyBudget: number | null
   theme: string
   startOfWeek: number
   version: string
@@ -108,6 +109,7 @@ interface DataStore {
 const defaultSettings: Settings = {
   defaultCurrency: 'EUR',
   coffeePrice: 4.50,
+  monthlyBudget: null,
   theme: 'light',
   startOfWeek: 1,
   version: '0.1.0',

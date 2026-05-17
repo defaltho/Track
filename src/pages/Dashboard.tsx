@@ -29,6 +29,7 @@ import { CategoryRingsWidget, RingItem } from '../components/widgets/CategoryRin
 import { SpendTrendWidget } from '../components/widgets/SpendTrendWidget'
 import { ClockWidget } from '../components/widgets/ClockWidget'
 import { RadarWidget, RadarCategory } from '../components/widgets/RadarWidget'
+import { BudgetWidget } from '../components/widgets/BudgetWidget'
 import { AddTrackForm } from '../components/forms/AddTrackForm'
 import { AddTaskForm } from '../components/forms/AddTaskForm'
 import { theme, CURRENCY_SYMBOL, Colors } from '../theme'
@@ -267,7 +268,7 @@ const statS = StyleSheet.create({
 type WKey =
   | 'active' | 'spend' | 'coffees' | 'events' | 'topExpense' | 'ytd' | 'monthGoal' | 'clock'
   | 'categoryRings'
-  | 'heatmap' | 'due' | 'category' | 'upcoming' | 'spendTrend' | 'radar'
+  | 'heatmap' | 'due' | 'category' | 'upcoming' | 'spendTrend' | 'radar' | 'budget'
 
 const WIDGET_SIZE: Record<WKey, 'square' | 'rectangle'> = {
   active:        'square',
@@ -285,6 +286,7 @@ const WIDGET_SIZE: Record<WKey, 'square' | 'rectangle'> = {
   upcoming:      'rectangle',
   spendTrend:    'rectangle',
   radar:         'rectangle',
+  budget:        'rectangle',
 }
 
 const WIDGET_DELAY: Record<WKey, number> = {
@@ -292,6 +294,7 @@ const WIDGET_DELAY: Record<WKey, number> = {
   heatmap: 180, due: 210,    spendTrend: 240, category: 270,
   coffees: 300, events: 330, upcoming: 360,
   topExpense: 390, ytd: 420,  radar: 450, categoryRings: 480,
+  budget: 500,
 }
 
 const ALL_KEYS: WKey[] = Object.keys(WIDGET_SIZE) as WKey[]
@@ -312,6 +315,7 @@ const WIDGET_META: Record<WKey, { label: string; emoji: string }> = {
   upcoming:      { label: 'upcoming',       emoji: '⏭️' },
   spendTrend:    { label: 'spend trend',    emoji: '📉' },
   radar:         { label: 'radar',          emoji: '🕸️' },
+  budget:        { label: 'budget',         emoji: '🎯' },
 }
 
 export function Dashboard() {
@@ -445,6 +449,7 @@ export function Dashboard() {
     'active', 'spend',              // squares row
     'monthGoal', 'clock',           // squares row (ring goal + analog clock)
     'heatmap',                      // rectangle
+    'budget',                       // rectangle (monthly budget vs spend)
     'due',                          // rectangle
     'spendTrend',                   // rectangle (line chart — LineTrend)
     'coffees', 'events',            // squares row
@@ -706,6 +711,14 @@ export function Dashboard() {
             })}
           </Widget>
         )
+      case 'budget':
+        return (
+          <BudgetWidget
+            spent={monthly}
+            budget={store.settings.monthlyBudget ?? null}
+            currency={currency}
+          />
+        )
     }
   }
 
@@ -748,7 +761,7 @@ export function Dashboard() {
     const out: React.ReactNode[] = []
     let pending: { id: WKey; node: React.ReactNode; idx: number } | null = null
 
-    order.forEach((id, idx) => {
+    for (const [idx, id] of order.entries()) {
       const node = renderSingle(id)
       if (WIDGET_SIZE[id] === 'square') {
         if (pending) {
@@ -775,7 +788,7 @@ export function Dashboard() {
         }
         out.push(wrapWidget(id, node, idx, false))
       }
-    })
+    }
     if (pending) {
       out.push(
         <View key={`row-${pending.id}-solo`} style={s.squareRow}>
@@ -896,7 +909,10 @@ const s = StyleSheet.create({
   // Same widget grid on web — centered, single column matching mobile width
   contentDesktop: { paddingHorizontal: 32, paddingVertical: 40, paddingBottom: 80, alignItems: 'center' },
   widgetColumn: { width: '100%', maxWidth: 480, gap: theme.sp4 },
-  header: { flexDirection:'row', justifyContent:'space-between', alignItems:'center', paddingHorizontal:4, paddingTop:theme.sp2, marginBottom:theme.sp2 },
+  // Header aligns flush with widgets (no inner padding) and relies on the
+  // parent column's `gap: sp4` for breathing room below — keeps the rhythm
+  // uniform between header→first-widget and between adjacent widgets.
+  header: { flexDirection:'row', justifyContent:'space-between', alignItems:'center' },
   pageTitle: { fontSize:34, fontFamily:theme.fontBlack, letterSpacing:-1 },
   headerBtns: { flexDirection:'row', gap:theme.sp2 },
   iconBtn: { width:38, height:38, borderRadius:19, alignItems:'center', justifyContent:'center', gap:3 },

@@ -93,14 +93,14 @@ const bw = StyleSheet.create({
   // Big bold title — echoes the notebook masthead
   title:      { fontSize: 26, fontFamily: theme.fontBlack, letterSpacing: -1, lineHeight: 30 },
 
-  // Stacked bar
-  barRow:     { flexDirection: 'row', gap: 4, height: 4, marginTop: theme.sp2 },
-  barSeg:     { height: 4, borderRadius: 2 },
+  // Stacked bar — pill-shaped segments with gaps
+  barRow:     { flexDirection: 'row', gap: 6, height: 6, marginTop: theme.sp3 },
+  barSeg:     { height: 6, borderRadius: 999 },
 
   // Rows
-  list:       { marginTop: theme.sp2 },
-  row:        { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
-  dot:        { width: 8, height: 8, borderRadius: 4 },
+  list:       { marginTop: theme.sp3 },
+  row:        { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
+  dot:        { width: 10, height: 10, borderRadius: 5 },
   label:      { flex: 1, fontSize: 13, fontFamily: theme.fontMedium, letterSpacing: -0.1 },
   value:      { fontSize: 13, fontFamily: theme.fontMonoBold, letterSpacing: -0.2, minWidth: 72, textAlign: 'right' },
   delta:      { flexDirection: 'row', alignItems: 'center', gap: 3, minWidth: 56, justifyContent: 'flex-end' },
