@@ -29,7 +29,10 @@ import { CategoryRingsWidget, RingItem } from '../components/widgets/CategoryRin
 import { SpendTrendWidget } from '../components/widgets/SpendTrendWidget'
 import { ClockWidget } from '../components/widgets/ClockWidget'
 import { RadarWidget, RadarCategory } from '../components/widgets/RadarWidget'
-import { BudgetWidget } from '../components/widgets/BudgetWidget'
+import { BudgetWidget }    from '../components/widgets/BudgetWidget'
+import { ForecastWidget } from '../components/widgets/ForecastWidget'
+import { ScoreWidget }    from '../components/widgets/ScoreWidget'
+import { buildForecast }  from '../utils/forecast'
 import { AddTrackForm } from '../components/forms/AddTrackForm'
 import { AddTaskForm } from '../components/forms/AddTaskForm'
 import { theme, CURRENCY_SYMBOL, Colors } from '../theme'
@@ -268,7 +271,8 @@ const statS = StyleSheet.create({
 type WKey =
   | 'active' | 'spend' | 'coffees' | 'events' | 'topExpense' | 'ytd' | 'monthGoal' | 'clock'
   | 'categoryRings'
-  | 'heatmap' | 'due' | 'category' | 'upcoming' | 'spendTrend' | 'radar' | 'budget'
+  | 'heatmap' | 'due' | 'category' | 'upcoming' | 'spendTrend' | 'radar' | 'budget' | 'forecast'
+  | 'score'
 
 const WIDGET_SIZE: Record<WKey, 'square' | 'rectangle'> = {
   active:        'square',
@@ -287,6 +291,8 @@ const WIDGET_SIZE: Record<WKey, 'square' | 'rectangle'> = {
   spendTrend:    'rectangle',
   radar:         'rectangle',
   budget:        'rectangle',
+  forecast:      'rectangle',
+  score:         'square',
 }
 
 const WIDGET_DELAY: Record<WKey, number> = {
@@ -294,7 +300,7 @@ const WIDGET_DELAY: Record<WKey, number> = {
   heatmap: 180, due: 210,    spendTrend: 240, category: 270,
   coffees: 300, events: 330, upcoming: 360,
   topExpense: 390, ytd: 420,  radar: 450, categoryRings: 480,
-  budget: 500,
+  budget: 500, forecast: 520, score: 540,
 }
 
 const ALL_KEYS: WKey[] = Object.keys(WIDGET_SIZE) as WKey[]
@@ -316,6 +322,8 @@ const WIDGET_META: Record<WKey, { label: string; emoji: string }> = {
   spendTrend:    { label: 'spend trend',    emoji: '📉' },
   radar:         { label: 'radar',          emoji: '🕸️' },
   budget:        { label: 'budget',         emoji: '🎯' },
+  forecast:      { label: 'forecast',       emoji: '📆' },
+  score:         { label: 'score',          emoji: '🏅' },
 }
 
 export function Dashboard() {
@@ -343,6 +351,15 @@ export function Dashboard() {
            differenceInCalendarDays(parseISO(s.nextChargeDate), now) <= 7
   }), [store.subscriptions])
   const activeSubs  = useMemo(() => store.subscriptions.filter((s: any) => s.active !== false), [store.subscriptions])
+
+  const forecastItems = useMemo(() => activeSubs.map((s: any) => ({
+    name:           s.name,
+    emoji:          s.emoji ?? '💳',
+    price:          s.price ?? 0,
+    billingCycle:   s.billingCycle ?? 'monthly',
+    nextChargeDate: s.nextChargeDate ?? format(new Date(), 'yyyy-MM-dd'),
+    active:         true,
+  })), [activeSubs])
 
   // Top expense (square widget)
   const topExpense = useMemo(() => {
@@ -450,6 +467,7 @@ export function Dashboard() {
     'monthGoal', 'clock',           // squares row (ring goal + analog clock)
     'heatmap',                      // rectangle
     'budget',                       // rectangle (monthly budget vs spend)
+    'forecast',                     // rectangle (30-day charge forecast)
     'due',                          // rectangle
     'spendTrend',                   // rectangle (line chart — LineTrend)
     'coffees', 'events',            // squares row
@@ -457,7 +475,7 @@ export function Dashboard() {
     'categoryRings', 'topExpense',  // squares row (rings + top expense)
     'radar',                        // rectangle (Radar — by category)
     'upcoming',                     // rectangle
-    'ytd',                          // square (alone — will pair with future widget)
+    'score', 'ytd',                 // squares row (financial score + year-to-date)
   ])
 
   const handleEnterEdit = React.useCallback(() => {
@@ -717,6 +735,22 @@ export function Dashboard() {
             spent={monthly}
             budget={store.settings.monthlyBudget ?? null}
             currency={currency}
+          />
+        )
+      case 'forecast':
+        return (
+          <ForecastWidget
+            items={forecastItems}
+            symbol={symbol}
+          />
+        )
+      case 'score':
+        return (
+          <ScoreWidget
+            subscriptions={store.subscriptions}
+            tasks={store.tasks}
+            monthlyBudget={store.settings.monthlyBudget ?? null}
+            monthlySpend={monthly}
           />
         )
     }
