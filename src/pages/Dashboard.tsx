@@ -448,18 +448,6 @@ export function Dashboard() {
     'ytd',                          // square (alone — will pair with future widget)
   ])
 
-  function moveWidget(id: WKey, dir: -1 | 1) {
-    setOrder(prev => {
-      const idx = prev.indexOf(id)
-      const next = idx + dir
-      if (idx === -1 || next < 0 || next >= prev.length) return prev
-      const out = [...prev]
-      out.splice(idx, 1)
-      out.splice(next, 0, id)
-      return out
-    })
-  }
-
   const handleDragStart = React.useCallback((id: WKey) => {
     setEditMode(true)
     setDraggingId(id)
@@ -484,24 +472,6 @@ export function Dashboard() {
   const handleMeasure = React.useCallback((id: WKey, top: number, height: number) => {
     layoutsRef.current.set(id, { top, height })
   }, [])
-
-  // ── Reorder controls (shown in edit mode) — Button DNA ─────────────
-  function ReorderBar({ id }: { id: WKey }) {
-    if (!editMode) return null
-    const idx = order.indexOf(id)
-    const canUp   = idx > 0
-    const canDown = idx < order.length - 1
-    return (
-      <View style={gh.bar}>
-        <IconButton variant="primary" size="sm" onPress={() => moveWidget(id, -1)} disabled={!canUp} accessibilityLabel="Move up">
-          <Text style={[gh.btnText, { color: primaryFg }]}>↑</Text>
-        </IconButton>
-        <IconButton variant="primary" size="sm" onPress={() => moveWidget(id, 1)} disabled={!canDown} accessibilityLabel="Move down">
-          <Text style={[gh.btnText, { color: primaryFg }]}>↓</Text>
-        </IconButton>
-      </View>
-    )
-  }
 
   function handleAddTrack(data: any) {
     if (data.type === 'subscription') { store.addSubscription(data); toast.push('Subscription added', 'success') }
@@ -871,12 +841,6 @@ export function Dashboard() {
     </ScrollView>
   )
 }
-
-// ── Reorder bar styles ─────────────────────────────────────────────────
-const gh = StyleSheet.create({
-  bar:        { marginBottom:8, flexDirection:'row', alignItems:'center', justifyContent:'center', gap:theme.sp2 },
-  btnText:    { fontSize:16, lineHeight:18, fontFamily:theme.fontMono },
-})
 
 const s = StyleSheet.create({
   page: { flex: 1 },
