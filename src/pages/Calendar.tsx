@@ -14,7 +14,8 @@ import { useDataStore } from '../stores/data'
 import { Modal } from '../components/ui/Modal'
 import { IconButton } from '../components/ui/Button'
 import { useTheme } from '../context/ThemeContext'
-import { theme, Colors } from '../theme'
+import { theme, Colors, CURRENCY_SYMBOL } from '../theme'
+import { buildForecast } from '../utils/forecast'
 
 const WEEKDAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']
 
@@ -179,6 +180,37 @@ export function Calendar() {
   )
   const panelCurrency = panelSubs[0]?.currency as string | undefined
 
+  // Saldo previsional: forecast for next 30 days from today, cumulative total
+  const forecastItems = useMemo(() =>
+    (store.subscriptions as any[])
+      .filter(s => s.active !== false && s.nextChargeDate)
+      .map(s => ({
+        name:           s.name,
+        emoji:          s.emoji ?? '💳',
+        price:          s.price ?? 0,
+        billingCycle:   s.billingCycle ?? 'monthly',
+        nextChargeDate: s.nextChargeDate,
+        active:         true,
+      })),
+    [store.subscriptions]
+  )
+
+  const forecast30 = useMemo(() => buildForecast(forecastItems, 30), [forecastItems])
+
+  // Days with charges in current month, not yet passed
+  const forecastThisMonth = useMemo(() => {
+    const monthStr = format(current, 'yyyy-MM')
+    return forecast30.filter(d => d.total > 0 && d.date.startsWith(monthStr))
+  }, [forecast30, current])
+
+  const forecastMonthTotal = useMemo(
+    () => forecastThisMonth.reduce((s, d) => s + d.total, 0),
+    [forecastThisMonth]
+  )
+
+  const defaultCurrency = store.settings.defaultCurrency ?? 'EUR'
+  const defaultSymbol   = CURRENCY_SYMBOL[defaultCurrency] ?? ''
+
   function prev() { setCurrent(d => subMonths(d, 1)) }
   function next() { setCurrent(d => addMonths(d, 1)) }
   function jumpToday() { setCurrent(new Date()) }
@@ -324,6 +356,42 @@ export function Calendar() {
             )
           })}
         </View>
+
+        {/* Saldo previsional */}
+        {forecastThisMonth.length > 0 && (
+          <>
+            <View style={[cs.rule, { backgroundColor: colors.border }]} />
+            <View style={cs.section}>
+              <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
+                <Text style={[cs.sectionTag, { color: colors.textMuted }]}>saldo previsional</Text>
+                <Text style={[cs.forecastTotal, { color: colors.text }]}>
+                  {defaultSymbol}{forecastMonthTotal.toFixed(2)} comprometido
+                </Text>
+              </View>
+              {forecastThisMonth.slice(0, 5).map(d => (
+                <View key={d.date} style={cs.upRow}>
+                  <Text style={cs.upEmoji}>{d.charges[0]?.emoji ?? '💳'}</Text>
+                  <View style={cs.upBody}>
+                    <Text style={[cs.upName, { color: colors.text }]} numberOfLines={1}>
+                      {d.charges[0]?.name}{d.charges.length > 1 ? ` +${d.charges.length - 1}` : ''}
+                    </Text>
+                    <Text style={[cs.upMeta, { color: colors.textMuted }]}>
+                      {format(parseISO(d.date), 'EEE · d MMM').toLowerCase()}
+                    </Text>
+                  </View>
+                  <Text style={[cs.upPrice, { color: colors.text }]}>
+                    {defaultSymbol}{d.total.toFixed(2)}
+                  </Text>
+                </View>
+              ))}
+              {forecastThisMonth.length > 5 && (
+                <Text style={[cs.empty, { color: colors.textFaint }]}>
+                  + {forecastThisMonth.length - 5} dias com cobranças
+                </Text>
+              )}
+            </View>
+          </>
+        )}
       </View>
 
       <Modal
@@ -578,7 +646,8 @@ const cs = StyleSheet.create({
   upMeta:  { fontSize: 11, fontFamily: theme.fontMono, letterSpacing: 0.1 },
   upPrice: { fontSize: 14, fontFamily: theme.fontMono, letterSpacing: -0.3 },
   upPill:  { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 },
-  upPillText: { fontSize: 10, fontFamily: theme.fontMedium, letterSpacing: 0.6 },
+  upPillText:    { fontSize: 10, fontFamily: theme.fontMedium, letterSpacing: 0.6 },
+  forecastTotal: { fontSize: 12, fontFamily: theme.fontMonoBold, letterSpacing: -0.3 },
 
   dayEmpty: { fontSize: theme.textSm, paddingVertical: theme.sp2, fontFamily: theme.fontRegular },
   dayRow:   { flexDirection: 'row', gap: 12, alignItems: 'center', paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },

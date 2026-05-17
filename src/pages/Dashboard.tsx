@@ -14,7 +14,7 @@ import { format, differenceInCalendarDays, parseISO, subDays, eachDayOfInterval,
 import { useDataStore } from '../stores/data'
 import { useToastStore } from '../stores/toasts'
 import { useTheme } from '../context/ThemeContext'
-import { totalMonthlySpend, coffees } from '../utils/calculations'
+import { totalMonthlySpend, coffees, isTrialExpiring } from '../utils/calculations'
 import { buildMonthlyBars } from '../utils/chart'
 import { computeDropIndex } from '../utils/dragReorder'
 import { Modal } from '../components/ui/Modal'
@@ -29,10 +29,11 @@ import { CategoryRingsWidget, RingItem } from '../components/widgets/CategoryRin
 import { SpendTrendWidget } from '../components/widgets/SpendTrendWidget'
 import { ClockWidget } from '../components/widgets/ClockWidget'
 import { RadarWidget, RadarCategory } from '../components/widgets/RadarWidget'
-import { BudgetWidget }    from '../components/widgets/BudgetWidget'
-import { ForecastWidget } from '../components/widgets/ForecastWidget'
-import { ScoreWidget }    from '../components/widgets/ScoreWidget'
-import { buildForecast }  from '../utils/forecast'
+import { BudgetWidget }         from '../components/widgets/BudgetWidget'
+import { ForecastWidget }       from '../components/widgets/ForecastWidget'
+import { ScoreWidget }          from '../components/widgets/ScoreWidget'
+import { TopExpensesWidget }    from '../components/widgets/TopExpensesWidget'
+import { buildForecast }        from '../utils/forecast'
 import { AddTrackForm } from '../components/forms/AddTrackForm'
 import { AddTaskForm } from '../components/forms/AddTaskForm'
 import { theme, CURRENCY_SYMBOL, Colors } from '../theme'
@@ -176,6 +177,7 @@ function SubRow({ sub, symbol, diff, onRemove, delay, colors }: { sub: any; symb
   const isToday = diff === 0
   const dueColor = isToday ? colors.accentRed : colors.textMuted
   const dueLabel = isToday ? 'today' : diff === 1 ? 'tomorrow' : `in ${diff}d`
+  const trialExpiring = isTrialExpiring(sub)
   return (
     <Animated.View entering={FadeInRight.delay(delay).springify().damping(20).stiffness(220)}>
       <Pressable onPressIn={() => { scale.value = withSpring(0.98,{damping:16,stiffness:380}) }} onPressOut={() => { scale.value = withSpring(1,{damping:16,stiffness:380}) }} onLongPress={onRemove} delayLongPress={500}>
@@ -186,6 +188,7 @@ function SubRow({ sub, symbol, diff, onRemove, delay, colors }: { sub: any; symb
             <View style={sr.metaRow}>
               <Text style={[sr.dueText, { color: dueColor }]}>· {dueLabel}</Text>
               {sub.category ? <Text style={[sr.cat, { color: colors.textFaint }]}>{sub.category}</Text> : null}
+              {trialExpiring && <Text style={[sr.trial, { color: colors.warning }]}>trial</Text>}
             </View>
           </View>
           <View style={sr.right}>
@@ -216,6 +219,7 @@ const sr = StyleSheet.create({
   cycle:     { fontSize:10, fontFamily:theme.fontMono, opacity:0.7 },
   removeBtn: { width:24, height:24, borderRadius:12, alignItems:'center', justifyContent:'center', opacity:0.5 },
   removeLine:{ width:10, height:StyleSheet.hairlineWidth, borderRadius:1 },
+  trial:     { fontSize:9, fontFamily:theme.fontBold, letterSpacing:0.6, textTransform:'uppercase', paddingHorizontal:5, paddingVertical:1 },
 })
 
 // ── Task row ───────────────────────────────────────────────────────────
@@ -272,7 +276,7 @@ type WKey =
   | 'active' | 'spend' | 'coffees' | 'events' | 'topExpense' | 'ytd' | 'monthGoal' | 'clock'
   | 'categoryRings'
   | 'heatmap' | 'due' | 'category' | 'upcoming' | 'spendTrend' | 'radar' | 'budget' | 'forecast'
-  | 'score'
+  | 'score' | 'topExpenses'
 
 const WIDGET_SIZE: Record<WKey, 'square' | 'rectangle'> = {
   active:        'square',
@@ -293,6 +297,7 @@ const WIDGET_SIZE: Record<WKey, 'square' | 'rectangle'> = {
   budget:        'rectangle',
   forecast:      'rectangle',
   score:         'square',
+  topExpenses:   'rectangle',
 }
 
 const WIDGET_DELAY: Record<WKey, number> = {
@@ -300,7 +305,7 @@ const WIDGET_DELAY: Record<WKey, number> = {
   heatmap: 180, due: 210,    spendTrend: 240, category: 270,
   coffees: 300, events: 330, upcoming: 360,
   topExpense: 390, ytd: 420,  radar: 450, categoryRings: 480,
-  budget: 500, forecast: 520, score: 540,
+  budget: 500, forecast: 520, score: 540, topExpenses: 560,
 }
 
 const ALL_KEYS: WKey[] = Object.keys(WIDGET_SIZE) as WKey[]
@@ -324,6 +329,7 @@ const WIDGET_META: Record<WKey, { label: string; emoji: string }> = {
   budget:        { label: 'budget',         emoji: '🎯' },
   forecast:      { label: 'forecast',       emoji: '📆' },
   score:         { label: 'score',          emoji: '🏅' },
+  topExpenses:   { label: 'top expenses',   emoji: '💰' },
 }
 
 export function Dashboard() {
@@ -474,6 +480,7 @@ export function Dashboard() {
     'category',                     // rectangle (Breakdown — Traffic source style)
     'categoryRings', 'topExpense',  // squares row (rings + top expense)
     'radar',                        // rectangle (Radar — by category)
+    'topExpenses',                  // rectangle (top 5 expenses)
     'upcoming',                     // rectangle
     'score', 'ytd',                 // squares row (financial score + year-to-date)
   ])
@@ -751,6 +758,13 @@ export function Dashboard() {
             tasks={store.tasks}
             monthlyBudget={store.settings.monthlyBudget ?? null}
             monthlySpend={monthly}
+          />
+        )
+      case 'topExpenses':
+        return (
+          <TopExpensesWidget
+            subscriptions={store.subscriptions}
+            symbol={symbol}
           />
         )
     }

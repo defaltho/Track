@@ -28,6 +28,20 @@ export function projectedYearly(subscriptions: any[]) {
     }, 0)
 }
 
+// Returns true if the subscription was created within the last 30 days
+// and the 30-day trial window ends within the next 3 days.
+export function isTrialExpiring(sub: any): boolean {
+  if (!sub?.createdAt) return false
+  const created = new Date(sub.createdAt)
+  if (isNaN(created.getTime())) return false
+  const trialEnd = new Date(created)
+  trialEnd.setDate(trialEnd.getDate() + 30)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const diff = Math.round((trialEnd.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+  return diff >= 0 && diff <= 3
+}
+
 // BUG M7 fix: validate nextChargeDate; normalise both dates to local midnight
 export function daysLeft(nextChargeDate: string) {
   if (!nextChargeDate) return null

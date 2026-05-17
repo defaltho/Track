@@ -77,6 +77,7 @@ interface Settings {
   startOfWeek: number
   version: string
   devMode: boolean
+  customCategories: string[]
 }
 
 interface DataStore {
@@ -114,6 +115,7 @@ const defaultSettings: Settings = {
   startOfWeek: 1,
   version: '0.1.0',
   devMode: false,
+  customCategories: [],
 }
 
 // BUG M4 fix: fallback UUID generator when crypto.randomUUID is unavailable

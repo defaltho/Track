@@ -42,7 +42,20 @@ export default function Settings() {
   const [budgetText, setBudgetText] = useState(
     store.settings.monthlyBudget != null ? String(store.settings.monthlyBudget) : ''
   )
+  const [newCategory, setNewCategory] = useState('')
   const devMode = store.settings.devMode
+  const customCategories: string[] = store.settings.customCategories ?? []
+
+  function handleAddCategory() {
+    const cat = newCategory.trim()
+    if (!cat || customCategories.includes(cat)) return
+    store.updateSettings({ customCategories: [...customCategories, cat] })
+    setNewCategory('')
+  }
+
+  function handleRemoveCategory(cat: string) {
+    store.updateSettings({ customCategories: customCategories.filter(c => c !== cat) })
+  }
 
   function handleBudgetBlur() {
     const n = parseFloat(budgetText.replace(',', '.'))
@@ -204,6 +217,43 @@ export default function Settings() {
             placeholderTextColor={colors.textFaint}
             returnKeyType="done"
           />
+        </View>
+      </View>
+
+      {/* ── Categories ── */}
+      <Text style={[s.sectionLabel, { color: colors.textMuted }]}>categories</Text>
+      <View style={[s.card, { backgroundColor: colors.surface }]}>
+        <View style={{ padding: theme.sp5, gap: theme.sp3 }}>
+          {customCategories.length > 0 && (
+            <View style={s.pillRow}>
+              {customCategories.map(cat => (
+                <TouchableOpacity
+                  key={cat}
+                  style={[s.pill, { backgroundColor: colors.surfaceEl, borderColor: colors.border }]}
+                  onPress={() => handleRemoveCategory(cat)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[s.pillText, { color: colors.text }]}>{cat} ×</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+          <View style={{ flexDirection: 'row', gap: theme.sp2 }}>
+            <TextInput
+              style={[s.budgetInput, { flex: 1, width: undefined, textAlign: 'left', color: colors.text, borderColor: colors.border, backgroundColor: colors.surfaceEl }]}
+              value={newCategory}
+              onChangeText={setNewCategory}
+              onSubmitEditing={handleAddCategory}
+              placeholder="nova categoria"
+              placeholderTextColor={colors.textFaint}
+              returnKeyType="done"
+              autoCapitalize="words"
+            />
+            <Button label="+ add" variant="primary" size="sm" onPress={handleAddCategory} />
+          </View>
+          {customCategories.length === 0 && (
+            <Text style={[s.rowSub, { color: colors.textFaint, fontStyle: 'italic' }]}>toca num chip para remover</Text>
+          )}
         </View>
       </View>
 

@@ -38,6 +38,26 @@ export function Members({ spaceId, onBack }: Props) {
 
   const [showInviteCode, setShowInviteCode] = useState(false)
   const [inviteCode, setInviteCode]         = useState('')
+  const [joinCode, setJoinCode]             = useState('')
+  const [joinError, setJoinError]           = useState('')
+
+  function handleJoin() {
+    const code = joinCode.trim().toUpperCase()
+    if (!code) return
+    const displayName = auth.user?.email?.split('@')[0] ?? 'Convidado'
+    const result = store.consumeInvite(code, displayName)
+    if ('error' in result) {
+      setJoinError(
+        result.error === 'expired'  ? 'Código expirado. Pede um novo ao administrador.' :
+        result.error === 'used'     ? 'Código já utilizado.' :
+                                      'Código inválido.'
+      )
+    } else {
+      setJoinCode('')
+      setJoinError('')
+      toast.push('Pedido enviado! Aguarda aprovação.', 'success')
+    }
+  }
 
   function handleGenerateInvite() {
     if (!myMember) return
@@ -156,12 +176,20 @@ export function Members({ spaceId, onBack }: Props) {
         <View style={[mb.card, { backgroundColor: colors.surface }]}>
           <Text style={[mb.cardTag, { color: colors.textMuted }]}>entrar com código</Text>
           <TextInput
-            style={[mb.codeInput, { color: colors.text, borderColor: colors.border }]}
+            style={[mb.codeInput, { color: colors.text, borderColor: joinError ? colors.danger : colors.border }]}
+            value={joinCode}
+            onChangeText={v => { setJoinCode(v); setJoinError('') }}
+            onSubmitEditing={handleJoin}
             placeholder="TRK-XXXX"
             placeholderTextColor={colors.textFaint}
             autoCapitalize="characters"
             maxLength={8}
+            returnKeyType="done"
           />
+          {joinError ? (
+            <Text style={[mb.errorText, { color: colors.danger }]}>{joinError}</Text>
+          ) : null}
+          <Button label="entrar" variant="primary" size="md" onPress={handleJoin} fullWidth />
         </View>
       )}
     </ScrollView>
@@ -195,5 +223,6 @@ const mb = StyleSheet.create({
   codePill:  { paddingHorizontal: 24, paddingVertical: 12, borderRadius: theme.radiusMd },
   code:      { fontSize: 28, fontFamily: theme.fontMonoBold, letterSpacing: 4 },
 
-  codeInput: { fontSize: 20, fontFamily: theme.fontMonoBold, letterSpacing: 4, borderWidth: 1, borderRadius: theme.radiusMd, paddingHorizontal: theme.sp3, paddingVertical: theme.sp2, textAlign: 'center' },
+  codeInput:  { fontSize: 20, fontFamily: theme.fontMonoBold, letterSpacing: 4, borderWidth: 1, borderRadius: theme.radiusMd, paddingHorizontal: theme.sp3, paddingVertical: theme.sp2, textAlign: 'center' },
+  errorText:  { fontSize: 12, fontFamily: theme.fontMedium, textAlign: 'center' },
 })
