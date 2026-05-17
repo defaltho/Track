@@ -16,6 +16,7 @@ import { useToastStore } from '../stores/toasts'
 import { useTheme } from '../context/ThemeContext'
 import { totalMonthlySpend, coffees } from '../utils/calculations'
 import { buildMonthlyBars } from '../utils/chart'
+import { computeDropIndex } from '../utils/dragReorder'
 import { Modal } from '../components/ui/Modal'
 import { Button, IconButton, usePrimaryFg } from '../components/ui/Button'
 import { Widget, WidgetRow } from '../components/ui/Widget'
@@ -429,6 +430,10 @@ export function Dashboard() {
 
   // ── Widget ordering ────────────────────────────────────────────────
   const [editMode, setEditMode] = useState(false)
+  const [draggingId, setDraggingId] = useState<WKey | null>(null)
+  // Per-widget measured rectangle in page-relative coordinates. We use a ref so
+  // mutations don't trigger re-renders — only the gesture handler reads it.
+  const layoutsRef = useRef<Map<WKey, { top: number; height: number }>>(new Map())
   const [order, setOrder]       = useState<WKey[]>([
     'active', 'spend',              // squares row
     'monthGoal', 'clock',           // squares row (ring goal + analog clock)
@@ -454,6 +459,31 @@ export function Dashboard() {
       return out
     })
   }
+
+  const handleDragStart = React.useCallback((id: WKey) => {
+    setEditMode(true)
+    setDraggingId(id)
+  }, [])
+
+  const handleDragMove = React.useCallback((id: WKey, absoluteY: number) => {
+    setOrder(prev => {
+      const target = computeDropIndex(layoutsRef.current, absoluteY, id, prev)
+      const fromIdx = prev.indexOf(id)
+      if (fromIdx === -1 || target === -1 || fromIdx === target) return prev
+      const out = [...prev]
+      out.splice(fromIdx, 1)
+      out.splice(target, 0, id)
+      return out
+    })
+  }, [])
+
+  const handleDragEnd = React.useCallback(() => {
+    setDraggingId(null)
+  }, [])
+
+  const handleMeasure = React.useCallback((id: WKey, top: number, height: number) => {
+    layoutsRef.current.set(id, { top, height })
+  }, [])
 
   // ── Reorder controls (shown in edit mode) — Button DNA ─────────────
   function ReorderBar({ id }: { id: WKey }) {
@@ -680,10 +710,15 @@ export function Dashboard() {
           style={fillStyle}
         >
           <EditableWidget
+            id={id}
             editMode={editMode}
-            isDragging={false}
+            isDragging={draggingId === id}
             phase={_idx / Math.max(order.length, 1)}
             onRemove={() => setOrder(prev => prev.filter(k => k !== id))}
+            onDragStart={handleDragStart}
+            onDragMove={handleDragMove}
+            onDragEnd={handleDragEnd}
+            onMeasure={handleMeasure}
           >
             {content}
           </EditableWidget>
