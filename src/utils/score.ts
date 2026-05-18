@@ -1,4 +1,5 @@
 import { daysLeft } from './calculations'
+import { buildMonthlyBars } from './chart'
 
 export interface ScoreBreakdown {
   total:         number  // 0–100
@@ -46,4 +47,19 @@ export function computeScore(
     total >= 30 ? 'danger'  : 'danger'
 
   return { total, budgetPts, subsPts, tasksPts, label, labelColor }
+}
+
+export interface ScorePoint { label: string; score: number }
+
+export function computeScoreHistory(
+  subscriptions: any[],
+  tasks:         any[],
+  monthlyBudget: number | null,
+  months = 6,
+): ScorePoint[] {
+  const bars = buildMonthlyBars(subscriptions, months - 1, 0)
+  return bars.map(b => ({
+    label: b.label,
+    score: computeScore(subscriptions, tasks, monthlyBudget, b.value).total,
+  }))
 }

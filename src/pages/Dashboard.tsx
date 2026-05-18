@@ -32,8 +32,10 @@ import { BudgetWidget }         from '../components/widgets/BudgetWidget'
 import { ForecastWidget }       from '../components/widgets/ForecastWidget'
 import { ScoreWidget }          from '../components/widgets/ScoreWidget'
 import { TopExpensesWidget }    from '../components/widgets/TopExpensesWidget'
+import { AnomalyWidget }        from '../components/widgets/AnomalyWidget'
 import { buildForecast }        from '../utils/forecast'
 import { AddTrackForm } from '../components/forms/AddTrackForm'
+import { AddTaskForm } from '../components/forms/AddTaskForm'
 import { theme, CURRENCY_SYMBOL, Colors } from '../theme'
 
 // ── Press / hover wrapper ──────────────────────────────────────────────
@@ -180,23 +182,39 @@ const hm = StyleSheet.create({
 })
 
 // ── Subscription row ───────────────────────────────────────────────────
-function SubRow({ sub, symbol, diff, onRemove, delay, colors }: { sub: any; symbol: string; diff: number; onRemove: () => void; delay: number; colors: Colors }) {
+function SubRow({ sub, symbol, diff, onRemove, onEdit, delay, colors }: { sub: any; symbol: string; diff: number; onRemove: () => void; onEdit?: () => void; delay: number; colors: Colors }) {
   const scale = useSharedValue(1)
   const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }))
-  // accentRed is reserved for "due today" only — everything else is graphite
-  const isToday = diff === 0
-  const dueColor = isToday ? colors.accentRed : colors.textMuted
-  const dueLabel = isToday ? 'today' : diff === 1 ? 'tomorrow' : `in ${diff}d`
+  // accentRed is reserved for "due today" and OVERDUE — everything else is graphite
+  const isToday   = diff === 0
+  const isOverdue = diff < 0
+  const dueColor = (isToday || isOverdue) ? colors.accentRed : colors.textMuted
+  const dueLabel = isOverdue
+    ? (diff === -1 ? 'overdue 1d' : `overdue ${-diff}d`)
+    : isToday ? 'today' : diff === 1 ? 'tomorrow' : `in ${diff}d`
   const trialExpiring = isTrialExpiring(sub)
   return (
     <Animated.View entering={FadeInRight.delay(delay).springify().damping(20).stiffness(220)}>
-      <Pressable onPressIn={() => { scale.value = withSpring(0.98,{damping:16,stiffness:380}) }} onPressOut={() => { scale.value = withSpring(1,{damping:16,stiffness:380}) }} onLongPress={onRemove} delayLongPress={500}>
-        <Animated.View style={[sr.row, { borderBottomColor: colors.border }, animStyle]}>
-          <View style={[sr.badge, { backgroundColor: colors.surfaceEl }]}><Text style={sr.emoji}>{sub.emoji ?? '💳'}</Text></View>
+      <Pressable
+        onPressIn={() => { scale.value = withSpring(0.98,{damping:16,stiffness:380}) }}
+        onPressOut={() => { scale.value = withSpring(1,{damping:16,stiffness:380}) }}
+        onPress={onEdit}
+        onLongPress={onRemove}
+        delayLongPress={500}
+        accessibilityRole="button"
+        accessibilityLabel={`Edit ${sub.name}`}
+      >
+        <Animated.View style={[
+          sr.row,
+          { borderBottomColor: colors.border },
+          isOverdue && { backgroundColor: colors.accentRed + '12', borderRadius: theme.radiusMd, paddingHorizontal: 6 },
+          animStyle,
+        ]}>
+          <View style={[sr.badge, { backgroundColor: isOverdue ? colors.accentRed + '22' : colors.surfaceEl }]}><Text style={sr.emoji}>{sub.emoji ?? '💳'}</Text></View>
           <View style={sr.body}>
             <Text style={[sr.name, { color: colors.text }]} numberOfLines={1}>{sub.name}</Text>
             <View style={sr.metaRow}>
-              <Text style={[sr.dueText, { color: dueColor }]}>· {dueLabel}</Text>
+              <Text style={[sr.dueText, { color: dueColor, fontFamily: isOverdue ? theme.fontMonoBold : theme.fontMono }]}>· {dueLabel}</Text>
               {sub.category ? <Text style={[sr.cat, { color: colors.textFaint }]}>{sub.category}</Text> : null}
               {trialExpiring && <Text style={[sr.trial, { color: colors.warning }]}>trial</Text>}
             </View>
@@ -233,16 +251,23 @@ const sr = StyleSheet.create({
 })
 
 // ── Task row ───────────────────────────────────────────────────────────
-function TaskRow({ task, delay, onToggle, onRemove, colors }: { task: any; delay: number; onToggle: () => void; onRemove: () => void; colors: Colors }) {
+function TaskRow({ task, delay, onToggle, onRemove, onEdit, colors }: { task: any; delay: number; onToggle: () => void; onRemove: () => void; onEdit?: () => void; colors: Colors }) {
   return (
     <Animated.View entering={FadeInRight.delay(delay).springify().damping(20).stiffness(220)} style={[sr.row, { borderBottomColor: colors.border }]}>
       <TouchableOpacity style={[tr.box, { borderColor:colors.borderStrong, backgroundColor:colors.surfaceEl }, task.done && { backgroundColor:colors.accent, borderColor:colors.accent }]} onPress={onToggle} accessibilityRole="checkbox">
         {task.done && <Animated.Text entering={ZoomIn.springify().damping(12).stiffness(300)} style={[tr.check, { color:colors.accentFg }]}>✓</Animated.Text>}
       </TouchableOpacity>
-      <View style={{ flex:1, minWidth:0 }}>
+      <Pressable
+        style={{ flex:1, minWidth:0 }}
+        onPress={onEdit}
+        onLongPress={onRemove}
+        delayLongPress={500}
+        accessibilityRole="button"
+        accessibilityLabel={`Edit ${task.name}`}
+      >
         <Text style={[sr.name, { color:colors.text }, task.done && { color:colors.textMuted, textDecorationLine:'line-through' }]}>{task.name}</Text>
         {task.note ? <Text style={[sr.cat, { color:colors.textFaint }]}>{task.note}</Text> : null}
-      </View>
+      </Pressable>
       <IconButton variant="secondary" size="sm" onPress={onRemove} accessibilityLabel="Remove">
         <View style={[sr.removeLine, { backgroundColor:colors.textMuted }]} />
         <View style={[sr.removeLine, { backgroundColor:colors.textMuted, transform:[{rotate:'90deg'}], position:'absolute' }]} />
@@ -286,7 +311,7 @@ type WKey =
   | 'active' | 'spend' | 'coffees' | 'events' | 'topExpense' | 'ytd' | 'monthGoal' | 'clock'
   | 'categoryRings'
   | 'heatmap' | 'due' | 'category' | 'upcoming' | 'spendTrend' | 'radar' | 'budget' | 'forecast'
-  | 'score' | 'topExpenses'
+  | 'score' | 'topExpenses' | 'anomaly'
 
 const WIDGET_SIZE: Record<WKey, 'square' | 'rectangle'> = {
   active:        'square',
@@ -308,6 +333,7 @@ const WIDGET_SIZE: Record<WKey, 'square' | 'rectangle'> = {
   forecast:      'rectangle',
   score:         'square',
   topExpenses:   'rectangle',
+  anomaly:       'rectangle',
 }
 
 const WIDGET_DELAY: Record<WKey, number> = {
@@ -315,7 +341,7 @@ const WIDGET_DELAY: Record<WKey, number> = {
   heatmap: 180, due: 210,    spendTrend: 240, category: 270,
   coffees: 300, events: 330, upcoming: 360,
   topExpense: 390, ytd: 420,  radar: 450, categoryRings: 480,
-  budget: 500, forecast: 520, score: 540, topExpenses: 560,
+  budget: 500, forecast: 520, score: 540, topExpenses: 560, anomaly: 580,
 }
 
 const ALL_KEYS: WKey[] = Object.keys(WIDGET_SIZE) as WKey[]
@@ -340,6 +366,7 @@ const WIDGET_META: Record<WKey, { label: string; emoji: string }> = {
   forecast:      { label: 'forecast',       emoji: '📆' },
   score:         { label: 'score',          emoji: '🏅' },
   topExpenses:   { label: 'top expenses',   emoji: '💰' },
+  anomaly:       { label: 'patterns',       emoji: '📊' },
 }
 
 export function Dashboard() {
@@ -361,11 +388,15 @@ export function Dashboard() {
   const coffeeCount = useMemo(() => coffees(monthly), [monthly])
   const monthEvents = useMemo(() => store.events.filter((e: any) => e.date?.startsWith(month)), [store.events, month])
   const todayTasks  = useMemo(() => store.tasks.filter((t: any) => t.dueDate === today), [store.tasks, today])
-  const dueSubs     = useMemo(() => store.subscriptions.filter((s: any) => {
-    if (s.active === false || !s.nextChargeDate) return false
-    return differenceInCalendarDays(parseISO(s.nextChargeDate), now) >= 0 &&
-           differenceInCalendarDays(parseISO(s.nextChargeDate), now) <= 7
-  }), [store.subscriptions])
+  // Includes overdue (diff < 0) AND next 7 days; overdue pinned to the top.
+  const dueSubs     = useMemo(() => {
+    return store.subscriptions
+      .filter((s: any) => s.active !== false && s.nextChargeDate)
+      .map((s: any) => ({ s, diff: differenceInCalendarDays(parseISO(s.nextChargeDate), now) }))
+      .filter(({ diff }) => diff < 0 || diff <= 7)
+      .sort((a, b) => a.diff - b.diff)
+      .map(({ s }) => s)
+  }, [store.subscriptions])
   const activeSubs  = useMemo(() => store.subscriptions.filter((s: any) => s.active !== false), [store.subscriptions])
 
   const forecastItems = useMemo(() => activeSubs.map((s: any) => ({
@@ -462,6 +493,9 @@ export function Dashboard() {
   }, [activeSubs, store.events, now])
 
   const [showAddTrack, setShowAddTrack] = useState(false)
+  const [showAddTask, setShowAddTask]   = useState(false)
+  const [editTrack, setEditTrack]       = useState<any | null>(null)
+  const [editTask, setEditTask]         = useState<any | null>(null)
   const [confirm, setConfirm]           = useState<{ kind: string; id: string; name: string } | null>(null)
 
   // ── Widget ordering ────────────────────────────────────────────────
@@ -491,6 +525,7 @@ export function Dashboard() {
     'topExpenses',                  // rectangle (top 5 expenses)
     'upcoming',                     // rectangle
     'score', 'ytd',                 // squares row (financial score + year-to-date)
+    'anomaly',                      // rectangle (spending pattern anomalies)
   ])
 
   const handleEnterEdit = React.useCallback(() => {
@@ -575,6 +610,22 @@ export function Dashboard() {
     else if (data.type === 'app') { store.addApp(data); toast.push('App added', 'success') }
     else if (data.type === 'event') { store.addEvent(data); toast.push('Event added', 'success') }
     setShowAddTrack(false)
+  }
+  function handleAddTask(data: any) { store.addTask(data); toast.push('Task added', 'success'); setShowAddTask(false) }
+  function handleEditTrack(data: any) {
+    if (!editTrack) return
+    const id = editTrack.id
+    if (editTrack.type === 'subscription') store.updateSubscription(id, data)
+    else if (editTrack.type === 'app') store.updateApp(id, data)
+    else if (editTrack.type === 'event') store.updateEvent(id, data)
+    toast.push('Saved', 'success')
+    setEditTrack(null)
+  }
+  function handleEditTask(data: any) {
+    if (!editTask) return
+    store.updateTask(editTask.id, data)
+    toast.push('Saved', 'success')
+    setEditTask(null)
   }
   function confirmRemove() {
     if (!confirm) return
@@ -695,10 +746,27 @@ export function Dashboard() {
           >
             {!hasItems && <Text style={[s.empty, { color:colors.textFaint }]}>nothing due in the next 7 days</Text>}
             {dueSubs.map((sub: any, i: number) => (
-              <SubRow key={sub.id} sub={sub} symbol={symbol} diff={differenceInCalendarDays(parseISO(sub.nextChargeDate), now)} delay={200+i*40} colors={colors} onRemove={() => setConfirm({ kind:'sub', id:sub.id, name:sub.name })} />
+              <SubRow
+                key={sub.id}
+                sub={sub}
+                symbol={symbol}
+                diff={differenceInCalendarDays(parseISO(sub.nextChargeDate), now)}
+                delay={200+i*40}
+                colors={colors}
+                onEdit={() => setEditTrack({ ...sub, type: sub.type ?? 'subscription' })}
+                onRemove={() => setConfirm({ kind:'sub', id:sub.id, name:sub.name })}
+              />
             ))}
             {todayTasks.map((task: any, i: number) => (
-              <TaskRow key={task.id} task={task} delay={300+i*40} colors={colors} onToggle={() => store.updateTask(task.id, { done: !task.done })} onRemove={() => setConfirm({ kind:'task', id:task.id, name:task.name })} />
+              <TaskRow
+                key={task.id}
+                task={task}
+                delay={300+i*40}
+                colors={colors}
+                onToggle={() => store.updateTask(task.id, { done: !task.done })}
+                onEdit={() => setEditTask(task)}
+                onRemove={() => setConfirm({ kind:'task', id:task.id, name:task.name })}
+              />
             ))}
           </Widget>
         )
@@ -787,6 +855,8 @@ export function Dashboard() {
             symbol={symbol}
           />
         )
+      case 'anomaly':
+        return <AnomalyWidget subscriptions={store.subscriptions} />
     }
   }
 
@@ -896,7 +966,28 @@ export function Dashboard() {
       <Modal open={showAddTrack} title="Add Track" onClose={() => setShowAddTrack(false)}>
         <AddTrackForm onSubmit={handleAddTrack} onCancel={() => setShowAddTrack(false)} />
       </Modal>
-<Modal open={confirm !== null} title="Remove?" onClose={() => setConfirm(null)}>
+      <Modal open={showAddTask} title="Add Task" onClose={() => setShowAddTask(false)}>
+        <AddTaskForm onSubmit={handleAddTask} onCancel={() => setShowAddTask(false)} />
+      </Modal>
+      <Modal open={editTrack !== null} title="Edit Track" onClose={() => setEditTrack(null)}>
+        {editTrack && (
+          <AddTrackForm
+            initialValue={editTrack}
+            onSubmit={handleEditTrack}
+            onCancel={() => setEditTrack(null)}
+          />
+        )}
+      </Modal>
+      <Modal open={editTask !== null} title="Edit Task" onClose={() => setEditTask(null)}>
+        {editTask && (
+          <AddTaskForm
+            initialValue={editTask}
+            onSubmit={handleEditTask}
+            onCancel={() => setEditTask(null)}
+          />
+        )}
+      </Modal>
+      <Modal open={confirm !== null} title="Remove?" onClose={() => setConfirm(null)}>
         {confirm && (
           <View>
             <Text style={[s.confirmText, { color:colors.text }]}>

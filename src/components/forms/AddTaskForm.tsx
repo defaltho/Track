@@ -18,34 +18,47 @@ const CATEGORIES = ['Personal', 'Work', 'Finance', 'Health', 'Travel', 'Other']
 interface Props {
   onSubmit: (data: any) => void
   onCancel: () => void
+  initialValue?: any
+  submitLabel?: string
 }
 
-export function AddTaskForm({ onSubmit, onCancel }: Props) {
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+
+function isValidDate(s: string): boolean {
+  if (!DATE_RE.test(s)) return false
+  const d = new Date(s)
+  return !Number.isNaN(d.getTime())
+}
+
+export function AddTaskForm({ onSubmit, onCancel, initialValue, submitLabel }: Props) {
   const { colors } = useTheme()
-  const [name, setName] = useState('')
+  const isEdit = !!initialValue
+  const [name, setName] = useState(initialValue?.name ?? '')
   const [nameError, setNameError] = useState('')
-  const [dueDate, setDueDate] = useState('')
+  const [dueDate, setDueDate] = useState(initialValue?.dueDate ?? '')
   const [dueDateError, setDueDateError] = useState('')
-  const [priority, setPriority] = useState<typeof PRIORITIES[number]>('medium')
-  const [category, setCategory] = useState('Other')
-  const [note, setNote] = useState('')
+  const [priority, setPriority] = useState<typeof PRIORITIES[number]>(
+    initialValue?.priority ?? 'medium'
+  )
+  const [category, setCategory] = useState(initialValue?.category ?? 'Other')
+  const [note, setNote] = useState(initialValue?.note ?? '')
 
   function submit() {
     if (!name.trim()) { setNameError('Task name is required'); return }
-    if (dueDate && !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
+    if (dueDate && !isValidDate(dueDate)) {
       setDueDateError('Use format YYYY-MM-DD')
       return
     }
     setDueDateError('')
     onSubmit({
       name: name.trim(),
-      done: false,
+      done: initialValue?.done ?? false,
       dueDate: dueDate || null,
       priority,
       category,
       note: note.trim(),
-      amount: null,
-      currency: null,
+      amount: initialValue?.amount ?? null,
+      currency: initialValue?.currency ?? null,
     })
   }
 
@@ -139,7 +152,7 @@ export function AddTaskForm({ onSubmit, onCancel }: Props) {
       <View style={s.actions}>
         <Button label="Cancel" variant="secondary" size="md" onPress={onCancel} />
         <View style={{ flex: 1 }}>
-          <Button label="Add Task" variant="primary" size="md" onPress={submit} fullWidth />
+          <Button label={submitLabel ?? (isEdit ? 'Save' : 'Add Task')} variant="primary" size="md" onPress={submit} fullWidth />
         </View>
       </View>
     </View>

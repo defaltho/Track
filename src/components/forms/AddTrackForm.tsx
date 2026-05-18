@@ -58,27 +58,45 @@ const EMOJI_SETS: Record<string, string[]> = {
 interface Props {
   onSubmit: (data: any) => void
   onCancel: () => void
+  initialValue?: any
+  submitLabel?: string
 }
 
-export function AddTrackForm({ onSubmit, onCancel }: Props) {
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+
+function isValidDate(s: string): boolean {
+  if (!DATE_RE.test(s)) return false
+  const d = new Date(s)
+  return !Number.isNaN(d.getTime())
+}
+
+export function AddTrackForm({ onSubmit, onCancel, initialValue, submitLabel }: Props) {
   const { colors } = useTheme()
   const { width: screenWidth } = useWindowDimensions()
   const calWidth = Math.min(310, screenWidth - 48)
   const cellSize = Math.floor((calWidth - theme.sp5 * 2) / 7)
+  const isEdit = !!initialValue
+  const initialType: typeof TYPES[number] =
+    initialValue?.type === 'app' ? 'app' :
+    initialValue?.type === 'event' ? 'event' : 'subscription'
 
   // Form state
   const [step, setStep]               = useState(1)
-  const [type, setType]               = useState<typeof TYPES[number]>('subscription')
-  const [name, setName]               = useState('')
-  const [emoji, setEmoji]             = useState('💳')
-  const [price, setPrice]             = useState('')
-  const [currency, setCurrency]       = useState('EUR')
-  const [billingCycle, setBillingCycle] = useState('monthly')
-  const [nextDate, setNextDate]       = useState('')
-  const [category, setCategory]       = useState('Other')
-  const [payment, setPayment]         = useState('Card')
-  const [note, setNote]               = useState('')
-  const [color, setColor]             = useState<string>(COLOR_PALETTE[0])
+  const [type, setType]               = useState<typeof TYPES[number]>(initialType)
+  const [name, setName]               = useState(initialValue?.name ?? '')
+  const [emoji, setEmoji]             = useState(initialValue?.emoji ?? '💳')
+  const [price, setPrice]             = useState(
+    initialValue?.price != null ? String(initialValue.price) : ''
+  )
+  const [currency, setCurrency]       = useState(initialValue?.currency ?? 'EUR')
+  const [billingCycle, setBillingCycle] = useState(initialValue?.billingCycle ?? 'monthly')
+  const [nextDate, setNextDate]       = useState(
+    initialValue?.nextChargeDate ?? initialValue?.date ?? ''
+  )
+  const [category, setCategory]       = useState(initialValue?.category ?? 'Other')
+  const [payment, setPayment]         = useState(initialValue?.paymentMethod ?? 'Card')
+  const [note, setNote]               = useState(initialValue?.note ?? '')
+  const [color, setColor]             = useState<string>(initialValue?.color ?? COLOR_PALETTE[0])
   const [customColor, setCustomColor] = useState('')
   const [error, setError]             = useState('')
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
@@ -89,8 +107,13 @@ export function AddTrackForm({ onSubmit, onCancel }: Props) {
 
   function goNext() {
     if (!name.trim()) { setError('Name is required'); return }
-    if (type !== 'event' && !price) { setError('Price is required'); return }
-    if (!nextDate) { setError('Date is required'); return }
+    if (type !== 'event') {
+      const p = parseFloat(price.replace(',', '.'))
+      if (!price.trim() || Number.isNaN(p)) { setError('Price is required'); return }
+      if (p <= 0) { setError('Price must be greater than 0'); return }
+    }
+    if (!nextDate.trim()) { setError('Date is required'); return }
+    if (!isValidDate(nextDate)) { setError('Use date format YYYY-MM-DD'); return }
     setError('')
     setStep(2)
   }
@@ -98,11 +121,12 @@ export function AddTrackForm({ onSubmit, onCancel }: Props) {
   function submit() {
     setError('')
     const finalColor = customColor.trim() || color
-    const base = { type, name: name.trim(), emoji, color: finalColor, currency, category, note: note.trim(), active: true }
+    const base = { type, name: name.trim(), emoji, color: finalColor, currency, category, note: note.trim(), active: initialValue?.active ?? true }
     if (type === 'event') {
       onSubmit({ ...base, date: nextDate })
     } else {
-      onSubmit({ ...base, price: parseFloat(price), billingCycle, nextChargeDate: nextDate, purchaseDate: nextDate, date: nextDate, paymentMethod: payment })
+      const p = parseFloat(price.replace(',', '.'))
+      onSubmit({ ...base, price: p, billingCycle, nextChargeDate: nextDate, purchaseDate: initialValue?.purchaseDate ?? nextDate, date: nextDate, paymentMethod: payment })
     }
   }
 
@@ -126,11 +150,11 @@ export function AddTrackForm({ onSubmit, onCancel }: Props) {
       {/* ════════════ STEP 1 ════════════ */}
       {step === 1 && (
         <View style={s.fields}>
-          {/* Type tabs — Button DNA via Segmented */}
+          {/* Type tabs — Button DNA via Segmented (locked when editing) */}
           <Segmented
             options={TYPES as unknown as readonly string[]}
             value={type}
-            onChange={v => setType(v as typeof type)}
+            onChange={v => { if (!isEdit) setType(v as typeof type) }}
             layout="equal"
             size="md"
             capitalize
@@ -316,7 +340,7 @@ export function AddTrackForm({ onSubmit, onCancel }: Props) {
         />
         <View style={{ flex: 1 }}>
           <Button
-            label={step === 1 ? 'Next →' : 'Add'}
+            label={step === 1 ? 'Next →' : (submitLabel ?? (isEdit ? 'Save' : 'Add'))}
             variant="primary"
             size="md"
             onPress={step === 1 ? goNext : submit}
