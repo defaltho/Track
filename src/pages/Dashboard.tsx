@@ -1,8 +1,9 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react'
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import {
-  View, Text, ScrollView, TouchableOpacity, Pressable, StyleSheet,
+  View, Text, TouchableOpacity, Pressable, StyleSheet,
   Platform, useWindowDimensions, Dimensions,
 } from 'react-native'
+import { ScrollView } from 'react-native-gesture-handler'
 import { MotiView } from 'moti'
 import Animated, {
   FadeInRight, ZoomIn, LinearTransition,
@@ -179,6 +180,26 @@ const hm = StyleSheet.create({
   label: { fontSize: 9, fontFamily: theme.fontMono, letterSpacing: 0.3 },
 })
 
+// ── Phantom drop zone (empty slot next to a lone square widget) ────────
+function PhantomDropZone({ pairedId, isTarget, onRegisterRef, colors }: {
+  pairedId: string
+  isTarget: boolean
+  onRegisterRef: (id: string, node: View | null) => void
+  colors: Colors
+}) {
+  const phantomId = `__gap_${pairedId}__`
+  return (
+    <View
+      ref={(node) => onRegisterRef(phantomId, node)}
+      style={{
+        flex: 1, minHeight: 80, borderRadius: theme.radiusXl,
+        backgroundColor: isTarget ? colors.surfaceEl : 'rgba(0,0,0,0.02)',
+        borderWidth: 1.5, borderColor: isTarget ? colors.borderStrong : colors.border,
+      }}
+    />
+  )
+}
+
 // ── Subscription row ───────────────────────────────────────────────────
 function SubRow({ sub, symbol, diff, onRemove, delay, colors }: { sub: any; symbol: string; diff: number; onRemove: () => void; delay: number; colors: Colors }) {
   const scale = useSharedValue(1)
@@ -342,6 +363,23 @@ const WIDGET_META: Record<WKey, { label: string; emoji: string }> = {
   topExpenses:   { label: 'top expenses',   emoji: '💰' },
 }
 
+const DEFAULT_WIDGET_ORDER: WKey[] = [
+  'active', 'spend',
+  'monthGoal', 'clock',
+  'heatmap',
+  'budget',
+  'forecast',
+  'due',
+  'spendTrend',
+  'coffees', 'events',
+  'category',
+  'categoryRings', 'topExpense',
+  'radar',
+  'topExpenses',
+  'upcoming',
+  'score', 'ytd',
+]
+
 export function Dashboard() {
   const { colors } = useTheme()
   const primaryFg = usePrimaryFg()
@@ -465,33 +503,37 @@ export function Dashboard() {
   const [confirm, setConfirm]           = useState<{ kind: string; id: string; name: string } | null>(null)
 
   // ── Widget ordering ────────────────────────────────────────────────
-  const [editMode, setEditMode]       = useState(false)
-  const [draggingId, setDraggingId]   = useState<WKey | null>(null)
-  const [dropTargetId, setDropTargetId] = useState<WKey | null>(null)
+  const [editMode, setEditMode]         = useState(false)
+  const [draggingId, setDraggingId]     = useState<WKey | null>(null)
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null)
+  // 'before' | 'swap' | 'after' — determined by which vertical third the cursor is in
+  const [dropMode, setDropMode] = useState<'before' | 'swap' | 'after'>('swap')
+  // Lone squares that the user has flipped to the right side (empty slot on the left)
+  const [flippedSquares, setFlippedSquares] = useState<Set<WKey>>(() => {
+    const stored = store.flippedWidgets
+    return new Set(stored.filter((k): k is WKey => (ALL_KEYS as string[]).includes(k)))
+  })
   // Refs mirror state so gesture callbacks (useCallback with [] deps) always
   // see the current value without needing to re-create the callback.
-  const draggingIdRef   = useRef<WKey | null>(null)
-  const dropTargetIdRef = useRef<WKey | null>(null)
-  const layoutsRef  = useRef<Map<WKey, { top: number; height: number }>>(new Map())
-  const scrollYRef  = useRef(0)
+  const draggingIdRef      = useRef<WKey | null>(null)
+  const dropTargetIdRef    = useRef<string | null>(null)
+  const dropModeRef = useRef<'before' | 'swap' | 'after'>('swap')
+  const scrollYRef    = useRef(0)
+  const scrollYShared = useSharedValue(0)
   const cursorAbsYRef = useRef(0)
-  const scrollRef   = useRef<ScrollView>(null)
-  const [order, setOrder]       = useState<WKey[]>([
-    'active', 'spend',              // squares row
-    'monthGoal', 'clock',           // squares row (ring goal + analog clock)
-    'heatmap',                      // rectangle
-    'budget',                       // rectangle (monthly budget vs spend)
-    'forecast',                     // rectangle (30-day charge forecast)
-    'due',                          // rectangle
-    'spendTrend',                   // rectangle (line chart — LineTrend)
-    'coffees', 'events',            // squares row
-    'category',                     // rectangle (Breakdown — Traffic source style)
-    'categoryRings', 'topExpense',  // squares row (rings + top expense)
-    'radar',                        // rectangle (Radar — by category)
-    'topExpenses',                  // rectangle (top 5 expenses)
-    'upcoming',                     // rectangle
-    'score', 'ytd',                 // squares row (financial score + year-to-date)
-  ])
+  const scrollRef     = useRef<ScrollView>(null)
+  const [order, setOrder] = useState<WKey[]>(() => {
+    const stored = store.widgetOrder
+    if (stored.length > 0) {
+      return stored.filter((k): k is WKey => (ALL_KEYS as string[]).includes(k))
+    }
+    return DEFAULT_WIDGET_ORDER
+  })
+
+  // Persist layout changes so F5 / app restart restores the user's arrangement
+  useEffect(() => {
+    store.setWidgetLayout(order, [...flippedSquares])
+  }, [order, flippedSquares])
 
   const handleEnterEdit = React.useCallback(() => {
     setEditMode(true)
@@ -502,19 +544,44 @@ export function Dashboard() {
     setDraggingId(id)
   }, [])
 
-  const handleDragMove = React.useCallback((id: WKey, absoluteY: number) => {
+  const cursorAbsXRef = useRef(0)
+  const widgetRefsMap = useRef<Map<string, View | null>>(new Map())
+
+  const handleRegisterRef = React.useCallback((id: string, node: View | null) => {
+    if (node) widgetRefsMap.current.set(id, node)
+    else widgetRefsMap.current.delete(id)
+  }, [])
+
+  const handleDragMove = React.useCallback((id: WKey, absoluteY: number, absoluteX: number) => {
     cursorAbsYRef.current = absoluteY
-    const contentY = absoluteY + scrollYRef.current
-    let nearest: WKey | null = null
+    cursorAbsXRef.current = absoluteX
+    let nearest: string | null = null
+    let nearestTop = 0, nearestH = 0
     let minDist = Infinity
-    for (const [k, rect] of layoutsRef.current) {
-      if (k === id) continue
-      const dist = Math.abs((rect.top + rect.height / 2) - contentY)
-      if (dist < minDist) { minDist = dist; nearest = k as WKey }
-    }
-    if (nearest !== dropTargetIdRef.current) {
-      dropTargetIdRef.current = nearest
-      setDropTargetId(nearest)
+    let pending = 0
+    for (const [k, ref] of widgetRefsMap.current) {
+      if (k === id || !ref) continue
+      pending++
+      ref.measureInWindow((left: number, top: number, width: number, height: number) => {
+        if (typeof top === 'number' && height > 0) {
+          const dist = Math.abs((top + height / 2) - absoluteY) * 2 + Math.abs((left + width / 2) - absoluteX)
+          if (dist < minDist) { minDist = dist; nearest = k; nearestTop = top; nearestH = height }
+        }
+        if (--pending === 0) {
+          let mode: 'before' | 'swap' | 'after' = 'swap'
+          if (nearest && nearestH > 0) {
+            const rel = (absoluteY - nearestTop) / nearestH  // 0–1 within the widget
+            if (rel < 0.3) mode = 'before'
+            else if (rel > 0.7) mode = 'after'
+          }
+          if (nearest !== dropTargetIdRef.current || mode !== dropModeRef.current) {
+            dropTargetIdRef.current = nearest
+            dropModeRef.current     = mode
+            setDropTargetId(nearest)
+            setDropMode(mode)
+          }
+        }
+      })
     }
   }, [])
 
@@ -522,22 +589,57 @@ export function Dashboard() {
     const dragId   = draggingIdRef.current
     const targetId = dropTargetIdRef.current
     if (dragId && targetId && dragId !== targetId) {
-      setOrder(prev => {
-        const out = [...prev]
-        const ai = out.indexOf(dragId)
-        const bi = out.indexOf(targetId)
-        if (ai !== -1 && bi !== -1) { [out[ai], out[bi]] = [out[bi], out[ai]] }
-        return out
-      })
+      if (targetId.startsWith('__gap_')) {
+        const pairedId = targetId.slice(6, -2) as WKey
+        if (dragId === pairedId) {
+          // Dragged the lone square onto its own phantom slot → flip to the other side
+          setFlippedSquares(prev => {
+            const next = new Set(prev)
+            if (next.has(dragId)) next.delete(dragId)
+            else next.add(dragId)
+            return next
+          })
+        } else {
+          // Insert dragged widget into the empty slot next to the lone square
+          setOrder(prev => {
+            const without = prev.filter(k => k !== dragId)
+            const insertAfter = without.indexOf(pairedId)
+            if (insertAfter === -1) return prev
+            const result = [...without]
+            result.splice(insertAfter + 1, 0, dragId)
+            return result
+          })
+          setFlippedSquares(prev => { const next = new Set(prev); next.delete(pairedId); return next })
+        }
+      } else {
+        const mode = dropModeRef.current
+        if (mode === 'swap') {
+          setOrder(prev => {
+            const out = [...prev]
+            const ai = out.indexOf(dragId)
+            const bi = out.indexOf(targetId as WKey)
+            if (ai !== -1 && bi !== -1) { [out[ai], out[bi]] = [out[bi], out[ai]] }
+            return out
+          })
+        } else {
+          const insertBefore = mode === 'before'
+          setOrder(prev => {
+            const without = prev.filter(k => k !== dragId)
+            const targetIdx = without.indexOf(targetId as WKey)
+            if (targetIdx === -1) return prev
+            const result = [...without]
+            result.splice(insertBefore ? targetIdx : targetIdx + 1, 0, dragId)
+            return result
+          })
+        }
+      }
     }
-    draggingIdRef.current   = null
+    draggingIdRef.current  = null
     dropTargetIdRef.current = null
+    dropModeRef.current    = 'swap'
     setDraggingId(null)
     setDropTargetId(null)
-  }, [])
-
-  const handleMeasure = React.useCallback((id: WKey, top: number, height: number) => {
-    layoutsRef.current.set(id, { top: top + scrollYRef.current, height })
+    setDropMode('swap')
   }, [])
 
   // Auto-scroll: while dragging, if the cursor is within EDGE_THRESHOLD of the
@@ -563,6 +665,8 @@ export function Dashboard() {
       if (dy !== 0 && scrollRef.current) {
         const next = Math.max(0, scrollYRef.current + dy)
         scrollRef.current.scrollTo({ y: next, animated: false })
+        scrollYRef.current    = next
+        scrollYShared.value   = next
       }
       raf = requestAnimationFrame(step)
     }
@@ -793,7 +897,7 @@ export function Dashboard() {
   // Wrap a widget with reorder bar + animation. `fill` propagates flex:1
   // through both wrappers so square widgets actually take half the row.
   function wrapWidget(id: WKey, content: React.ReactNode, _idx: number, fill = false): React.ReactNode {
-    const fillStyle = fill ? { flex: 1 } : undefined
+    const fillStyle = fill ? { flex: 1, overflow: 'visible' as const } : { overflow: 'visible' as const }
     return (
       <Animated.View
         key={id}
@@ -804,13 +908,14 @@ export function Dashboard() {
           id={id}
           editMode={editMode}
           isDragging={draggingId === id}
-          isDropTarget={dropTargetId === id}
+          isDropTarget={dropTargetId === id && dropMode === 'swap'}
           onRemove={() => setOrder(prev => prev.filter(k => k !== id))}
           onEnterEdit={handleEnterEdit}
           onDragStart={handleDragStart}
           onDragMove={handleDragMove}
           onDragEnd={handleDragEnd}
-          onMeasure={handleMeasure}
+          onRegisterRef={handleRegisterRef}
+          scrollY={scrollYShared}
         >
           {content}
         </EditableWidget>
@@ -818,48 +923,80 @@ export function Dashboard() {
     )
   }
 
-  // Auto-pair consecutive squares into rows (mono layout rule)
+  function DropLine({ id }: { id: string }) {
+    return (
+      <View
+        key={`sep-${id}`}
+        style={{ height: 3, borderRadius: 2, backgroundColor: colors.accent, opacity: 0.55 }}
+      />
+    )
+  }
+
+  // Auto-pair consecutive squares into rows (mono layout rule).
+  // A DropLine is inserted above/below the drop target to show where the widget will land.
   function renderAll(): React.ReactNode[] {
     const out: React.ReactNode[] = []
     let pending: { id: WKey; node: React.ReactNode; idx: number } | null = null
+
+    function flushSolo() {
+      if (!pending) return
+      const p = pending
+      pending = null
+      const isTarget = dropTargetId === p.id
+      if (isTarget && dropMode === 'before') out.push(<DropLine key={`sep-above-${p.id}`} id={`above-${p.id}`} />)
+      out.push(renderSoloRow(p.id, p.node, p.idx))
+      if (isTarget && dropMode === 'after')  out.push(<DropLine key={`sep-below-${p.id}`} id={`below-${p.id}`} />)
+    }
 
     for (const [idx, id] of order.entries()) {
       const node = renderSingle(id)
       if (WIDGET_SIZE[id] === 'square') {
         if (pending) {
+          const isFirstTarget  = dropTargetId === pending.id
+          const isSecondTarget = dropTargetId === id
+          // Line above: only when cursor is in the top-third of the FIRST square
+          const showAbove = isFirstTarget && dropMode === 'before'
+          // Line below: cursor in bottom-third of either square, or top/middle of second square
+          const showBelow = !showAbove && (
+            (isFirstTarget && dropMode === 'after') ||
+            (isSecondTarget && (dropMode === 'before' || dropMode === 'after'))
+          )
+          if (showAbove) out.push(<DropLine key={`sep-above-${pending.id}`} id={`above-${pending.id}`} />)
           out.push(
             <View key={`row-${pending.id}-${id}`} style={s.squareRow}>
               {wrapWidget(pending.id, pending.node, pending.idx, true)}
               {wrapWidget(id, node, idx, true)}
             </View>
           )
+          if (showBelow) out.push(<DropLine key={`sep-below-${id}`} id={`below-${id}`} />)
           pending = null
         } else {
           pending = { id, node, idx }
         }
       } else {
-        if (pending) {
-          // Lone trailing square: render on its own (half row, left-aligned)
-          out.push(
-            <View key={`row-${pending.id}-solo`} style={s.squareRow}>
-              {wrapWidget(pending.id, pending.node, pending.idx, true)}
-              <View style={{ flex: 1 }} />
-            </View>
-          )
-          pending = null
-        }
+        flushSolo()
+        const isTarget = dropTargetId === id
+        if (isTarget && dropMode === 'before') out.push(<DropLine key={`sep-above-${id}`} id={`above-${id}`} />)
         out.push(wrapWidget(id, node, idx, false))
+        if (isTarget && dropMode === 'after')  out.push(<DropLine key={`sep-below-${id}`} id={`below-${id}`} />)
       }
     }
-    if (pending) {
-      out.push(
-        <View key={`row-${pending.id}-solo`} style={s.squareRow}>
-          {wrapWidget(pending.id, pending.node, pending.idx, true)}
-          <View style={{ flex: 1 }} />
-        </View>
-      )
-    }
+    flushSolo()
     return out
+  }
+
+  function renderSoloRow(soloId: WKey, node: React.ReactNode, idx: number): React.ReactNode {
+    const isFlipped = flippedSquares.has(soloId)
+    const phantom = editMode
+      ? <PhantomDropZone pairedId={soloId} isTarget={dropTargetId === `__gap_${soloId}__`} onRegisterRef={handleRegisterRef} colors={colors} />
+      : <View style={{ flex: 1 }} />
+    const widgetEl = wrapWidget(soloId, node, idx, true)
+    return (
+      <View key={`row-${soloId}-solo`} style={s.squareRow}>
+        {isFlipped ? phantom : widgetEl}
+        {isFlipped ? widgetEl : phantom}
+      </View>
+    )
   }
 
   const header = (
@@ -929,30 +1066,33 @@ export function Dashboard() {
         style={{ flex: 1 }}
         contentContainerStyle={[s.content, isDesktop && s.contentDesktop]}
         showsVerticalScrollIndicator={false}
-        onScroll={(e) => { scrollYRef.current = e.nativeEvent.contentOffset.y }}
+        bounces={false}
+        overScrollMode="never"
+        onScroll={(e) => {
+          const y = e.nativeEvent.contentOffset.y
+          scrollYRef.current  = y
+          scrollYShared.value = y
+        }}
         scrollEventThrottle={16}
       >
-        <Pressable
-          onPress={editMode ? () => setEditMode(false) : undefined}
-          style={{ flex: 1 }}
-        >
-          <View style={isDesktop ? s.widgetColumn : undefined}>
-            {order.length === 0 && !editMode && (
-              <View style={s.emptyState}>
-                <Text style={[s.emptyTitle, { color: colors.textMuted }]}>no widgets</Text>
-                <Text style={[s.emptySub, { color: colors.textFaint }]}>press ⊞ to add widgets back</Text>
-              </View>
-            )}
-            {renderAll()}
-            <HiddenWidgetTray
-              visible={editMode}
-              items={ALL_KEYS
-                .filter(k => !order.includes(k))
-                .map(k => ({ id: k, label: WIDGET_META[k].label, emoji: WIDGET_META[k].emoji }))}
-              onAdd={(id) => setOrder(prev => [...prev, id as WKey])}
-            />
+          <View style={{ flex: 1 }}>
+            <View style={isDesktop ? s.widgetColumn : undefined}>
+              {order.length === 0 && !editMode && (
+                <View style={s.emptyState}>
+                  <Text style={[s.emptyTitle, { color: colors.textMuted }]}>no widgets</Text>
+                  <Text style={[s.emptySub, { color: colors.textFaint }]}>press ⊞ to add widgets back</Text>
+                </View>
+              )}
+              {renderAll()}
+              <HiddenWidgetTray
+                visible={editMode}
+                items={ALL_KEYS
+                  .filter(k => !order.includes(k))
+                  .map(k => ({ id: k, label: WIDGET_META[k].label, emoji: WIDGET_META[k].emoji }))}
+                onAdd={(id) => setOrder(prev => [...prev, id as WKey])}
+              />
+            </View>
           </View>
-        </Pressable>
         {modals}
       </ScrollView>
     </View>
@@ -964,7 +1104,7 @@ const s = StyleSheet.create({
   // Header wrapper — always visible above the scroll area
   headerWrapper: { paddingHorizontal: theme.sp4, paddingTop: theme.sp4, paddingBottom: theme.sp3 },
   headerWrapperDesktop: { paddingHorizontal: 32, paddingTop: 40, paddingBottom: theme.sp3 },
-  content: { padding:theme.sp4, paddingTop: 0, gap:theme.sp4, paddingBottom:130 },
+  content: { padding:theme.sp4, paddingTop: theme.sp3, gap:theme.sp4, paddingBottom:130 },
   // Same widget grid on web — centered, single column matching mobile width
   contentDesktop: { paddingHorizontal: 32, paddingTop: 0, paddingBottom: 80, alignItems: 'center' },
   widgetColumn: { width: '100%', maxWidth: 480, gap: theme.sp4 },
@@ -980,7 +1120,7 @@ const s = StyleSheet.create({
   // both axes centered, fills the widget body
   metricCenter: { flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center', gap: theme.sp1 },
   // Row of two square widgets — mono spacing matches theme.sp4 (consistent vertical/horizontal rhythm)
-  squareRow: { flexDirection: 'row', gap: theme.sp4 },
+  squareRow: { flexDirection: 'row', gap: theme.sp4, overflow: 'visible' },
   spendBlock: { flexDirection:'row', alignItems:'flex-end', gap:6 },
   // Hero numbers — Space Mono BOLD, sized to fill the widget (§Widget hero typo)
   spendMain: { fontSize:56, fontFamily:theme.fontMonoBold, letterSpacing:-2.5, lineHeight:60 },

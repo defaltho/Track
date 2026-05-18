@@ -3,12 +3,14 @@ import { View, Pressable, StyleSheet, Platform } from 'react-native'
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
+  useAnimatedReaction,
   withRepeat,
   withTiming,
   withSequence,
   Easing,
   cancelAnimation,
   runOnJS,
+  type SharedValue,
 } from 'react-native-reanimated'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 
@@ -21,9 +23,12 @@ interface Props<Id extends string> {
   /** Long-press to enter edit mode (only fires when editMode === false). */
   onEnterEdit:  () => void
   onDragStart:  (id: Id) => void
-  onDragMove:   (id: Id, absoluteY: number) => void
-  onDragEnd:    () => void
-  onMeasure:    (id: Id, top: number, height: number) => void
+  onDragMove:      (id: Id, absoluteY: number, absoluteX: number) => void
+  onDragEnd:       () => void
+  onRegisterRef:   (id: Id, node: View | null) => void
+  /** Scroll offset shared value from the parent ScrollView — used to keep
+   *  the dragged widget visually locked to the cursor when auto-scroll fires. */
+  scrollY:      SharedValue<number>
   children:     React.ReactNode
 }
 
@@ -34,17 +39,36 @@ const STOP_DURATION  = 140
 const SCALE_DURATION = 140
 
 export function EditableWidget<Id extends string> ({
-  id, editMode, isDragging, isDropTarget, onRemove, onEnterEdit, onDragStart, onDragMove, onDragEnd, onMeasure, children,
+  id, editMode, isDragging, isDropTarget, onRemove, onEnterEdit,
+  onDragStart, onDragMove, onDragEnd, onRegisterRef, scrollY, children,
 }: Props<Id>) {
   const rot   = useSharedValue(0)
   const scale = useSharedValue(1)
   const tx    = useSharedValue(0)
   const ty    = useSharedValue(0)
-  const viewRef = useRef<Animated.View>(null)
+  // Accumulated scroll delta during a drag — keeps the widget visually locked
+  // to the cursor even when auto-scroll moves the ScrollView underneath it.
+  const scrollComp     = useSharedValue(0)
+  const isDraggingShared = useSharedValue(false)
+
+  const viewRef = useRef<View | null>(null)
+  const callbackRef = React.useCallback((node: View | null) => {
+    viewRef.current = node
+    onRegisterRef(id, node)
+  }, [id, onRegisterRef])
+
+  // When the scroll view moves during a drag, compensate so the widget stays
+  // at the cursor. We track the delta separately (scrollComp) rather than
+  // mutating ty so the pan gesture's own translationY writes never conflict.
+  useAnimatedReaction(
+    () => scrollY.value,
+    (current, previous) => {
+      if (previous === null || !isDraggingShared.value) return
+      scrollComp.value += current - previous
+    },
+  )
 
   // Jiggle in unison (iOS Home Screen actually does this too — no phase offset).
-  // The loop is symmetric: +deg ↔ -deg with smooth sin easing. We seed with
-  // +deg so the first swing is a clean half-cycle to -deg, never starting from 0.
   useEffect(() => {
     if (editMode && !isDragging) {
       rot.value = JIGGLE_DEG
@@ -65,78 +89,67 @@ export function EditableWidget<Id extends string> ({
   useEffect(() => {
     scale.value = withTiming(isDragging ? 1.05 : 1, { duration: SCALE_DURATION })
     if (!isDragging) {
-      tx.value = withTiming(0, { duration: 200 })
-      ty.value = withTiming(0, { duration: 200 })
+      tx.value         = withTiming(0, { duration: 200 })
+      ty.value         = withTiming(0, { duration: 200 })
+      scrollComp.value = withTiming(0, { duration: 200 })
     }
-  }, [isDragging, scale, tx, ty])
+  }, [isDragging, scale, tx, ty, scrollComp])
 
   // ── Gestures ────────────────────────────────────────────────────────
-  // Strategy: TWO independent gestures, mutually exclusive via `enabled` toggles:
-  //   1. enterEditPress  — long-press in NON-edit mode → enters edit mode.
-  //   2. dragPan         — pan in edit mode → drags & reorders immediately.
-  // No composite/chained gestures (those are flaky on RN-web).
-
   const enterEditPress = Gesture.LongPress()
     .minDuration(LONG_PRESS_MS)
+    .maxDistance(30)   // more forgiving on mobile — finger drifts during hold
     .enabled(!editMode)
     .onStart(() => { runOnJS(onEnterEdit)() })
 
-  // Pan only activates after a 180ms hold — short enough to feel snappy when
-  // intentionally grabbing, long enough that a quick vertical swipe is left
-  // alone and passes through to the underlying ScrollView.
   const dragPan = Gesture.Pan()
     .enabled(editMode)
-    .activateAfterLongPress(60)
-    .onStart(() => { runOnJS(onDragStart)(id) })
+    .activateAfterLongPress(200)  // 200ms lets quick scrolls pass through in edit mode
+    .onStart(() => {
+      scrollComp.value   = 0
+      isDraggingShared.value = true
+      runOnJS(onDragStart)(id)
+    })
     .onUpdate((e) => {
       tx.value = e.translationX
       ty.value = e.translationY
-      runOnJS(onDragMove)(id, e.absoluteY)
+      runOnJS(onDragMove)(id, e.absoluteY, e.absoluteX)
     })
-    .onEnd(() => { runOnJS(onDragEnd)() })
-    .onFinalize(() => { runOnJS(onDragEnd)() })
+    .onEnd(()      => { isDraggingShared.value = false; runOnJS(onDragEnd)() })
+    .onFinalize(() => { isDraggingShared.value = false; runOnJS(onDragEnd)() })
 
-  // Race so only one fires at a time. enterEditPress is enabled outside edit
-  // mode; dragPan is enabled inside it. Cannot both be active.
   const composed = Gesture.Race(enterEditPress, dragPan)
 
   const animStyle = useAnimatedStyle(() => ({
     transform: [
       { translateX: tx.value },
-      { translateY: ty.value },
+      { translateY: ty.value + scrollComp.value },
       { rotate: `${rot.value}deg` },
       { scale: scale.value },
     ],
   }))
 
-  function handleLayout () {
-    requestAnimationFrame(() => {
-      viewRef.current?.measureInWindow((_x: number, top: number, _w: number, height: number) => {
-        if (typeof top === 'number' && typeof height === 'number') {
-          onMeasure(id, top, height)
-        }
-      })
-    })
-  }
-
   return (
-    <GestureDetector gesture={composed}>
-      <Animated.View
-        ref={viewRef}
-        style={[ew.container, isDragging && ew.dragging, animStyle]}
-        onLayout={handleLayout}
-      >
-        {children}
-        {isDropTarget && !isDragging && (
-          <View style={ew.dropTarget} pointerEvents="none" />
-        )}
-        {editMode && (
-          <Pressable onPress={onRemove} hitSlop={10} style={ew.removeBtn} accessibilityLabel="Remove widget">
+    <Animated.View style={[{ position: 'relative', overflow: 'visible' }, animStyle]}>
+      <GestureDetector gesture={composed}>
+        <View
+          ref={callbackRef}
+          style={[ew.container, isDragging && ew.dragging]}
+        >
+          {children}
+          {isDropTarget && !isDragging && (
+            <View style={ew.dropTarget} pointerEvents="none" />
+          )}
+        </View>
+      </GestureDetector>
+      {editMode && (
+        <Pressable onPress={onRemove} style={ew.removeBtnArea} accessibilityLabel="Remove widget">
+          <View style={ew.removeBtnCircle}>
             <View style={ew.removeBar} />
-          </Pressable>
-        )}
-      </Animated.View>
-    </GestureDetector>
+          </View>
+        </Pressable>
+      )}
+    </Animated.View>
   )
 }
 
@@ -158,14 +171,18 @@ const ew = StyleSheet.create({
     borderColor: 'rgba(0,0,0,0.25)',
     backgroundColor: 'rgba(0,0,0,0.05)',
   },
-  removeBtn: {
-    position: 'absolute', top: -8, left: -8,
+  removeBtnArea: {
+    position: 'absolute', top: -10, left: -10,
+    width: 44, height: 44,
+    alignItems: 'center', justifyContent: 'center',
+    zIndex: 10,
+  },
+  removeBtnCircle: {
     width: 24, height: 24, borderRadius: 12,
     backgroundColor: '#FFFFFF',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(0,0,0,0.18)',
     alignItems: 'center', justifyContent: 'center',
-    zIndex: 10,
     ...Platform.select({
       web: { boxShadow: '0 1px 3px rgba(0,0,0,0.20)' } as any,
       ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.20, shadowRadius: 3 },

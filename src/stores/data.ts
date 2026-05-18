@@ -86,6 +86,8 @@ interface DataStore {
   events: EventEntry[]
   tasks: Task[]
   settings: Settings
+  widgetOrder: string[]
+  flippedWidgets: string[]
 
   addSubscription: (item: Omit<Subscription, 'id' | 'createdAt' | 'updatedAt'>) => void
   addApp: (item: Omit<AppEntry, 'id' | 'createdAt' | 'updatedAt'>) => void
@@ -103,6 +105,7 @@ interface DataStore {
   removeTask: (id: string) => void
 
   updateSettings: (patch: Partial<Settings>) => void
+  setWidgetLayout: (order: string[], flipped: string[]) => void
   clearAll: () => void
   importData: (data: Partial<{ subscriptions: Subscription[]; apps: AppEntry[]; events: EventEntry[]; tasks: Task[] }>) => void
 }
@@ -152,6 +155,8 @@ export const useDataStore = create<DataStore>()(
       events: [],
       tasks: [],
       settings: defaultSettings,
+      widgetOrder: [],
+      flippedWidgets: [],
 
       addSubscription: (item) =>
         set((s) => ({ subscriptions: [...s.subscriptions, makeEntry(item) as Subscription] })),
@@ -202,6 +207,9 @@ export const useDataStore = create<DataStore>()(
 
       updateSettings: (patch) =>
         set((s) => ({ settings: { ...s.settings, ...patch } })),
+
+      setWidgetLayout: (order, flipped) =>
+        set(() => ({ widgetOrder: order, flippedWidgets: flipped })),
 
       clearAll: () =>
         set(() => ({ subscriptions: [], apps: [], events: [], tasks: [] })),

@@ -19,12 +19,19 @@ export default function Root({ children }: PropsWithChildren) {
               width: 100%; height: 100%;
               background: #F2F1EE;
               overflow: hidden;
+              touch-action: none;
+              overscroll-behavior: none;
             }
             #root {
               height: 100vh;
+              height: 100dvh;
               display: flex;
               align-items: center;
               justify-content: center;
+            }
+            /* Enable momentum scrolling in RN ScrollView containers on iOS */
+            div {
+              -webkit-overflow-scrolling: touch;
             }
             ::-webkit-scrollbar { display: none; }
             * { scrollbar-width: none; }
