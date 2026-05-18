@@ -8,7 +8,22 @@ import {
   StyleSheet,
   Modal,
   Platform,
+  useWindowDimensions,
 } from 'react-native'
+
+const CAL_DAYS   = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']
+const CAL_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
+
+function calFirstDay(y: number, m: number) { const d = new Date(y, m, 1).getDay(); return d === 0 ? 6 : d - 1 }
+function calDaysIn(y: number, m: number)   { return new Date(y, m + 1, 0).getDate() }
+function fmtDate(y: number, m: number, d: number) {
+  return `${y}-${String(m + 1).padStart(2,'0')}-${String(d).padStart(2,'0')}`
+}
+function displayDate(iso: string) {
+  if (!iso) return 'Select date'
+  const [y, m, d] = iso.split('-').map(Number)
+  return `${String(d).padStart(2,'0')} ${CAL_MONTHS[m - 1]?.slice(0,3)} ${y}`
+}
 import { useTheme } from '../../context/ThemeContext'
 import { theme } from '../../theme'
 import { Button, IconButton } from '../ui/Button'
@@ -47,6 +62,9 @@ interface Props {
 
 export function AddTrackForm({ onSubmit, onCancel }: Props) {
   const { colors } = useTheme()
+  const { width: screenWidth } = useWindowDimensions()
+  const calWidth = Math.min(310, screenWidth - 48)
+  const cellSize = Math.floor((calWidth - theme.sp5 * 2) / 7)
 
   // Form state
   const [step, setStep]               = useState(1)
@@ -65,6 +83,9 @@ export function AddTrackForm({ onSubmit, onCancel }: Props) {
   const [error, setError]             = useState('')
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const [emojiCategory, setEmojiCategory]     = useState('Finance')
+  const [showDatePicker, setShowDatePicker]   = useState(false)
+  const [calYear, setCalYear]   = useState(() => new Date().getFullYear())
+  const [calMonth, setCalMonth] = useState(() => new Date().getMonth())
 
   function goNext() {
     if (!name.trim()) { setError('Name is required'); return }
@@ -177,15 +198,18 @@ export function AddTrackForm({ onSubmit, onCancel }: Props) {
 
           {/* Date */}
           <View>
-            <Text style={[s.label, { color: colors.textMuted }]}>{dateLabel} * (YYYY-MM-DD)</Text>
-            <TextInput
-              style={[s.input, inputStyle]}
-              value={nextDate}
-              onChangeText={v => { setNextDate(v); setError('') }}
-              placeholder="2025-12-31"
-              placeholderTextColor={colors.textFaint}
-              keyboardType="numeric"
-            />
+            <Text style={[s.label, { color: colors.textMuted }]}>{dateLabel} *</Text>
+            <TouchableOpacity
+              style={[s.input, inputStyle, s.dateTouchable]}
+              onPress={() => setShowDatePicker(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Select date"
+            >
+              <Text style={{ color: nextDate ? colors.text : colors.textFaint, fontSize: theme.textSm, fontFamily: theme.fontRegular }}>
+                {displayDate(nextDate)}
+              </Text>
+              <Text style={{ color: colors.textMuted, fontSize: 16 }}>📅</Text>
+            </TouchableOpacity>
           </View>
         </View>
       )}
@@ -301,6 +325,64 @@ export function AddTrackForm({ onSubmit, onCancel }: Props) {
         </View>
       </View>
 
+      {/* ── Date Picker ── */}
+      <Modal visible={showDatePicker} transparent animationType="fade" onRequestClose={() => setShowDatePicker(false)}>
+        <TouchableOpacity style={[s.pickerOverlay, s.calOverlay]} activeOpacity={1} onPress={() => setShowDatePicker(false)}>
+          {/* onStartShouldSetResponder blocks touch from bubbling to the overlay on native */}
+          <View onStartShouldSetResponder={() => true} style={[s.calSheet, { backgroundColor: colors.surface, width: calWidth }, theme.shadowMd as any]}>
+            {/* Month nav */}
+            <View style={s.calHeader}>
+              <TouchableOpacity
+                onPress={() => { if (calMonth === 0) { setCalMonth(11); setCalYear(y => y - 1) } else setCalMonth(m => m - 1) }}
+                style={[s.calNavBtn, { backgroundColor: colors.surfaceEl }]}
+              >
+                <Text style={{ color: colors.text, fontSize: 18, lineHeight: 20 }}>‹</Text>
+              </TouchableOpacity>
+              <Text style={[s.calMonthLabel, { color: colors.text }]}>{CAL_MONTHS[calMonth]} {calYear}</Text>
+              <TouchableOpacity
+                onPress={() => { if (calMonth === 11) { setCalMonth(0); setCalYear(y => y + 1) } else setCalMonth(m => m + 1) }}
+                style={[s.calNavBtn, { backgroundColor: colors.surfaceEl }]}
+              >
+                <Text style={{ color: colors.text, fontSize: 18, lineHeight: 20 }}>›</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Day headers */}
+            <View style={s.calDayRow}>
+              {CAL_DAYS.map(d => (
+                <Text key={d} style={[s.calDayHeader, { color: colors.textMuted, width: cellSize }]}>{d}</Text>
+              ))}
+            </View>
+
+            {/* Day grid */}
+            <View style={s.calGrid}>
+              {Array.from({ length: calFirstDay(calYear, calMonth) }).map((_, i) => (
+                <View key={`e${i}`} style={{ width: cellSize, height: cellSize }} />
+              ))}
+              {Array.from({ length: calDaysIn(calYear, calMonth) }, (_, i) => i + 1).map(day => {
+                const iso = fmtDate(calYear, calMonth, day)
+                const selected = nextDate === iso
+                const today = fmtDate(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()) === iso
+                return (
+                  <TouchableOpacity
+                    key={day}
+                    style={[{ width: cellSize, height: cellSize, alignItems: 'center', justifyContent: 'center' },
+                      selected && { backgroundColor: colors.accent, borderRadius: theme.radiusMd }]}
+                    onPress={() => { setNextDate(iso); setError(''); setShowDatePicker(false) }}
+                  >
+                    <Text style={[
+                      s.calDayText,
+                      { color: selected ? colors.accentFg : today ? colors.accent : colors.text },
+                      today && !selected && { fontFamily: theme.fontBold },
+                    ]}>{day}</Text>
+                  </TouchableOpacity>
+                )
+              })}
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
       {/* ── Emoji Picker ── */}
       <Modal visible={showEmojiPicker} transparent animationType="slide" onRequestClose={() => setShowEmojiPicker(false)}>
         <TouchableOpacity style={s.pickerOverlay} activeOpacity={1} onPress={() => setShowEmojiPicker(false)}>
@@ -365,6 +447,17 @@ const s = StyleSheet.create({
     fontFamily: theme.fontRegular,
   },
   noteInput: { minHeight: 72, paddingTop: theme.sp3 },
+  dateTouchable: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+
+  calSheet:      { borderRadius: theme.radiusXl, padding: theme.sp5, alignSelf: 'center' },
+  calHeader:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: theme.sp3 },
+  calMonthLabel: { fontSize: theme.textBase, fontFamily: theme.fontBold },
+  calNavBtn:     { width: 30, height: 30, borderRadius: theme.radiusMd, alignItems: 'center', justifyContent: 'center' },
+  calDayRow:     { flexDirection: 'row', marginBottom: 4 },
+  calDayHeader:  { textAlign: 'center', fontSize: 10, fontFamily: theme.fontBold, textTransform: 'uppercase', letterSpacing: 0.5 },
+  calGrid:       { flexDirection: 'row', flexWrap: 'wrap' },
+  calCell:       { alignItems: 'center', justifyContent: 'center' },
+  calDayText:    { fontSize: 13, fontFamily: theme.fontRegular },
   colorRow:   { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   colorSwatch:{ width: 28, height: 28, borderRadius: 8, borderWidth: 2 },
 
@@ -380,6 +473,7 @@ const s = StyleSheet.create({
   actions: { flexDirection: 'row', gap: theme.sp3, marginTop: theme.sp6 },
 
   pickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  calOverlay:    { justifyContent: 'center', alignItems: 'center', ...(Platform.OS === 'web' ? { backdropFilter: 'blur(12px)', backgroundColor: 'rgba(0,0,0,0.25)' } as any : {}) },
   pickerSheet:   { borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: theme.sp5, paddingBottom: 36 },
   pickerHandle:  { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: theme.sp4 },
   pickerTitle:   { fontSize: theme.textBase, fontFamily: theme.fontBold, marginBottom: theme.sp4, textAlign: 'center' },

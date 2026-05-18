@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useDataStore } from '../../src/stores/data'
 import { useAuthStore } from '../../src/stores/auth'
 import { useToastStore } from '../../src/stores/toasts'
+import { useLoggerStore, logger } from '../../src/stores/logger'
 import { useTheme } from '../../src/context/ThemeContext'
 import { theme } from '../../src/theme'
 import { Modal as TrackModal } from '../../src/components/ui/Modal'
@@ -45,6 +46,10 @@ export default function Settings() {
   const [newCategory, setNewCategory] = useState('')
   const devMode = store.settings.devMode
   const customCategories: string[] = store.settings.customCategories ?? []
+  const [showExportModal, setShowExportModal] = useState(false)
+  const [exportSel, setExportSel] = useState({ subscriptions: true, apps: true, events: true, tasks: true, settings: true, logs: false })
+  const logEntries = useLoggerStore(s => s.entries)
+  const clearLogs = useLoggerStore(s => s.clear)
 
   function handleAddCategory() {
     const cat = newCategory.trim()
@@ -114,6 +119,28 @@ export default function Settings() {
     }
   }
 
+  async function handleSelectiveExport() {
+    const data: Record<string, unknown> = {}
+    if (exportSel.subscriptions) data.subscriptions = store.subscriptions
+    if (exportSel.apps) data.apps = store.apps
+    if (exportSel.events) data.events = store.events
+    if (exportSel.tasks) data.tasks = store.tasks
+    if (exportSel.settings) data.settings = store.settings
+    if (exportSel.logs) data.logs = logEntries
+    const json = JSON.stringify(data, null, 2)
+    setShowExportModal(false)
+    if (Platform.OS === 'web') {
+      try {
+        await (navigator as any).clipboard.writeText(json)
+        toast.push('Data copied to clipboard', 'success')
+      } catch {
+        toast.push('Could not copy — check browser permissions', 'info')
+      }
+    } else {
+      await Share.share({ message: json })
+    }
+  }
+
   function handleImport() {
     try {
       const data = JSON.parse(importText)
@@ -122,8 +149,10 @@ export default function Settings() {
       setImportText('')
       setImportError('')
       toast.push('Data imported successfully', 'success')
-    } catch {
-      setImportError('Invalid JSON. Please check the format.')
+    } catch (err) {
+      const msg = 'Invalid JSON. Please check the format.'
+      setImportError(msg)
+      logger.error(msg, String(err))
     }
   }
 
@@ -265,6 +294,14 @@ export default function Settings() {
           <Text style={[s.chevron, { color: colors.textMuted }]}>JSON ›</Text>
         </TouchableOpacity>
         <View style={[s.divider, { backgroundColor: colors.border }]} />
+        <TouchableOpacity style={s.row} onPress={() => setShowExportModal(true)} activeOpacity={0.6}>
+          <View>
+            <Text style={[s.rowLabel, { color: colors.text }]}>Export (select data)</Text>
+            <Text style={[s.rowSub, { color: colors.textMuted }]}>escolhe o que exportar</Text>
+          </View>
+          <Text style={[s.chevron, { color: colors.textMuted }]}>›</Text>
+        </TouchableOpacity>
+        <View style={[s.divider, { backgroundColor: colors.border }]} />
         <TouchableOpacity style={s.row} onPress={() => setShowImport(!showImport)} activeOpacity={0.6}>
           <Text style={[s.rowLabel, { color: colors.text }]}>Import Data</Text>
           <Text style={[s.chevron, { color: colors.textMuted }]}>Paste ›</Text>
@@ -299,6 +336,38 @@ export default function Settings() {
             </View>
           </View>
         )}
+      </View>
+
+      {/* ── Logs ── */}
+      <Text style={[s.sectionLabel, { color: colors.textMuted }]}>logs</Text>
+      <View style={[s.card, { backgroundColor: colors.surface }]}>
+        <View style={[s.row, { paddingVertical: theme.sp3 }]}>
+          <Text style={[s.rowLabel, { color: colors.text }]}>Error / Warning Log</Text>
+          {logEntries.length > 0 && (
+            <TouchableOpacity onPress={clearLogs} activeOpacity={0.6}>
+              <Text style={[s.chevron, { color: colors.danger }]}>Clear</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+        <View style={{ paddingHorizontal: theme.sp5, paddingBottom: theme.sp4, gap: 6 }}>
+          {logEntries.length === 0 ? (
+            <Text style={[s.rowSub, { color: colors.textFaint, fontStyle: 'italic' }]}>Nenhum registo</Text>
+          ) : logEntries.slice(0, 20).map(entry => (
+            <View key={entry.id} style={[s.logEntry, { backgroundColor: colors.surfaceEl }]}>
+              <View style={[s.logBadge, {
+                backgroundColor: entry.level === 'error' ? colors.danger : entry.level === 'warn' ? '#F2C200' : colors.border,
+              }]} />
+              <View style={{ flex: 1 }}>
+                <Text style={[s.logMsg, { color: colors.text }]} numberOfLines={2}>{entry.message}</Text>
+                {entry.context ? <Text style={[s.logCtx, { color: colors.textMuted }]} numberOfLines={1}>{entry.context}</Text> : null}
+              </View>
+              <Text style={[s.logTime, { color: colors.textFaint }]}>{entry.timestamp.slice(11, 19)}</Text>
+            </View>
+          ))}
+          {logEntries.length > 20 && (
+            <Text style={[s.rowSub, { color: colors.textFaint }]}>+{logEntries.length - 20} mais</Text>
+          )}
+        </View>
       </View>
 
       {/* ── About ── */}
@@ -411,6 +480,44 @@ export default function Settings() {
               )}
             </View>
           ))}
+        </View>
+      </TrackModal>
+
+      {/* Selective export modal */}
+      <TrackModal open={showExportModal} title="Export Data" onClose={() => setShowExportModal(false)}>
+        <View style={{ gap: 14 }}>
+          <Text style={{ fontSize: 13, fontFamily: theme.fontRegular, color: colors.textMuted, lineHeight: 20 }}>
+            Seleciona os dados a exportar:
+          </Text>
+          {([
+            ['subscriptions', 'Subscriptions'],
+            ['apps', 'Apps'],
+            ['events', 'Events'],
+            ['tasks', 'Tasks'],
+            ['settings', 'Settings'],
+            ['logs', 'Error Log'],
+          ] as [keyof typeof exportSel, string][]).map(([key, label]) => (
+            <TouchableOpacity
+              key={key}
+              style={s.checkRow}
+              onPress={() => setExportSel(p => ({ ...p, [key]: !p[key] }))}
+              activeOpacity={0.6}
+            >
+              <View style={[s.checkbox, {
+                borderColor: exportSel[key] ? colors.accent : colors.border,
+                backgroundColor: exportSel[key] ? colors.accent : 'transparent',
+              }]}>
+                {exportSel[key] && <Text style={{ color: colors.accentFg, fontSize: 11, fontFamily: theme.fontBold }}>✓</Text>}
+              </View>
+              <Text style={[s.rowLabel, { color: colors.text }]}>{label}</Text>
+            </TouchableOpacity>
+          ))}
+          <View style={{ flexDirection: 'row', gap: 12, marginTop: 4 }}>
+            <Button label="Cancel" variant="secondary" size="md" onPress={() => setShowExportModal(false)} />
+            <View style={{ flex: 1 }}>
+              <Button label="Export" variant="primary" size="md" onPress={handleSelectiveExport} fullWidth />
+            </View>
+          </View>
         </View>
       </TrackModal>
 
@@ -584,6 +691,17 @@ const s = StyleSheet.create({
     fontSize: theme.textSm,
     fontFamily: theme.fontBold,
   },
+
+  /* Selective export */
+  checkRow: { flexDirection: 'row', alignItems: 'center', gap: theme.sp3 },
+  checkbox: { width: 20, height: 20, borderRadius: 5, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+
+  /* Log entries */
+  logEntry: { flexDirection: 'row', alignItems: 'flex-start', borderRadius: theme.radiusSm, padding: 8, gap: 8 },
+  logBadge: { width: 3, borderRadius: 2, alignSelf: 'stretch', minHeight: 16 },
+  logMsg: { fontSize: 12, fontFamily: theme.fontRegular, lineHeight: 17 },
+  logCtx: { fontSize: 11, fontFamily: theme.fontMono, marginTop: 2, opacity: 0.7 },
+  logTime: { fontSize: 10, fontFamily: theme.fontMono },
 
   /* Footer */
   footer: {

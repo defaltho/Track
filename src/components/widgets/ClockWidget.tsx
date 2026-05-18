@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useMemo } from 'react'
 import { View, StyleSheet } from 'react-native'
 import Svg, { Line, Circle, Text as SvgText } from 'react-native-svg'
 import { theme } from '../../theme'
@@ -48,22 +48,21 @@ export function ClockWidget({ tag = 'now' }: { tag?: string }) {
   const secEnd    = polar(secondAngle, R * 0.80)
   const secTail   = polar(secondAngle + 180, R * 0.18)
 
-  // 60 ticks — every 5th is a long/bold hour tick
-  const ticks = Array.from({ length: 60 }, (_, i) => {
+  // Static geometry — computed once, never changes
+  const ticks = useMemo(() => Array.from({ length: 60 }, (_, i) => {
     const angle = (i / 60) * 360
     const isHour = i % 5 === 0
     const outer = polar(angle, R)
     const inner = polar(angle, R - (isHour ? 10 : 5))
     return { ...inner, x2: outer.x, y2: outer.y, isHour }
-  })
+  }), [])
 
-  // 12 numerals
-  const numerals = Array.from({ length: 12 }, (_, i) => {
+  const numerals = useMemo(() => Array.from({ length: 12 }, (_, i) => {
     const n = i + 1
     const angle = (n / 12) * 360
     const p = polar(angle, R - 22)
     return { x: p.x, y: p.y, label: String(n) }
-  })
+  }), [])
 
   return (
     <Widget tag={tag} size="square">

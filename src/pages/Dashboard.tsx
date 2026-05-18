@@ -8,7 +8,6 @@ import Animated, {
   FadeInRight, ZoomIn, LinearTransition,
   useSharedValue, useAnimatedStyle, withSpring,
 } from 'react-native-reanimated'
-import { TapGestureHandler, State as GestureState } from 'react-native-gesture-handler'
 import Svg, { Circle as SvgCircle } from 'react-native-svg'
 import { format, differenceInCalendarDays, parseISO, subDays, eachDayOfInterval, getMonth } from 'date-fns'
 import { useDataStore } from '../stores/data'
@@ -35,7 +34,6 @@ import { ScoreWidget }          from '../components/widgets/ScoreWidget'
 import { TopExpensesWidget }    from '../components/widgets/TopExpensesWidget'
 import { buildForecast }        from '../utils/forecast'
 import { AddTrackForm } from '../components/forms/AddTrackForm'
-import { AddTaskForm } from '../components/forms/AddTaskForm'
 import { theme, CURRENCY_SYMBOL, Colors } from '../theme'
 
 // ── Press / hover wrapper ──────────────────────────────────────────────
@@ -114,9 +112,10 @@ function RingBadge({ value, max = 20, size = 56, colors }: { value: number; max?
 }
 
 // ── Activity heatmap ───────────────────────────────────────────────────
-const CELL = 9, GAP = 2, WEEKS = 26
-function buildHeatmap(subs: any[], events: any[]) {
-  const today = new Date(), start = subDays(today, WEEKS * 7 - 1)
+const HM_GAP = 3, HM_CELL_TARGET = 11, HM_MAX_WEEKS = 26
+
+function buildHeatmap(subs: any[], events: any[], weeks: number) {
+  const today = new Date(), start = subDays(today, weeks * 7 - 1)
   const map: Record<string, number> = {}
   for (const s of subs) if (s.nextChargeDate) map[s.nextChargeDate] = (map[s.nextChargeDate] || 0) + 1
   for (const e of events) if (e.date) map[e.date] = (map[e.date] || 0) + 1
@@ -131,7 +130,18 @@ function buildHeatmap(subs: any[], events: any[]) {
 
 function ActivityHeatmap({ subs, events, colors }: { subs: any[]; events: any[]; colors: Colors }) {
   const isDark = colors.bg !== '#F2F1EE'
-  const cols = useMemo(() => buildHeatmap(subs, events), [subs, events])
+  const [containerW, setContainerW] = useState(0)
+
+  // Fit as many weeks as possible at target cell size; fill remaining width
+  const weeksToShow = containerW > 0
+    ? Math.min(HM_MAX_WEEKS, Math.floor((containerW + HM_GAP) / (HM_CELL_TARGET + HM_GAP)))
+    : HM_MAX_WEEKS
+  const cellSize = containerW > 0
+    ? Math.floor((containerW + HM_GAP) / weeksToShow) - HM_GAP
+    : HM_CELL_TARGET
+  const radius = Math.max(2, Math.round(cellSize * 0.28))
+
+  const cols = useMemo(() => buildHeatmap(subs, events, weeksToShow), [subs, events, weeksToShow])
   const monthLabels = useMemo(() => {
     const labels: { col: number; label: string }[] = []; let last = -1
     cols.forEach((week, ci) => {
@@ -141,31 +151,31 @@ function ActivityHeatmap({ subs, events, colors }: { subs: any[]; events: any[];
     })
     return labels
   }, [cols])
-  const totalW = cols.length * (CELL + GAP) - GAP
+
   const dotColor = (count: number) => isDark
     ? (!count ? 'rgba(255,255,255,0.07)' : count===1 ? 'rgba(255,255,255,0.28)' : count===2 ? colors.accentRed+'88' : colors.accentRed)
     : (!count ? 'rgba(0,0,0,0.07)' : count===1 ? 'rgba(0,0,0,0.28)' : count===2 ? 'rgba(0,0,0,0.55)' : '#111')
+
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-      <View>
-        <View style={{ height: 16, width: totalW, marginBottom: 5 }}>
-          {monthLabels.map((ml, i) => (
-            <Text key={i} style={[hm.label, { position:'absolute', left: ml.col*(CELL+GAP), color: isDark?'rgba(255,255,255,0.3)':'rgba(0,0,0,0.35)' }]}>{ml.label}</Text>
-          ))}
-        </View>
-        <View style={{ flexDirection:'row', gap:GAP }}>
-          {cols.map((week, ci) => (
-            <View key={ci} style={{ gap:GAP }}>
-              {week.map((cell, ri) => <View key={ri} style={[hm.cell, { backgroundColor: dotColor(cell.count) }]} />)}
-            </View>
-          ))}
-        </View>
+    <View onLayout={e => setContainerW(e.nativeEvent.layout.width)}>
+      <View style={{ height: 16, marginBottom: 5 }}>
+        {monthLabels.map((ml, i) => (
+          <Text key={i} style={[hm.label, { position:'absolute', left: ml.col*(cellSize+HM_GAP), color: isDark?'rgba(255,255,255,0.3)':'rgba(0,0,0,0.35)' }]}>{ml.label}</Text>
+        ))}
       </View>
-    </ScrollView>
+      <View style={{ flexDirection:'row', gap:HM_GAP }}>
+        {cols.map((week, ci) => (
+          <View key={ci} style={{ gap:HM_GAP }}>
+            {week.map((cell, ri) => (
+              <View key={ri} style={{ width:cellSize, height:cellSize, borderRadius:radius, backgroundColor:dotColor(cell.count) }} />
+            ))}
+          </View>
+        ))}
+      </View>
+    </View>
   )
 }
 const hm = StyleSheet.create({
-  cell: { width: CELL, height: CELL, borderRadius: 2 },
   label: { fontSize: 9, fontFamily: theme.fontMono, letterSpacing: 0.3 },
 })
 
@@ -452,22 +462,20 @@ export function Dashboard() {
   }, [activeSubs, store.events, now])
 
   const [showAddTrack, setShowAddTrack] = useState(false)
-  const [showAddTask, setShowAddTask]   = useState(false)
   const [confirm, setConfirm]           = useState<{ kind: string; id: string; name: string } | null>(null)
 
   // ── Widget ordering ────────────────────────────────────────────────
-  const [editMode, setEditMode] = useState(false)
-  const [draggingId, setDraggingId] = useState<WKey | null>(null)
-  // Per-widget measured rectangle in CONTENT-relative coordinates (window-Y at
-  // measure time + scrollY at measure time). Stable across scroll.
-  const layoutsRef = useRef<Map<WKey, { top: number; height: number }>>(new Map())
-  // Current page scroll offset, tracked from ScrollView.onScroll.
-  const scrollYRef = useRef(0)
-  // Last reported drag cursor in window coordinates (viewport-Y). Updated on
-  // every dragMove; consumed by the auto-scroll RAF loop.
+  const [editMode, setEditMode]       = useState(false)
+  const [draggingId, setDraggingId]   = useState<WKey | null>(null)
+  const [dropTargetId, setDropTargetId] = useState<WKey | null>(null)
+  // Refs mirror state so gesture callbacks (useCallback with [] deps) always
+  // see the current value without needing to re-create the callback.
+  const draggingIdRef   = useRef<WKey | null>(null)
+  const dropTargetIdRef = useRef<WKey | null>(null)
+  const layoutsRef  = useRef<Map<WKey, { top: number; height: number }>>(new Map())
+  const scrollYRef  = useRef(0)
   const cursorAbsYRef = useRef(0)
-  // Ref to the dashboard ScrollView so auto-scroll can call scrollTo.
-  const scrollRef = useRef<ScrollView>(null)
+  const scrollRef   = useRef<ScrollView>(null)
   const [order, setOrder]       = useState<WKey[]>([
     'active', 'spend',              // squares row
     'monthGoal', 'clock',           // squares row (ring goal + analog clock)
@@ -490,32 +498,45 @@ export function Dashboard() {
   }, [])
 
   const handleDragStart = React.useCallback((id: WKey) => {
+    draggingIdRef.current = id
     setDraggingId(id)
   }, [])
 
   const handleDragMove = React.useCallback((id: WKey, absoluteY: number) => {
     cursorAbsYRef.current = absoluteY
-    // Convert window-Y to content-Y so the comparison against stored layouts
-    // (also content-Y) remains correct as the page scrolls during the drag.
     const contentY = absoluteY + scrollYRef.current
-    setOrder(prev => {
-      const target = computeDropIndex(layoutsRef.current, contentY, id, prev)
-      const fromIdx = prev.indexOf(id)
-      if (fromIdx === -1 || target === -1 || fromIdx === target) return prev
-      const out = [...prev]
-      out.splice(fromIdx, 1)
-      out.splice(target, 0, id)
-      return out
-    })
+    let nearest: WKey | null = null
+    let minDist = Infinity
+    for (const [k, rect] of layoutsRef.current) {
+      if (k === id) continue
+      const dist = Math.abs((rect.top + rect.height / 2) - contentY)
+      if (dist < minDist) { minDist = dist; nearest = k as WKey }
+    }
+    if (nearest !== dropTargetIdRef.current) {
+      dropTargetIdRef.current = nearest
+      setDropTargetId(nearest)
+    }
   }, [])
 
   const handleDragEnd = React.useCallback(() => {
+    const dragId   = draggingIdRef.current
+    const targetId = dropTargetIdRef.current
+    if (dragId && targetId && dragId !== targetId) {
+      setOrder(prev => {
+        const out = [...prev]
+        const ai = out.indexOf(dragId)
+        const bi = out.indexOf(targetId)
+        if (ai !== -1 && bi !== -1) { [out[ai], out[bi]] = [out[bi], out[ai]] }
+        return out
+      })
+    }
+    draggingIdRef.current   = null
+    dropTargetIdRef.current = null
     setDraggingId(null)
+    setDropTargetId(null)
   }, [])
 
   const handleMeasure = React.useCallback((id: WKey, top: number, height: number) => {
-    // Store content-relative top (window-Y + current scroll offset). Invariant
-    // across subsequent scrolls.
     layoutsRef.current.set(id, { top: top + scrollYRef.current, height })
   }, [])
 
@@ -555,7 +576,6 @@ export function Dashboard() {
     else if (data.type === 'event') { store.addEvent(data); toast.push('Event added', 'success') }
     setShowAddTrack(false)
   }
-  function handleAddTask(data: any) { store.addTask(data); toast.push('Task added', 'success'); setShowAddTask(false) }
   function confirmRemove() {
     if (!confirm) return
     if (confirm.kind === 'sub') { store.removeSubscription(confirm.id); toast.push(`Removed ${confirm.name}`) }
@@ -780,26 +800,20 @@ export function Dashboard() {
         layout={LinearTransition.springify().damping(22).stiffness(220)}
         style={fillStyle}
       >
-        <MotiView
-          from={{ opacity:0, translateY:16 }}
-          animate={{ opacity:1, translateY:0 }}
-          transition={{ type:'spring', damping:20, stiffness:200, delay: WIDGET_DELAY[id] }}
-          style={fillStyle}
+        <EditableWidget
+          id={id}
+          editMode={editMode}
+          isDragging={draggingId === id}
+          isDropTarget={dropTargetId === id}
+          onRemove={() => setOrder(prev => prev.filter(k => k !== id))}
+          onEnterEdit={handleEnterEdit}
+          onDragStart={handleDragStart}
+          onDragMove={handleDragMove}
+          onDragEnd={handleDragEnd}
+          onMeasure={handleMeasure}
         >
-          <EditableWidget
-            id={id}
-            editMode={editMode}
-            isDragging={draggingId === id}
-            onRemove={() => setOrder(prev => prev.filter(k => k !== id))}
-            onEnterEdit={handleEnterEdit}
-            onDragStart={handleDragStart}
-            onDragMove={handleDragMove}
-            onDragEnd={handleDragEnd}
-            onMeasure={handleMeasure}
-          >
-            {content}
-          </EditableWidget>
-        </MotiView>
+          {content}
+        </EditableWidget>
       </Animated.View>
     )
   }
@@ -852,15 +866,6 @@ export function Dashboard() {
     <MotiView from={{ opacity:0, translateY:-8 }} animate={{ opacity:1, translateY:0 }} transition={{ type:'spring', damping:20, stiffness:200 }} style={s.header}>
       <Text style={[s.pageTitle, { color:colors.text }]}>Track</Text>
       <View style={s.headerBtns}>
-        {!editMode && (
-          <IconButton variant="primary" size="md" onPress={() => setShowAddTask(true)} accessibilityLabel="Add task">
-            <View style={{ gap:3, alignItems:'center' }}>
-              <View style={{ width:14, height:1.5, backgroundColor:primaryFg, borderRadius:1 }} />
-              <View style={{ width:10, height:1.5, backgroundColor:primaryFg, borderRadius:1 }} />
-              <View style={{ width:14, height:1.5, backgroundColor:primaryFg, borderRadius:1 }} />
-            </View>
-          </IconButton>
-        )}
         {editMode ? (
           <IconButton variant="primary" size="md" onPress={() => setEditMode(false)} accessibilityLabel="Done editing layout">
             <Text style={{ color: primaryFg, fontSize: 13, fontFamily: theme.fontBold, paddingHorizontal: 6 }}>Done</Text>
@@ -891,10 +896,7 @@ export function Dashboard() {
       <Modal open={showAddTrack} title="Add Track" onClose={() => setShowAddTrack(false)}>
         <AddTrackForm onSubmit={handleAddTrack} onCancel={() => setShowAddTrack(false)} />
       </Modal>
-      <Modal open={showAddTask} title="Add Task" onClose={() => setShowAddTask(false)}>
-        <AddTaskForm onSubmit={handleAddTask} onCancel={() => setShowAddTask(false)} />
-      </Modal>
-      <Modal open={confirm !== null} title="Remove?" onClose={() => setConfirm(null)}>
+<Modal open={confirm !== null} title="Remove?" onClose={() => setConfirm(null)}>
         {confirm && (
           <View>
             <Text style={[s.confirmText, { color:colors.text }]}>
@@ -916,25 +918,31 @@ export function Dashboard() {
 
   // Unified — same widgets on mobile and web (centered column on desktop)
   return (
-    <ScrollView
-      ref={scrollRef}
-      style={[s.page, { backgroundColor:colors.bg }]}
-      contentContainerStyle={[s.content, isDesktop && s.contentDesktop]}
-      showsVerticalScrollIndicator={false}
-      onScroll={(e) => { scrollYRef.current = e.nativeEvent.contentOffset.y }}
-      scrollEventThrottle={16}
-    >
-      <TapGestureHandler
-        enabled={editMode}
-        onHandlerStateChange={(e) => {
-          if (e.nativeEvent.state === GestureState.ACTIVE) {
-            setEditMode(false)
-          }
-        }}
+    <View style={[s.page, { backgroundColor:colors.bg }]}>
+      {/* Header is outside the ScrollView so it never shifts position */}
+      <View style={[s.headerWrapper, isDesktop && s.headerWrapperDesktop]}>
+        {header}
+      </View>
+
+      <ScrollView
+        ref={scrollRef}
+        style={{ flex: 1 }}
+        contentContainerStyle={[s.content, isDesktop && s.contentDesktop]}
+        showsVerticalScrollIndicator={false}
+        onScroll={(e) => { scrollYRef.current = e.nativeEvent.contentOffset.y }}
+        scrollEventThrottle={16}
       >
-        <Animated.View>
+        <Pressable
+          onPress={editMode ? () => setEditMode(false) : undefined}
+          style={{ flex: 1 }}
+        >
           <View style={isDesktop ? s.widgetColumn : undefined}>
-            {header}
+            {order.length === 0 && !editMode && (
+              <View style={s.emptyState}>
+                <Text style={[s.emptyTitle, { color: colors.textMuted }]}>no widgets</Text>
+                <Text style={[s.emptySub, { color: colors.textFaint }]}>press ⊞ to add widgets back</Text>
+              </View>
+            )}
             {renderAll()}
             <HiddenWidgetTray
               visible={editMode}
@@ -944,25 +952,28 @@ export function Dashboard() {
               onAdd={(id) => setOrder(prev => [...prev, id as WKey])}
             />
           </View>
-        </Animated.View>
-      </TapGestureHandler>
-      {modals}
-    </ScrollView>
+        </Pressable>
+        {modals}
+      </ScrollView>
+    </View>
   )
 }
 
 const s = StyleSheet.create({
   page: { flex: 1 },
-  content: { padding:theme.sp4, gap:theme.sp4, paddingBottom:130 },
+  // Header wrapper — always visible above the scroll area
+  headerWrapper: { paddingHorizontal: theme.sp4, paddingTop: theme.sp4, paddingBottom: theme.sp3 },
+  headerWrapperDesktop: { paddingHorizontal: 32, paddingTop: 40, paddingBottom: theme.sp3 },
+  content: { padding:theme.sp4, paddingTop: 0, gap:theme.sp4, paddingBottom:130 },
   // Same widget grid on web — centered, single column matching mobile width
-  contentDesktop: { paddingHorizontal: 32, paddingVertical: 40, paddingBottom: 80, alignItems: 'center' },
+  contentDesktop: { paddingHorizontal: 32, paddingTop: 0, paddingBottom: 80, alignItems: 'center' },
   widgetColumn: { width: '100%', maxWidth: 480, gap: theme.sp4 },
-  // Header aligns flush with widgets (no inner padding) and relies on the
-  // parent column's `gap: sp4` for breathing room below — keeps the rhythm
-  // uniform between header→first-widget and between adjacent widgets.
-  header: { flexDirection:'row', justifyContent:'space-between', alignItems:'center' },
+  header: { flexDirection:'row', justifyContent:'space-between', alignItems:'center', width:'100%' },
   pageTitle: { fontSize:34, fontFamily:theme.fontBlack, letterSpacing:-1 },
   headerBtns: { flexDirection:'row', gap:theme.sp2 },
+  emptyState: { flex:1, alignItems:'center', justifyContent:'center', paddingTop: 80, gap: theme.sp2 },
+  emptyTitle: { fontSize: theme.textLg, fontFamily: theme.fontMono, letterSpacing: 1 },
+  emptySub:   { fontSize: theme.textSm, fontFamily: theme.fontRegular },
   iconBtn: { width:38, height:38, borderRadius:19, alignItems:'center', justifyContent:'center', gap:3 },
   iconBtnPlus: { fontSize:22, fontFamily:theme.fontLight, lineHeight:26 },
   // Centered hero content area inside a Widget (for metric widgets) —

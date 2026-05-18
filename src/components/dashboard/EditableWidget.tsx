@@ -16,6 +16,7 @@ interface Props<Id extends string> {
   id:           Id
   editMode:     boolean
   isDragging:   boolean
+  isDropTarget?: boolean
   onRemove:     () => void
   /** Long-press to enter edit mode (only fires when editMode === false). */
   onEnterEdit:  () => void
@@ -33,7 +34,7 @@ const STOP_DURATION  = 140
 const SCALE_DURATION = 140
 
 export function EditableWidget<Id extends string> ({
-  id, editMode, isDragging, onRemove, onEnterEdit, onDragStart, onDragMove, onDragEnd, onMeasure, children,
+  id, editMode, isDragging, isDropTarget, onRemove, onEnterEdit, onDragStart, onDragMove, onDragEnd, onMeasure, children,
 }: Props<Id>) {
   const rot   = useSharedValue(0)
   const scale = useSharedValue(1)
@@ -85,7 +86,7 @@ export function EditableWidget<Id extends string> ({
   // alone and passes through to the underlying ScrollView.
   const dragPan = Gesture.Pan()
     .enabled(editMode)
-    .activateAfterLongPress(180)
+    .activateAfterLongPress(60)
     .onStart(() => { runOnJS(onDragStart)(id) })
     .onUpdate((e) => {
       tx.value = e.translationX
@@ -126,6 +127,9 @@ export function EditableWidget<Id extends string> ({
         onLayout={handleLayout}
       >
         {children}
+        {isDropTarget && !isDragging && (
+          <View style={ew.dropTarget} pointerEvents="none" />
+        )}
         {editMode && (
           <Pressable onPress={onRemove} hitSlop={10} style={ew.removeBtn} accessibilityLabel="Remove widget">
             <View style={ew.removeBar} />
@@ -146,6 +150,13 @@ const ew = StyleSheet.create({
       android: { elevation: 16 },
       default: {},
     }),
+  },
+  dropTarget: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    borderRadius: 22,
+    borderWidth: 2,
+    borderColor: 'rgba(0,0,0,0.25)',
+    backgroundColor: 'rgba(0,0,0,0.05)',
   },
   removeBtn: {
     position: 'absolute', top: -8, left: -8,
