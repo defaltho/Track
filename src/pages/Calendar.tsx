@@ -21,7 +21,7 @@ const WEEKDAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']
 
 // ── Day cell with hover + press scale ─────────────────────────────────
 function DayCell({
-  day, isCurrentMonth, isToday, isPast, isPinned, emojis, dotColors, hasActivity, monthTag, onPress, onHoverIn, onHoverOut, colors,
+  day, isCurrentMonth, isToday, isPast, isPinned, emojis, dotColors, hasActivity, isOverdue, monthTag, onPress, onHoverIn, onHoverOut, colors,
 }: {
   day: Date
   isCurrentMonth: boolean
@@ -31,6 +31,7 @@ function DayCell({
   emojis: string[]
   dotColors: string[]
   hasActivity: boolean
+  isOverdue: boolean
   monthTag: string | null
   onPress: () => void
   onHoverIn?: () => void
@@ -42,17 +43,20 @@ function DayCell({
   const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }))
   const isWeb = Platform.OS === 'web'
 
-  // Tone: out-of-month is the dimmest, past is dim, current is normal
+  // Tone: out-of-month is the dimmest, past is dim, current is normal.
+  // Overdue cells get a faint red tint so they stand out from generic past days.
   const cellBg =
     !isCurrentMonth ? 'transparent' :
+    isOverdue ? colors.accentRed + '14' :
     isPast ? colors.surfaceEl :
     colors.surfaceEl
   const numColor =
+    isOverdue ? colors.accentRed :
     isToday ? colors.text :
     !isCurrentMonth ? colors.textFaint :
     isPast ? colors.textMuted :
     colors.text
-  const numWeight = isToday ? 'Roboto_700Bold' : 'Roboto_500Medium'
+  const numWeight = (isToday || isOverdue) ? 'Roboto_700Bold' : 'Roboto_500Medium'
 
   return (
     <Pressable
@@ -68,17 +72,20 @@ function DayCell({
           cs.card,
           {
             backgroundColor: cellBg,
-            borderColor: !isCurrentMonth ? 'transparent' : (isPinned ? colors.text : colors.border),
-            borderWidth: isPinned ? 1.5 : StyleSheet.hairlineWidth,
+            borderColor:
+              !isCurrentMonth ? 'transparent' :
+              isOverdue ? colors.accentRed + '55' :
+              (isPinned ? colors.text : colors.border),
+            borderWidth: (isPinned || isOverdue) ? 1.5 : StyleSheet.hairlineWidth,
             opacity: !isCurrentMonth ? 0.45 : 1,
           },
           hovered && isWeb && isCurrentMonth && { backgroundColor: colors.surfaceHigh },
           animStyle,
         ]}
       >
-        {/* Top-right activity dot */}
+        {/* Top-right activity dot — red when overdue */}
         {hasActivity && (
-          <View style={[cs.topDot, { backgroundColor: dotColors[0] || colors.accent }]} />
+          <View style={[cs.topDot, { backgroundColor: isOverdue ? colors.accentRed : (dotColors[0] || colors.accent) }]} />
         )}
 
         {/* Month tag (when foreign month's day = 1) */}
@@ -138,12 +145,14 @@ export function Calendar() {
     return cells
   }, [current])
 
-  // Emojis + colors + activity per day
+  // Emojis + colors + activity + overdue flag per day. A day is overdue when
+  // an active subscription's nextChargeDate is in the past (< today).
   const dayInfo = useMemo(() => {
-    const map = new Map<string, { emojis: string[]; colors: string[]; hasActivity: boolean }>()
-    function push(date: string, emoji?: string, color?: string) {
-      const cur = map.get(date) ?? { emojis: [], colors: [], hasActivity: false }
+    const map = new Map<string, { emojis: string[]; colors: string[]; hasActivity: boolean; isOverdue: boolean }>()
+    function push(date: string, emoji?: string, color?: string, overdue = false) {
+      const cur = map.get(date) ?? { emojis: [], colors: [], hasActivity: false, isOverdue: false }
       cur.hasActivity = true
+      if (overdue) cur.isOverdue = true
       if (emoji) cur.emojis.push(emoji)
       if (color) cur.colors.push(color)
       map.set(date, cur)
@@ -151,10 +160,11 @@ export function Calendar() {
     for (const e of store.events as any[]) if (e.date) push(e.date, e.emoji, e.color)
     for (const s of store.subscriptions as any[]) {
       if (s.active === false || !s.nextChargeDate) continue
-      push(s.nextChargeDate, s.emoji, s.color)
+      const overdue = isBefore(parseISO(s.nextChargeDate), today)
+      push(s.nextChargeDate, s.emoji, s.color, overdue)
     }
     return map
-  }, [store.events, store.subscriptions])
+  }, [store.events, store.subscriptions, today])
 
   const dayEvents = useMemo(
     () => (selectedDay ? (store.events as any[]).filter(e => e.date === selectedDay) : []),
@@ -311,6 +321,7 @@ export function Calendar() {
                 emojis={emojis}
                 dotColors={info?.colors ?? []}
                 hasActivity={hasActivity}
+                isOverdue={!!info?.isOverdue}
                 monthTag={monthTag}
                 onPress={() => setSelectedDay(prev => prev === str ? null : str)}
                 onHoverIn={isDesktop ? () => setHoveredDay(str) : undefined}
