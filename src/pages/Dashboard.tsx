@@ -490,9 +490,24 @@ export function Dashboard() {
   const categoryBreakdown = useMemo<BreakdownItem[]>(() => {
     const byCat: Record<string, { value: number; color: string }> = {}
     for (const sub of activeSubs as any[]) {
+      if ((sub.price || 0) <= 0) continue   // skip income/zero items
       const cat = sub.category || 'Other'
       if (!byCat[cat]) byCat[cat] = { value: 0, color: sub.color || colors.accent }
       byCat[cat].value += (sub.price || 0)
+    }
+    return Object.entries(byCat)
+      .map(([label, { value, color }]) => ({ label, value, color }))
+      .sort((a, b) => b.value - a.value)
+  }, [activeSubs, colors.accent])
+
+  // Income breakdown — subscriptions with price < 0 (heuristic until income type field lands)
+  const incomeCategoryBreakdown = useMemo<BreakdownItem[]>(() => {
+    const byCat: Record<string, { value: number; color: string }> = {}
+    for (const sub of activeSubs as any[]) {
+      if ((sub.price || 0) >= 0) continue
+      const cat = sub.category || 'Other'
+      if (!byCat[cat]) byCat[cat] = { value: 0, color: sub.color || colors.accent }
+      byCat[cat].value += Math.abs(sub.price || 0)
     }
     return Object.entries(byCat)
       .map(([label, { value, color }]) => ({ label, value, color }))
@@ -544,10 +559,7 @@ export function Dashboard() {
   // 'before' | 'swap' | 'after' — determined by which vertical third the cursor is in
   const [dropMode, setDropMode] = useState<'before' | 'swap' | 'after'>('swap')
   // Lone squares that the user has flipped to the right side (empty slot on the left)
-  const [flippedSquares, setFlippedSquares] = useState<Set<WKey>>(() => {
-    const stored = store.flippedWidgets
-    return new Set(stored.filter((k): k is WKey => (ALL_KEYS as string[]).includes(k)))
-  })
+  const [flippedSquares, setFlippedSquares] = useState<Set<WKey>>(new Set())
   // Refs mirror state so gesture callbacks (useCallback with [] deps) always
   // see the current value without needing to re-create the callback.
   const draggingIdRef      = useRef<WKey | null>(null)
@@ -557,18 +569,36 @@ export function Dashboard() {
   const scrollYShared = useSharedValue(0)
   const cursorAbsYRef = useRef(0)
   const scrollRef     = useRef<ScrollView>(null)
-  const [order, setOrder] = useState<WKey[]>(() => {
-    const stored = store.widgetOrder
-    if (stored.length > 0) {
-      return stored.filter((k): k is WKey => (ALL_KEYS as string[]).includes(k))
-    }
-    return DEFAULT_WIDGET_ORDER
-  })
+  const [order, setOrder] = useState<WKey[]>(DEFAULT_WIDGET_ORDER)
+  // True once AsyncStorage has finished hydrating — prevents the persist effect
+  // from overwriting stored data before it's been read.
+  const [layoutHydrated, setLayoutHydrated] = useState(false)
 
-  // Persist layout changes so F5 / app restart restores the user's arrangement
+  // Load persisted layout after the data store finishes hydrating from AsyncStorage.
+  // useState initialisers run synchronously before hydration completes, so we
+  // must apply stored values here instead.
   useEffect(() => {
+    function applyStored() {
+      const s = useDataStore.getState()
+      if (s.widgetOrder.length > 0) {
+        setOrder(s.widgetOrder.filter((k): k is WKey => (ALL_KEYS as string[]).includes(k)))
+      }
+      setFlippedSquares(new Set(s.flippedWidgets.filter((k): k is WKey => (ALL_KEYS as string[]).includes(k))))
+      setLayoutHydrated(true)
+    }
+    if (useDataStore.persist.hasHydrated()) {
+      applyStored()
+      return
+    }
+    const unsub = useDataStore.persist.onFinishHydration(applyStored)
+    return unsub
+  }, [])
+
+  // Persist layout changes — only after initial hydration to avoid overwriting stored data
+  useEffect(() => {
+    if (!layoutHydrated) return
     store.setWidgetLayout(order, [...flippedSquares])
-  }, [order, flippedSquares])
+  }, [order, flippedSquares, layoutHydrated])
 
   const handleEnterEdit = React.useCallback(() => {
     setEditMode(true)
@@ -880,6 +910,7 @@ export function Dashboard() {
             tag="stats"
             title="by category"
             items={categoryBreakdown}
+            incomeItems={incomeCategoryBreakdown}
             unit={symbol}
           />
         )
