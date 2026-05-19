@@ -21,7 +21,7 @@ const PAD_B   = 20
 const COLOR_UP   = '#EF4444'
 const COLOR_DOWN = '#22C55E'
 
-// ── Line Chart ─────────────────────────────────────────────────────────────
+// ── Line Chart (Luis Miguel) ────────────────────────────────────────────────
 function SpendingChart({ bars, compBars, symbol, colors }: {
   bars: Bar[]; compBars: Bar[]; symbol: string; colors: any
 }) {
@@ -71,7 +71,6 @@ function SpendingChart({ bars, compBars, symbol, colors }: {
 
   return (
     <View>
-      {/* Top row */}
       <View style={lc.topRow}>
         <View style={lc.trendBadge}>
           <Text style={[lc.trendArrow, { color: trendColor }]}>{trendUp ? '↑' : '↓'}</Text>
@@ -102,21 +101,17 @@ function SpendingChart({ bars, compBars, symbol, colors }: {
               stroke={colors.text} strokeOpacity={0.06} strokeWidth={1} strokeDasharray="3 6" />
           ))}
 
-          {/* Comparison line — previous period, dimmed */}
           {compPath ? (
             <Path d={compPath} fill="none" stroke={colors.textMuted}
               strokeWidth={1.5} strokeDasharray="4 4" strokeOpacity={0.45}
               strokeLinejoin="round" strokeLinecap="round" />
           ) : null}
 
-          {/* Gradient fill — current */}
           <Path d={areaPath} fill="url(#grad-main)" />
 
-          {/* Past line — solid, trend colored */}
           <Path d={pastPath} fill="none" stroke={trendColor}
             strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
 
-          {/* Future line — dashed */}
           {futurePath ? (
             <Path d={futurePath} fill="none" stroke={trendColor}
               strokeWidth={2} strokeDasharray="5 5" strokeOpacity={0.4}
@@ -154,7 +149,6 @@ function SpendingChart({ bars, compBars, symbol, colors }: {
         ))}
       </View>
 
-      {/* Legend */}
       <View style={lc.legend}>
         <View style={lc.legendItem}>
           <View style={[lc.legendLine, { backgroundColor: trendColor }]} />
@@ -186,6 +180,97 @@ const lc = StyleSheet.create({
   legendTxt:    { fontSize: 10, fontFamily: theme.fontRegular },
 })
 
+// ── Donut Chart ─────────────────────────────────────────────────────────────
+interface DonutSlice { label: string; value: number; color: string }
+
+function polarXY(cx: number, cy: number, r: number, deg: number) {
+  const rad = (deg - 90) * (Math.PI / 180)
+  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) }
+}
+
+function donutArc(cx: number, cy: number, r: number, start: number, end: number, stroke: number): string {
+  const a = polarXY(cx, cy, r, start)
+  const b = polarXY(cx, cy, r, end)
+  const large = end - start > 180 ? 1 : 0
+  const inner = r - stroke
+  const ai = polarXY(cx, cy, inner, end)
+  const bi = polarXY(cx, cy, inner, start)
+  return [
+    `M ${a.x.toFixed(2)} ${a.y.toFixed(2)}`,
+    `A ${r} ${r} 0 ${large} 1 ${b.x.toFixed(2)} ${b.y.toFixed(2)}`,
+    `L ${ai.x.toFixed(2)} ${ai.y.toFixed(2)}`,
+    `A ${inner} ${inner} 0 ${large} 0 ${bi.x.toFixed(2)} ${bi.y.toFixed(2)}`,
+    'Z',
+  ].join(' ')
+}
+
+function DonutChart({ slices, symbol, colors }: { slices: DonutSlice[]; symbol: string; colors: any }) {
+  const SIZE   = 140
+  const CX     = SIZE / 2
+  const STROKE = 24
+  const R      = (SIZE - STROKE) / 2 - 2
+  const GAP    = 1.5
+
+  const total = slices.reduce((s, sl) => s + sl.value, 0)
+
+  const paths = useMemo(() => {
+    if (total <= 0) return []
+    let cursor = 0
+    return slices.map(sl => {
+      const sweep = (sl.value / total) * (360 - GAP * slices.length)
+      const start = cursor + GAP / 2
+      const end   = cursor + sweep + GAP / 2
+      cursor += sweep + GAP
+      return { ...sl, d: donutArc(CX, CX, R, start, end, STROKE) }
+    })
+  }, [slices, total])
+
+  return (
+    <View style={dc.wrap}>
+      <Svg width={SIZE} height={SIZE}>
+        {total <= 0 ? (
+          <Circle cx={CX} cy={CX} r={R - STROKE / 2} fill="none"
+            stroke={colors.border} strokeWidth={STROKE} />
+        ) : paths.map((p, i) => (
+          <Path key={i} d={p.d} fill={p.color} />
+        ))}
+      </Svg>
+      {/* centre label */}
+      <View style={dc.centre} pointerEvents="none">
+        <Text style={[dc.centreAmt, { color: colors.text }]}>
+          {symbol}{total.toFixed(0)}
+        </Text>
+        <Text style={[dc.centreSub, { color: colors.textMuted }]}>/ mo</Text>
+      </View>
+
+      {/* legend */}
+      <View style={dc.legend}>
+        {slices.slice(0, 6).map((sl, i) => (
+          <View key={i} style={dc.legendRow}>
+            <View style={[dc.dot, { backgroundColor: sl.color }]} />
+            <Text style={[dc.legendLabel, { color: colors.text }]} numberOfLines={1}>{sl.label}</Text>
+            <Text style={[dc.legendVal, { color: colors.textMuted }]}>
+              {symbol}{sl.value.toFixed(0)}
+            </Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  )
+}
+
+const dc = StyleSheet.create({
+  wrap:        { flexDirection: 'row', alignItems: 'center', gap: theme.sp5 },
+  centre:      { position: 'absolute', left: 0, width: 140, height: 140, alignItems: 'center', justifyContent: 'center' },
+  centreAmt:   { fontSize: 18, fontFamily: theme.fontBlack, letterSpacing: -1 },
+  centreSub:   { fontSize: 10, fontFamily: theme.fontRegular, marginTop: 1 },
+  legend:      { flex: 1, gap: theme.sp2 },
+  legendRow:   { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  dot:         { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
+  legendLabel: { flex: 1, fontSize: 12, fontFamily: theme.fontMedium, letterSpacing: -0.1 },
+  legendVal:   { fontSize: 12, fontFamily: theme.fontMonoBold, letterSpacing: -0.2 },
+})
+
 // ── Analytics ──────────────────────────────────────────────────────────────
 
 export function Analytics() {
@@ -195,16 +280,73 @@ export function Analytics() {
   const currency = store.settings.defaultCurrency ?? 'EUR'
   const symbol   = CURRENCY_SYMBOL[currency] ?? ''
 
+  const activeSubs = useMemo(
+    () => store.subscriptions.filter((s: any) => s.active !== false),
+    [store.subscriptions]
+  )
+
   const monthly     = useMemo(() => totalMonthlySpend(store.subscriptions), [store.subscriptions])
   const yearly      = useMemo(() => projectedYearly(store.subscriptions), [store.subscriptions])
   const coffeeCount = useMemo(() => coffees(monthly), [monthly])
 
+  const avgPerSub = activeSubs.length > 0
+    ? monthly / activeSubs.length
+    : 0
+
+  const nextChargeDays = useMemo(() => {
+    const today = new Date(); today.setHours(0, 0, 0, 0)
+    const upcoming = activeSubs
+      .filter((s: any) => s.nextChargeDate)
+      .map((s: any) => {
+        const d = new Date(s.nextChargeDate); d.setHours(0, 0, 0, 0)
+        return Math.ceil((d.getTime() - today.getTime()) / 86400000)
+      })
+      .filter(d => d >= 0)
+      .sort((a, b) => a - b)
+    return upcoming[0] ?? null
+  }, [activeSubs])
+
+  // Category breakdown for donut
+  const [donutMode, setDonutMode] = useState<'expense' | 'income'>('expense')
+
+  const expenseSlices = useMemo<DonutSlice[]>(() => {
+    const map = new Map<string, { value: number; color: string }>()
+    for (const s of activeSubs as any[]) {
+      if (s.price <= 0) continue
+      const cat = s.category ?? 'Other'
+      const monthly = monthlyEquivalent(s.price, s.billingCycle)
+      const existing = map.get(cat)
+      if (existing) existing.value += monthly
+      else map.set(cat, { value: monthly, color: s.color ?? colors.accent })
+    }
+    return [...map.entries()]
+      .map(([label, v]) => ({ label, ...v }))
+      .sort((a, b) => b.value - a.value)
+  }, [activeSubs, colors.accent])
+
+  const incomeSlices = useMemo<DonutSlice[]>(() => {
+    const map = new Map<string, { value: number; color: string }>()
+    for (const s of activeSubs as any[]) {
+      if (s.price >= 0) continue
+      const cat = s.category ?? 'Other'
+      const monthly = monthlyEquivalent(Math.abs(s.price), s.billingCycle)
+      const existing = map.get(cat)
+      if (existing) existing.value += monthly
+      else map.set(cat, { value: monthly, color: s.color ?? colors.success })
+    }
+    return [...map.entries()]
+      .map(([label, v]) => ({ label, ...v }))
+      .sort((a, b) => b.value - a.value)
+  }, [activeSubs, colors.success])
+
+  const hasIncome   = incomeSlices.length > 0
+  const activeSlices = donutMode === 'expense' ? expenseSlices : incomeSlices
+
   const breakdown = useMemo(
-    () => store.subscriptions
-      .filter((s: any) => s.active !== false)
+    () => activeSubs
       .map((s: any) => ({ ...s, monthly: monthlyEquivalent(s.price, s.billingCycle) }))
       .sort((a: any, b: any) => b.monthly - a.monthly),
-    [store.subscriptions]
+    [activeSubs]
   )
 
   const [timeRange, setTimeRange] = useState('6M')
@@ -223,27 +365,69 @@ export function Analytics() {
     <ScrollView style={[s.page, { backgroundColor: colors.bg }]} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
       <Text style={[s.pageTitle, { color: colors.text }]}>Analytics</Text>
 
-      {/* Summary */}
-      <View style={[s.card, { backgroundColor: colors.surface }]}>
-        <View style={s.summaryGrid}>
-          <View style={s.stat}>
-            <Text style={[s.statNum, { color: colors.text }]}>{symbol}{monthly.toFixed(0)}</Text>
-            <Text style={[s.statLabel, { color: colors.textMuted }]}>per month</Text>
-          </View>
-          <View style={s.stat}>
-            <Text style={[s.statNum, { color: colors.text }]}>{symbol}{yearly.toFixed(0)}</Text>
-            <Text style={[s.statLabel, { color: colors.textMuted }]}>per year</Text>
-          </View>
-          <View style={s.stat}>
-            <Text style={[s.statNum, { color: colors.text }]}>{coffeeCount}</Text>
-            <Text style={[s.statLabel, { color: colors.textMuted }]}>coffees / mo</Text>
-          </View>
+      {/* ── Hero KPI scroll ─────────────────────────────────────── */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.kpiRow}>
+        <View style={[s.kpiCard, { backgroundColor: colors.surface }]}>
+          <Text style={[s.kpiNum, { color: colors.text }]}>{symbol}{monthly.toFixed(0)}</Text>
+          <Text style={[s.kpiLabel, { color: colors.textMuted }]}>per month</Text>
         </View>
+        <View style={[s.kpiCard, { backgroundColor: colors.surface }]}>
+          <Text style={[s.kpiNum, { color: colors.text }]}>{symbol}{yearly.toFixed(0)}</Text>
+          <Text style={[s.kpiLabel, { color: colors.textMuted }]}>per year</Text>
+        </View>
+        <View style={[s.kpiCard, { backgroundColor: colors.surface }]}>
+          <Text style={[s.kpiNum, { color: colors.text }]}>{activeSubs.length}</Text>
+          <Text style={[s.kpiLabel, { color: colors.textMuted }]}>active subs</Text>
+        </View>
+        <View style={[s.kpiCard, { backgroundColor: colors.surface }]}>
+          <Text style={[s.kpiNum, { color: colors.text }]}>{symbol}{avgPerSub.toFixed(0)}</Text>
+          <Text style={[s.kpiLabel, { color: colors.textMuted }]}>avg / sub</Text>
+        </View>
+        <View style={[s.kpiCard, { backgroundColor: colors.surface }]}>
+          <Text style={[s.kpiNum, { color: colors.text }]}>{coffeeCount}</Text>
+          <Text style={[s.kpiLabel, { color: colors.textMuted }]}>coffees / mo</Text>
+        </View>
+        {nextChargeDays !== null && (
+          <View style={[s.kpiCard, { backgroundColor: colors.surface }]}>
+            <Text style={[s.kpiNum, { color: colors.text }]}>{nextChargeDays}d</Text>
+            <Text style={[s.kpiLabel, { color: colors.textMuted }]}>next charge</Text>
+          </View>
+        )}
+      </ScrollView>
+
+      {/* ── Category donut ──────────────────────────────────────── */}
+      <View style={[s.card, { backgroundColor: colors.surface }]}>
+        <View style={s.cardHeader}>
+          <Text style={[s.cardTitle, { color: colors.text }]}>By category</Text>
+          {hasIncome && (
+            <View style={[s.toggle, { backgroundColor: colors.surfaceEl }]}>
+              {(['expense', 'income'] as const).map(m => (
+                <TouchableOpacity
+                  key={m}
+                  style={[s.toggleBtn, donutMode === m && { backgroundColor: colors.surface }]}
+                  onPress={() => setDonutMode(m)}
+                >
+                  <Text style={[s.toggleLabel, { color: donutMode === m ? colors.text : colors.textMuted }]}>
+                    {m === 'expense' ? 'Expense' : 'Income'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </View>
+        {activeSlices.length > 0
+          ? <DonutChart slices={activeSlices} symbol={symbol} colors={colors} />
+          : <View style={s.chartEmpty}>
+              <Text style={[s.chartEmptyText, { color: colors.textFaint }]}>
+                {donutMode === 'income' ? 'No income tracked yet' : 'Add a subscription to see the chart'}
+              </Text>
+            </View>
+        }
       </View>
 
-      {/* Line Chart */}
+      {/* ── Spending over time (Luis Miguel) ────────────────────── */}
       <View style={[s.card, { backgroundColor: colors.surface }]}>
-        <View style={s.chartHeader}>
+        <View style={s.cardHeader}>
           <Text style={[s.cardTitle, { color: colors.text }]}>Spending over time</Text>
           <View style={s.filters}>
             {Object.keys(RANGE_CONFIG).map(f => (
@@ -261,7 +445,7 @@ export function Analytics() {
         }
       </View>
 
-      {/* Breakdown list */}
+      {/* ── Breakdown by subscription ────────────────────────────── */}
       {breakdown.length > 0 ? (
         <View style={[s.card, { backgroundColor: colors.surface }]}>
           <Text style={[s.cardTitle, { color: colors.text, marginBottom: theme.sp4 }]}>Breakdown by subscription</Text>
@@ -275,7 +459,7 @@ export function Analytics() {
                     <Text style={[s.breakdownPct, { color: colors.textMuted }]}>{symbol}{sub.monthly.toFixed(2)} · {pct.toFixed(0)}%</Text>
                   </View>
                   <View style={[s.barTrack, { backgroundColor: colors.surfaceHigh }]}>
-                    <View style={[s.barFill, { flex: pct, maxWidth: `${pct}%` as any, backgroundColor: colors.accent }]} />
+                    <View style={[s.barFill, { flex: pct, maxWidth: `${pct}%` as any, backgroundColor: sub.color ?? colors.accent }]} />
                     <View style={{ flex: 100 - pct }} />
                   </View>
                 </View>
@@ -296,18 +480,27 @@ const s = StyleSheet.create({
   page:    { flex: 1 },
   content: { padding: theme.sp4, gap: theme.sp4, paddingBottom: 130 },
   pageTitle: { fontSize: 34, fontFamily: theme.fontBlack, letterSpacing: -1, marginBottom: theme.sp4 },
+
+  kpiRow:   { gap: theme.sp3, paddingRight: theme.sp4 },
+  kpiCard:  { minWidth: 100, borderRadius: theme.radiusXl, padding: theme.sp4, ...theme.shadow },
+  kpiNum:   { fontSize: 28, fontFamily: theme.fontBlack, letterSpacing: -1, lineHeight: 32 },
+  kpiLabel: { fontSize: 11, fontFamily: theme.fontRegular, marginTop: 4 },
+
   card: { borderRadius: theme.radiusXl, padding: theme.sp5, ...theme.shadow },
-  summaryGrid: { flexDirection: 'row', justifyContent: 'space-between', gap: theme.sp3 },
-  stat:        { flex: 1 },
-  statNum:     { fontSize: theme.textXl, fontFamily: theme.fontBlack },
-  statLabel:   { fontSize: theme.textXs, fontFamily: theme.fontRegular, marginTop: 2 },
-  chartHeader:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: theme.sp4, flexWrap: 'wrap', gap: theme.sp2 },
-  cardTitle:      { fontSize: theme.textBase, fontFamily: theme.fontBold },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: theme.sp4, flexWrap: 'wrap', gap: theme.sp2 },
+  cardTitle: { fontSize: theme.textBase, fontFamily: theme.fontBold },
+
+  toggle:      { flexDirection: 'row', borderRadius: 8, padding: 3, gap: 2, alignSelf: 'flex-start' },
+  toggleBtn:   { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6 },
+  toggleLabel: { fontSize: 11, fontFamily: theme.fontMedium },
+
   filters:        { flexDirection: 'row', flexWrap: 'wrap', gap: theme.sp2 },
   filterPill:     { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20 },
   filterPillText: { fontSize: theme.textXs, fontFamily: theme.fontMedium },
-  chartEmpty:     { height: 160, alignItems: 'center', justifyContent: 'center' },
+
+  chartEmpty:     { height: 140, alignItems: 'center', justifyContent: 'center' },
   chartEmptyText: { fontSize: 13, fontFamily: theme.fontRegular, opacity: 0.6 },
+
   breakdownList:{ minWidth: 180, gap: 0 },
   breakdownRow: { marginBottom: theme.sp4 },
   breakdownInfo:{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: theme.sp1 },
