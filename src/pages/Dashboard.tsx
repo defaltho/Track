@@ -34,6 +34,7 @@ import { ForecastWidget }       from '../components/widgets/ForecastWidget'
 import { ScoreWidget }          from '../components/widgets/ScoreWidget'
 import { TopExpensesWidget }    from '../components/widgets/TopExpensesWidget'
 import { AnomalyWidget }        from '../components/widgets/AnomalyWidget'
+import { PeriodCompareWidget }  from '../components/widgets/PeriodCompareWidget'
 import { buildForecast }        from '../utils/forecast'
 import { AddTrackForm } from '../components/forms/AddTrackForm'
 import { AddTaskForm } from '../components/forms/AddTaskForm'
@@ -332,7 +333,7 @@ type WKey =
   | 'active' | 'spend' | 'coffees' | 'events' | 'topExpense' | 'ytd' | 'monthGoal' | 'clock'
   | 'categoryRings'
   | 'heatmap' | 'due' | 'category' | 'upcoming' | 'spendTrend' | 'radar' | 'budget' | 'forecast'
-  | 'score' | 'topExpenses' | 'anomaly'
+  | 'score' | 'topExpenses' | 'anomaly' | 'periodCompare'
 
 const WIDGET_SIZE: Record<WKey, 'square' | 'rectangle'> = {
   active:        'square',
@@ -355,6 +356,7 @@ const WIDGET_SIZE: Record<WKey, 'square' | 'rectangle'> = {
   score:         'square',
   topExpenses:   'rectangle',
   anomaly:       'rectangle',
+  periodCompare: 'rectangle',
 }
 
 const WIDGET_DELAY: Record<WKey, number> = {
@@ -362,7 +364,7 @@ const WIDGET_DELAY: Record<WKey, number> = {
   heatmap: 180, due: 210,    spendTrend: 240, category: 270,
   coffees: 300, events: 330, upcoming: 360,
   topExpense: 390, ytd: 420,  radar: 450, categoryRings: 480,
-  budget: 500, forecast: 520, score: 540, topExpenses: 560, anomaly: 580,
+  budget: 500, forecast: 520, score: 540, topExpenses: 560, anomaly: 580, periodCompare: 600,
 }
 
 const ALL_KEYS: WKey[] = Object.keys(WIDGET_SIZE) as WKey[]
@@ -388,6 +390,7 @@ const WIDGET_META: Record<WKey, { label: string; emoji: string }> = {
   score:         { label: 'score',          emoji: '🏅' },
   topExpenses:   { label: 'top expenses',   emoji: '💰' },
   anomaly:       { label: 'patterns',       emoji: '📊' },
+  periodCompare: { label: 'period compare', emoji: '📊' },
 }
 
 const DEFAULT_WIDGET_ORDER: WKey[] = [
@@ -406,6 +409,7 @@ const DEFAULT_WIDGET_ORDER: WKey[] = [
   'upcoming',
   'score', 'ytd',
   'anomaly',
+  'periodCompare',
 ]
 
 export function Dashboard() {
@@ -992,6 +996,8 @@ export function Dashboard() {
         )
       case 'anomaly':
         return <AnomalyWidget subscriptions={store.subscriptions} />
+      case 'periodCompare':
+        return <PeriodCompareWidget subscriptions={activeSubs} unit={symbol} />
     }
   }
 
