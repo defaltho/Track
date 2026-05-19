@@ -24,6 +24,7 @@ import { Segmented } from '../../src/components/ui/Segmented'
 import { VERSION } from '../../src/data/version'
 import { CHANGELOG } from '../../src/data/changelog'
 import { loadSeedData } from '../../src/utils/seedData'
+import { ErrorLog } from '../../src/pages/Settings/ErrorLog'
 
 const CURRENCIES = ['EUR', 'USD', 'GBP', 'BRL']
 
@@ -48,6 +49,7 @@ export default function Settings() {
   const customCategories: string[] = store.settings.customCategories ?? []
   const [showExportModal, setShowExportModal] = useState(false)
   const [exportSel, setExportSel] = useState({ subscriptions: true, apps: true, events: true, tasks: true, settings: true, logs: false })
+  const [showErrorLog, setShowErrorLog] = useState(false)
   const logEntries = useLoggerStore(s => s.entries)
   const clearLogs = useLoggerStore(s => s.clear)
 
@@ -111,7 +113,8 @@ export default function Settings() {
       try {
         await (navigator as any).clipboard.writeText(json)
         toast.push('Data copied to clipboard', 'success')
-      } catch {
+      } catch (err) {
+        logger.error('Clipboard write failed during export', String(err))
         toast.push('Could not copy — check browser permissions', 'info')
       }
     } else {
@@ -133,7 +136,8 @@ export default function Settings() {
       try {
         await (navigator as any).clipboard.writeText(json)
         toast.push('Data copied to clipboard', 'success')
-      } catch {
+      } catch (err) {
+        logger.error('Clipboard write failed during selective export', String(err))
         toast.push('Could not copy — check browser permissions', 'info')
       }
     } else {
@@ -166,6 +170,8 @@ export default function Settings() {
     { key: 'light', label: 'Light', icon: 'sunny', desc: 'Clean, minimal' },
     { key: 'dark',  label: 'Dark',  icon: 'moon',  desc: 'Easy on the eyes' },
   ]
+
+  if (showErrorLog) return <ErrorLog onBack={() => setShowErrorLog(false)} />
 
   return (
     <ScrollView
@@ -341,33 +347,18 @@ export default function Settings() {
       {/* ── Logs ── */}
       <Text style={[s.sectionLabel, { color: colors.textMuted }]}>logs</Text>
       <View style={[s.card, { backgroundColor: colors.surface }]}>
-        <View style={[s.row, { paddingVertical: theme.sp3 }]}>
-          <Text style={[s.rowLabel, { color: colors.text }]}>Error / Warning Log</Text>
-          {logEntries.length > 0 && (
-            <TouchableOpacity onPress={clearLogs} activeOpacity={0.6}>
-              <Text style={[s.chevron, { color: colors.danger }]}>Clear</Text>
-            </TouchableOpacity>
+        <TouchableOpacity style={s.row} onPress={() => setShowErrorLog(true)} activeOpacity={0.6}>
+          <View style={{ flex: 1 }}>
+            <Text style={[s.rowLabel, { color: colors.text }]}>Error Log</Text>
+            <Text style={[s.rowSub, { color: colors.textMuted }]}>
+              {logEntries.length === 0 ? 'No entries' : `${logEntries.length} entr${logEntries.length === 1 ? 'y' : 'ies'}`}
+            </Text>
+          </View>
+          {logEntries.some(e => e.level === 'error') && (
+            <View style={[s.errorDot, { backgroundColor: colors.danger }]} />
           )}
-        </View>
-        <View style={{ paddingHorizontal: theme.sp5, paddingBottom: theme.sp4, gap: 6 }}>
-          {logEntries.length === 0 ? (
-            <Text style={[s.rowSub, { color: colors.textFaint, fontStyle: 'italic' }]}>Nenhum registo</Text>
-          ) : logEntries.slice(0, 20).map(entry => (
-            <View key={entry.id} style={[s.logEntry, { backgroundColor: colors.surfaceEl }]}>
-              <View style={[s.logBadge, {
-                backgroundColor: entry.level === 'error' ? colors.danger : entry.level === 'warn' ? '#F2C200' : colors.border,
-              }]} />
-              <View style={{ flex: 1 }}>
-                <Text style={[s.logMsg, { color: colors.text }]} numberOfLines={2}>{entry.message}</Text>
-                {entry.context ? <Text style={[s.logCtx, { color: colors.textMuted }]} numberOfLines={1}>{entry.context}</Text> : null}
-              </View>
-              <Text style={[s.logTime, { color: colors.textFaint }]}>{entry.timestamp.slice(11, 19)}</Text>
-            </View>
-          ))}
-          {logEntries.length > 20 && (
-            <Text style={[s.rowSub, { color: colors.textFaint }]}>+{logEntries.length - 20} mais</Text>
-          )}
-        </View>
+          <Text style={[s.chevron, { color: colors.textMuted }]}>›</Text>
+        </TouchableOpacity>
       </View>
 
       {/* ── About ── */}
@@ -445,11 +436,11 @@ export default function Settings() {
             <Text style={[s.footerLink, { color: colors.textMuted }]}>GitHub</Text>
           </TouchableOpacity>
           <Text style={[s.footerSep, { color: colors.textFaint }]}>|</Text>
-          <TouchableOpacity activeOpacity={0.6}>
+          <TouchableOpacity activeOpacity={0.6} onPress={() => toast.push('Privacy policy — em breve', 'info')}>
             <Text style={[s.footerLink, { color: colors.textMuted }]}>Privacy</Text>
           </TouchableOpacity>
           <Text style={[s.footerSep, { color: colors.textFaint }]}>|</Text>
-          <TouchableOpacity activeOpacity={0.6}>
+          <TouchableOpacity activeOpacity={0.6} onPress={() => toast.push('Terms of service — em breve', 'info')}>
             <Text style={[s.footerLink, { color: colors.textMuted }]}>Terms</Text>
           </TouchableOpacity>
         </View>
@@ -696,12 +687,13 @@ const s = StyleSheet.create({
   checkRow: { flexDirection: 'row', alignItems: 'center', gap: theme.sp3 },
   checkbox: { width: 20, height: 20, borderRadius: 5, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
 
-  /* Log entries */
+  /* Log entries (kept for export modal reference) */
   logEntry: { flexDirection: 'row', alignItems: 'flex-start', borderRadius: theme.radiusSm, padding: 8, gap: 8 },
   logBadge: { width: 3, borderRadius: 2, alignSelf: 'stretch', minHeight: 16 },
   logMsg: { fontSize: 12, fontFamily: theme.fontRegular, lineHeight: 17 },
   logCtx: { fontSize: 11, fontFamily: theme.fontMono, marginTop: 2, opacity: 0.7 },
   logTime: { fontSize: 10, fontFamily: theme.fontMono },
+  errorDot: { width: 8, height: 8, borderRadius: 4, marginRight: 4 },
 
   /* Footer */
   footer: {
