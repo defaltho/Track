@@ -43,8 +43,6 @@ export function SpaceList() {
     setJoinSuccess(false)
   }
 
-  const mySpaces = spaces
-
   return (
     <ScrollView
       style={[sl.page, { backgroundColor: colors.bg }]}
@@ -53,12 +51,12 @@ export function SpaceList() {
     >
       <Text style={[sl.title, { color: colors.text }]}>Família</Text>
 
-      {mySpaces.length === 0 ? (
+      {spaces.length === 0 ? (
         <EmptyState colors={colors} onCreate={() => setCreating(true)} onJoin={() => setShowJoinModal(true)} />
       ) : (
         <>
           <View style={sl.list}>
-            {mySpaces.map(space => {
+            {spaces.map(space => {
               const memberCount = members.filter(m => m.spaceId === space.id).length
               return (
                 <SpaceRow

@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   Platform, useWindowDimensions, ScrollView, KeyboardAvoidingView,
@@ -31,6 +31,8 @@ export default function LoginScreen() {
   const [forgotSent, setForgotSent] = useState(false)
   const { width } = useWindowDimensions()
   const isWide = Platform.OS === 'web' && width > 800
+  const forgotTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => { if (forgotTimerRef.current) clearTimeout(forgotTimerRef.current) }, [])
 
   function doLogin(provider: 'email' | 'google' | 'apple') {
     const fallback = provider === 'google' ? 'user@gmail.com' : provider === 'apple' ? 'user@icloud.com' : 'user@example.com'
@@ -43,7 +45,7 @@ export default function LoginScreen() {
 
   function handleForgot() {
     setForgotSent(true)
-    setTimeout(() => { setForgotSent(false); setView('signin') }, 2200)
+    forgotTimerRef.current = setTimeout(() => { setForgotSent(false); setView('signin') }, 2200)
   }
 
   function goBack() { setView('signin'); setForgotSent(false) }

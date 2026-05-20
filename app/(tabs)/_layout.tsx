@@ -56,7 +56,11 @@ function useTabBadges(): Record<string, boolean> {
     today.setHours(0, 0, 0, 0)
     const in3Days = new Date(today.getTime() + 3 * 24 * 60 * 60 * 1000)
     const hasOverdue  = subscriptions.some(s => s.active && new Date(s.nextChargeDate) < today)
-    const hasUpcoming = subscriptions.some(s => s.active && new Date(s.nextChargeDate) <= in3Days && new Date(s.nextChargeDate) >= today)
+    const hasUpcoming = subscriptions.some(s => {
+      if (!s.active) return false
+      const d = new Date(s.nextChargeDate)
+      return d <= in3Days && d >= today
+    })
     return {
       index:    hasOverdue,
       calendar: hasUpcoming,
@@ -64,9 +68,8 @@ function useTabBadges(): Record<string, boolean> {
   }, [subscriptions])
 }
 
-function TabIcon({ name, focused, colors }: { name: string; focused: boolean; colors: Colors }) {
+function TabIcon({ name, focused, colors, badges }: { name: string; focused: boolean; colors: Colors; badges: Record<string, boolean> }) {
   const cfg = TAB_CFG[name] ?? { active: 'ellipse', inactive: 'ellipse-outline', label: name }
-  const badges = useTabBadges()
   const hasBadge = !!badges[name]
   return (
     <View style={s.iconWrap}>
@@ -343,6 +346,7 @@ export default function TabsLayout() {
   const { colors } = useTheme()
   const { width } = useWindowDimensions()
   const insets = useSafeAreaInsets()
+  const badges = useTabBadges()
   const isDesktop = Platform.OS === 'web' && width >= BREAK
 
   // Tab bar bottom adjusts for home indicator / gesture bar
@@ -365,7 +369,7 @@ export default function TabsLayout() {
             headerShown: false,
             tabBarShowLabel: false,
             tabBarStyle,
-            tabBarIcon: ({ focused }) => <TabIcon name={route.name} focused={focused} colors={colors} />,
+            tabBarIcon: ({ focused }) => <TabIcon name={route.name} focused={focused} colors={colors} badges={badges} />,
             ...(isDesktop ? {} : {
               tabBarItemStyle: s.tabItem,
               tabBarIconStyle: s.tabIconContainer,
