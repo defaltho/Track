@@ -2,11 +2,13 @@ import { Stack, useRouter, useSegments } from 'expo-router'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { Toast } from '../src/components/ui/Toast'
+import { CommandPalette } from '../src/components/ui/CommandPalette'
 import { View, StyleSheet, Platform } from 'react-native'
 import { ThemeProvider, useTheme } from '../src/context/ThemeContext'
 import { useAuthStore } from '../src/stores/auth'
 import { useDataStore } from '../src/stores/data'
 import { loadSeedData } from '../src/utils/seedData'
+import { setupLoggerBridge } from '../src/stores/loggerBridge'
 import {
   useFonts,
   Roboto_300Light,
@@ -19,7 +21,7 @@ import {
   SpaceMono_400Regular,
   SpaceMono_700Bold,
 } from '@expo-google-fonts/space-mono'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import * as SplashScreen from 'expo-splash-screen'
 
 SplashScreen.preventAutoHideAsync()
@@ -41,6 +43,23 @@ function AppShell() {
   const user       = useAuthStore(s => s.user)
   const onboarding = useAuthStore(s => s.onboarding)
   const hydrated   = useAuthStore(s => s._hydrated)
+  const [cmdOpen, setCmdOpen] = useState(false)
+
+  // Install console + global error bridge once
+  useEffect(() => { setupLoggerBridge() }, [])
+
+  // Cmd/Ctrl+K global keyboard shortcut (web only)
+  useEffect(() => {
+    if (Platform.OS !== 'web') return
+    function onKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        setCmdOpen(v => !v)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
 
   // Hide splash once fonts and auth store are ready
   useEffect(() => {
@@ -86,6 +105,7 @@ function AppShell() {
       <View style={[s.root, { backgroundColor: colors.bg }]}>
         <Stack screenOptions={{ headerShown: false }} />
         <Toast />
+        <CommandPalette visible={cmdOpen} onClose={() => setCmdOpen(false)} />
       </View>
     </SafeAreaProvider>
   )

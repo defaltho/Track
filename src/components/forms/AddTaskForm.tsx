@@ -9,8 +9,10 @@ import {
   Platform,
 } from 'react-native'
 import { useTheme } from '../../context/ThemeContext'
+import { useDataStore } from '../../stores/data'
 import { theme } from '../../theme'
 import { Button } from '../ui/Button'
+import { TagInput } from '../ui/TagInput'
 
 const PRIORITIES = ['low', 'medium', 'high'] as const
 const CATEGORIES = ['Personal', 'Work', 'Finance', 'Health', 'Travel', 'Other']
@@ -32,6 +34,10 @@ function isValidDate(s: string): boolean {
 
 export function AddTaskForm({ onSubmit, onCancel, initialValue, submitLabel }: Props) {
   const { colors } = useTheme()
+  const customCategories = useDataStore(s => s.settings.customCategories ?? [])
+  const allCategories = [...CATEGORIES, ...customCategories]
+  const customAccounts   = useDataStore(s => s.settings.customAccounts ?? [])
+  const allAccounts      = ['Personal', 'Business', ...customAccounts]
   const isEdit = !!initialValue
   const [name, setName] = useState(initialValue?.name ?? '')
   const [nameError, setNameError] = useState('')
@@ -42,6 +48,8 @@ export function AddTaskForm({ onSubmit, onCancel, initialValue, submitLabel }: P
   )
   const [category, setCategory] = useState(initialValue?.category ?? 'Other')
   const [note, setNote] = useState(initialValue?.note ?? '')
+  const [account, setAccount] = useState(initialValue?.account ?? '')
+  const [tags, setTags] = useState<string[]>(Array.isArray(initialValue?.tags) ? initialValue.tags : [])
 
   function submit() {
     if (!name.trim()) { setNameError('Task name is required'); return }
@@ -57,6 +65,8 @@ export function AddTaskForm({ onSubmit, onCancel, initialValue, submitLabel }: P
       priority,
       category,
       note: note.trim(),
+      account: account || undefined,
+      tags: tags.length > 0 ? tags : undefined,
       amount: initialValue?.amount ?? null,
       currency: initialValue?.currency ?? null,
     })
@@ -119,7 +129,7 @@ export function AddTaskForm({ onSubmit, onCancel, initialValue, submitLabel }: P
         <View>
           <Text style={[s.label, { color: colors.textMuted }]}>Category</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.pillsScroll}>
-            {CATEGORIES.map(c => (
+            {allCategories.map(c => (
               <TouchableOpacity
                 key={c}
                 style={[s.pill, {
@@ -136,6 +146,27 @@ export function AddTaskForm({ onSubmit, onCancel, initialValue, submitLabel }: P
           </ScrollView>
         </View>
 
+        {/* Account */}
+        <View>
+          <Text style={[s.label, { color: colors.textMuted }]}>Account</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.pillsScroll}>
+            {allAccounts.map(a => (
+              <TouchableOpacity
+                key={a}
+                style={[s.pill, {
+                  backgroundColor: (account || 'Personal') === a ? colors.accent : colors.surfaceEl,
+                  borderColor: (account || 'Personal') === a ? colors.accent : colors.border,
+                }]}
+                onPress={() => setAccount(a === 'Personal' ? '' : a)}
+              >
+                <Text style={[s.pillText, { color: (account || 'Personal') === a ? colors.accentFg : colors.textMuted }]}>
+                  {a}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+
         {/* Note */}
         <View>
           <Text style={[s.label, { color: colors.textMuted }]}>Note</Text>
@@ -146,6 +177,12 @@ export function AddTaskForm({ onSubmit, onCancel, initialValue, submitLabel }: P
             placeholder="Optional"
             placeholderTextColor={colors.textFaint}
           />
+        </View>
+
+        {/* Tags */}
+        <View>
+          <Text style={[s.label, { color: colors.textMuted }]}>Tags</Text>
+          <TagInput value={tags} onChange={setTags} />
         </View>
       </View>
 

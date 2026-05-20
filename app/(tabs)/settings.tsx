@@ -45,8 +45,10 @@ export default function Settings() {
     store.settings.monthlyBudget != null ? String(store.settings.monthlyBudget) : ''
   )
   const [newCategory, setNewCategory] = useState('')
+  const [newAccountName, setNewAccountName] = useState('')
   const devMode = store.settings.devMode
   const customCategories: string[] = store.settings.customCategories ?? []
+  const customAccounts: string[]   = store.settings.customAccounts ?? []
   const [showExportModal, setShowExportModal] = useState(false)
   const [exportSel, setExportSel] = useState({ subscriptions: true, apps: true, events: true, tasks: true, settings: true, logs: false })
   const [showErrorLog, setShowErrorLog] = useState(false)
@@ -62,6 +64,17 @@ export default function Settings() {
 
   function handleRemoveCategory(cat: string) {
     store.updateSettings({ customCategories: customCategories.filter(c => c !== cat) })
+  }
+
+  function handleAddAccount() {
+    const acc = newAccountName.trim()
+    if (!acc || customAccounts.includes(acc)) return
+    store.updateSettings({ customAccounts: [...customAccounts, acc] })
+    setNewAccountName('')
+  }
+
+  function handleRemoveAccount(acc: string) {
+    store.updateSettings({ customAccounts: customAccounts.filter(a => a !== acc) })
   }
 
   function handleBudgetBlur() {
@@ -92,7 +105,7 @@ export default function Settings() {
     toast.push('Seed data reloaded', 'success')
   }
 
-  function newAccount() {
+  function handleNewAccount() {
     store.clearAll()
     auth.logout()
     setShowNewAccount(false)
@@ -292,6 +305,43 @@ export default function Settings() {
         </View>
       </View>
 
+      {/* ── Accounts ── */}
+      <Text style={[s.sectionLabel, { color: colors.textMuted }]}>accounts</Text>
+      <View style={[s.card, { backgroundColor: colors.surface }]}>
+        <View style={{ padding: theme.sp5, gap: theme.sp3 }}>
+          {customAccounts.length > 0 && (
+            <View style={s.pillRow}>
+              {customAccounts.map(acc => (
+                <TouchableOpacity
+                  key={acc}
+                  style={[s.pill, { backgroundColor: colors.surfaceEl, borderColor: colors.border }]}
+                  onPress={() => handleRemoveAccount(acc)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[s.pillText, { color: colors.text }]}>{acc} ×</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+          <View style={{ flexDirection: 'row', gap: theme.sp2 }}>
+            <TextInput
+              style={[s.budgetInput, { flex: 1, width: undefined, textAlign: 'left', color: colors.text, borderColor: colors.border, backgroundColor: colors.surfaceEl }]}
+              value={newAccountName}
+              onChangeText={setNewAccountName}
+              onSubmitEditing={handleAddAccount}
+              placeholder="ex: N26, Revolut, Monzo"
+              placeholderTextColor={colors.textFaint}
+              returnKeyType="done"
+              autoCapitalize="words"
+            />
+            <Button label="+ add" variant="primary" size="sm" onPress={handleAddAccount} />
+          </View>
+          {customAccounts.length === 0 && (
+            <Text style={[s.rowSub, { color: colors.textFaint, fontStyle: 'italic' }]}>toca num chip para remover</Text>
+          )}
+        </View>
+      </View>
+
       {/* ── Data ── */}
       <Text style={[s.sectionLabel, { color: colors.textMuted }]}>data</Text>
       <View style={[s.card, { backgroundColor: colors.surface }]}>
@@ -361,6 +411,7 @@ export default function Settings() {
         </TouchableOpacity>
       </View>
 
+
       {/* ── About ── */}
       <Text style={[s.sectionLabel, { color: colors.textMuted }]}>about</Text>
       <View style={[s.card, { backgroundColor: colors.surface }]}>
@@ -401,6 +452,28 @@ export default function Settings() {
             <TouchableOpacity style={s.row} onPress={() => setShowNewAccount(true)} activeOpacity={0.6}>
               <Text style={[s.rowLabel, { color: colors.text }]}>Set up new account</Text>
               <Text style={[s.rowSub, { color: colors.textMuted }]}>Sign out + wipe local data</Text>
+            </TouchableOpacity>
+            <View style={[s.divider, { backgroundColor: colors.border }]} />
+            <TouchableOpacity
+              style={s.row}
+              onPress={() => { logger.error('Test error from Dev Tools', 'manual-trigger') }}
+              activeOpacity={0.6}
+            >
+              <Text style={[s.rowLabel, { color: colors.text }]}>Emit test error</Text>
+              <Text style={[s.rowSub, { color: colors.textMuted }]}>Adds a sample entry to the log below</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Error / Warning Log — inside Dev Tools */}
+          <View style={[s.card, { backgroundColor: colors.surface }]}>
+            <TouchableOpacity style={s.row} onPress={() => router.push('/error-log' as any)} activeOpacity={0.6}>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.rowLabel, { color: colors.text }]}>Error / Warning Log</Text>
+                <Text style={[s.rowSub, { color: colors.textMuted }]}>
+                  {logEntries.length === 0 ? 'No entries' : `${logEntries.length} entr${logEntries.length === 1 ? 'y' : 'ies'}`}
+                </Text>
+              </View>
+              <Text style={[s.chevron, { color: colors.textMuted }]}>›</Text>
             </TouchableOpacity>
           </View>
         </>
@@ -521,7 +594,7 @@ export default function Settings() {
           <View style={{ flexDirection: 'row', gap: 12 }}>
             <Button label="Cancel" variant="secondary" size="md" onPress={() => setShowNewAccount(false)} />
             <View style={{ flex: 1 }}>
-              <Button label="Wipe & sign out" variant="danger" size="md" onPress={newAccount} fullWidth />
+              <Button label="Wipe & sign out" variant="danger" size="md" onPress={handleNewAccount} fullWidth />
             </View>
           </View>
         </View>

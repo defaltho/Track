@@ -1,5 +1,38 @@
 # Ruflo — Claude Code Configuration
 
+## Project Context
+
+Track is a **universal life tracker** (not just financial) — a React Native/Expo app with TypeScript. When generating roadmaps, features, or copy, treat it as a general life-tracking app covering finances, habits, health, etc.
+
+## Goals
+
+**Current wave: Wave B** — see `docs/ROADMAP.md` for the full plan.
+
+- Add **Habits tracker** (new entry type beyond Subscription/App/Event/Task)
+- Add **Subscription `startDate`** field + custom categories CRUD
+- Add **Tags** + **Multi-account** support across all forms
+- New widgets: **KpiStrip**, **PeriodCompare**, **BreakdownWidget Income/Expense toggle**
+- Reform **Menu**: introduce Trackers hub + Control Hub (Cmd/Ctrl+K search)
+- Polish **Family invites**: member activity dots, expired-invite UX
+- Build **Error Log UI** on top of existing `src/stores/logger.ts`
+- Reform **Analytics** (Luis-owned) inspired by donut Income/Expense + period-over-period
+- Add **track-feature** + **github-flow** skills
+
+Constraints: don't increase code complexity beyond what's needed; don't hallucinate features; preserve the universal-tracker scope.
+
+## Widget & UI Rules
+
+- Widgets come in exactly TWO sizes — do not mix arbitrary sizes.
+- Dark-theme buttons use FLAT fill + GRADIENT STROKE (not gradient fill).
+- Prefer minimal designs; avoid adding pills, subtitles, or extra rings unless requested.
+- Reuse shared chart utils across widgets (e.g., spend trend should match Analytics chart style).
+
+## Environment
+
+- Shell is PowerShell on Windows — use `setx` for persistent env vars, not bash syntax.
+- Expo dev server runs on port 8081; if occupied, kill the port before retry.
+- Always run `npm install` before first `expo start` in a fresh clone.
+
 ## Contributors
 
 This repository has more than one human contributor. When you see a commit author that is **not** the current user, treat that work as a peer's:

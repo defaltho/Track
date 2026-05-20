@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { View, Text, StyleSheet, Pressable } from 'react-native'
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
 import { theme } from '../../theme'
 import { useTheme } from '../../context/ThemeContext'
 import { Widget } from '../ui/Widget'
@@ -15,41 +15,43 @@ interface Props {
   tag?: string
   title: string
   items: BreakdownItem[]
-  /** When provided, shows an Expense | Income toggle. These are the income items. */
   incomeItems?: BreakdownItem[]
-  unit?: string       // e.g. "€" — prefixed before value
+  incomeTitle?: string
+  unit?: string
   action?: React.ReactNode
   maxRows?: number
 }
 
 export function BreakdownWidget({
-  tag = 'stats', title, items, incomeItems, unit, action, maxRows = 4,
+  tag = 'stats', title, items, unit, action, maxRows = 4,
+  incomeItems, incomeTitle,
 }: Props) {
   const { colors } = useTheme()
+  const hasToggle = Array.isArray(incomeItems)
   const [mode, setMode] = useState<'expense' | 'income'>('expense')
 
-  const active  = mode === 'expense' ? items : (incomeItems ?? [])
-  const visible = active.slice(0, maxRows)
-  const total   = active.reduce((sum, it) => sum + Math.abs(it.value), 0)
+  const activeItems = hasToggle && mode === 'income' ? (incomeItems ?? []) : items
+  const activeTitle = hasToggle && mode === 'income' ? (incomeTitle ?? 'Income') : title
 
-  const hasToggle = incomeItems !== undefined
+  const visible = activeItems.slice(0, maxRows)
+  const total = activeItems.reduce((sum, it) => sum + it.value, 0)
 
   return (
     <Widget tag={tag} action={action} size="rectangle">
-      <View style={bw.headerRow}>
-        <Text style={[bw.title, { color: colors.text }]}>{title}</Text>
+      <View style={bw.header}>
+        <Text style={[bw.title, { color: colors.text }]}>{activeTitle}</Text>
         {hasToggle && (
-          <View style={[bw.toggle, { backgroundColor: colors.surfaceEl }]}>
+          <View style={[bw.toggle, { backgroundColor: colors.surfaceEl, borderColor: colors.border }]}>
             {(['expense', 'income'] as const).map(m => (
-              <Pressable
+              <TouchableOpacity
                 key={m}
-                style={[bw.toggleBtn, mode === m && { backgroundColor: colors.surface }]}
                 onPress={() => setMode(m)}
+                style={[bw.toggleBtn, mode === m && { backgroundColor: colors.accent }]}
               >
-                <Text style={[bw.toggleLabel, { color: mode === m ? colors.text : colors.textMuted }]}>
-                  {m === 'expense' ? 'Expense' : 'Income'}
+                <Text style={[bw.toggleLabel, { color: mode === m ? '#fff' : colors.textMuted }]}>
+                  {m === 'expense' ? 'Exp' : 'Inc'}
                 </Text>
-              </Pressable>
+              </TouchableOpacity>
             ))}
           </View>
         )}
@@ -110,12 +112,11 @@ export function BreakdownWidget({
 }
 
 const bw = StyleSheet.create({
-  headerRow:   { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 },
+  header:      { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
   title:       { fontSize: 26, fontFamily: theme.fontBlack, letterSpacing: -1, lineHeight: 30, flex: 1 },
-
-  toggle:      { flexDirection: 'row', borderRadius: 8, padding: 3, gap: 2, alignSelf: 'flex-start', marginTop: 2 },
-  toggleBtn:   { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6 },
-  toggleLabel: { fontSize: 11, fontFamily: theme.fontMedium, letterSpacing: -0.1 },
+  toggle:      { flexDirection: 'row', borderRadius: theme.radiusMd, borderWidth: 1, overflow: 'hidden', alignSelf: 'flex-start', marginTop: 4 },
+  toggleBtn:   { paddingHorizontal: 10, paddingVertical: 4 },
+  toggleLabel: { fontSize: 11, fontFamily: theme.fontBold, textTransform: 'uppercase', letterSpacing: 0.3 },
 
   barRow:      { flexDirection: 'row', gap: 6, height: 6, marginTop: theme.sp3 },
   barSeg:      { height: 6, borderRadius: 999 },

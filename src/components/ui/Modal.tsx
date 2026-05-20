@@ -9,12 +9,11 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
-  Dimensions,
+  useWindowDimensions,
 } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '../../context/ThemeContext'
 import { theme } from '../../theme'
-
-const SCREEN_H = Dimensions.get('window').height
 
 interface Props {
   open: boolean
@@ -25,6 +24,8 @@ interface Props {
 
 export function Modal({ open, title, onClose, children }: Props) {
   const { colors } = useTheme()
+  const { height: screenH } = useWindowDimensions()
+  const insets = useSafeAreaInsets()
 
   return (
     <RNModal visible={open} transparent animationType="fade" onRequestClose={onClose}>
@@ -34,7 +35,7 @@ export function Modal({ open, title, onClose, children }: Props) {
           style={s.kav}
         >
           <Pressable style={s.pressable} onPress={e => e.stopPropagation()}>
-            <View style={[s.sheet, { backgroundColor: colors.surface }]}>
+            <View style={[s.sheet, { backgroundColor: colors.surface, maxHeight: screenH * 0.88, marginBottom: 16 + insets.bottom }]}>
               {/* Drag handle */}
               <View style={s.handleWrap}>
                 <View style={[s.handle, { backgroundColor: colors.borderStrong }]} />
@@ -90,8 +91,6 @@ const s = StyleSheet.create({
     borderTopRightRadius: 28,
     borderBottomLeftRadius: 28,
     borderBottomRightRadius: 28,
-    marginBottom: 16,
-    maxHeight: SCREEN_H * 0.88,
     flexDirection: 'column',
     ...Platform.select({
       ios: { shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.12, shadowRadius: 24 },

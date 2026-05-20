@@ -10,6 +10,29 @@ import { Button } from '../../components/ui/Button'
 
 interface Props { spaceId: string; onBack: () => void }
 
+// Returns 'active' (≤7d), 'recent' (≤30d), or 'inactive' based on join date + expense activity
+function memberActivityStatus(
+  memberId: string,
+  joinedAt: string,
+  expenses: { paidBy: string; createdAt: string }[]
+): 'active' | 'recent' | 'inactive' {
+  const now = Date.now()
+  const DAY = 86_400_000
+  const lastExpense = expenses
+    .filter(e => e.paidBy === memberId)
+    .map(e => new Date(e.createdAt).getTime())
+    .sort((a, b) => b - a)[0]
+
+  const lastSeen = Math.max(
+    new Date(joinedAt).getTime(),
+    lastExpense ?? 0,
+  )
+  const days = (now - lastSeen) / DAY
+  if (days <= 7)  return 'active'
+  if (days <= 30) return 'recent'
+  return 'inactive'
+}
+
 export function Members({ spaceId, onBack }: Props) {
   const { colors } = useTheme()
   const store      = useFamilyStore()
@@ -20,6 +43,11 @@ export function Members({ spaceId, onBack }: Props) {
   const userId     = auth.user?.email ?? 'local'
   const myMember   = members.find(m => m.userId === userId)
   const isAdmin    = myMember?.role === 'admin'
+
+  const spaceExpenses = useMemo(
+    () => store.sharedExpenses.filter(e => e.spaceId === spaceId),
+    [store.sharedExpenses, spaceId]
+  )
 
   // Pending invites (consumed but not yet approved/rejected)
   const pending    = useMemo(() =>
@@ -32,6 +60,15 @@ export function Members({ spaceId, onBack }: Props) {
     store.invites.find(i =>
       i.spaceId === spaceId && !i.usedAt && !i.rejectedAt &&
       new Date(i.expiresAt) > new Date()
+    ),
+    [store.invites, spaceId]
+  )
+
+  // Expired invite — naturally timed out (not used, not approved, not rejected)
+  const expiredInvite = useMemo(() =>
+    store.invites.find(i =>
+      i.spaceId === spaceId && !i.usedAt && !i.approvedAt && !i.rejectedAt &&
+      new Date(i.expiresAt) <= new Date()
     ),
     [store.invites, spaceId]
   )
@@ -64,6 +101,14 @@ export function Members({ spaceId, onBack }: Props) {
     const inv = store.createInvite(spaceId, myMember.id)
     setInviteCode(inv.code)
     setShowInviteCode(true)
+  }
+
+  function handleRegenerateInvite() {
+    if (!myMember) return
+    const inv = store.createInvite(spaceId, myMember.id)
+    setInviteCode(inv.code)
+    setShowInviteCode(true)
+    toast.push('Novo código gerado', 'success')
   }
 
   function handleApprove(inviteId: string) {
@@ -105,28 +150,36 @@ export function Members({ spaceId, onBack }: Props) {
       {/* Member list */}
       <View style={[mb.card, { backgroundColor: colors.surface }]}>
         <Text style={[mb.cardTag, { color: colors.textMuted }]}>no espaço</Text>
-        {members.map((m, i) => (
-          <View key={m.id}>
-            {i > 0 && <View style={[mb.divider, { backgroundColor: colors.border }]} />}
-            <View style={mb.memberRow}>
-              <View style={[mb.avatar, { backgroundColor: m.color }]}>
-                <Text style={mb.initial}>{m.initial}</Text>
+        {members.map((m, i) => {
+          const status = memberActivityStatus(m.id, m.joinedAt, spaceExpenses)
+          const dotColor = status === 'active' ? colors.success : status === 'recent' ? '#F2C200' : colors.border
+          const isMe = m.userId === userId
+          return (
+            <View key={m.id}>
+              {i > 0 && <View style={[mb.divider, { backgroundColor: colors.border }]} />}
+              <View style={mb.memberRow}>
+                <View style={mb.avatarWrap}>
+                  <View style={[mb.avatar, { backgroundColor: m.color }]}>
+                    <Text style={mb.initial}>{m.initial}</Text>
+                  </View>
+                  <View style={[mb.activityDot, { backgroundColor: dotColor, borderColor: colors.surface }]} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[mb.name, { color: colors.text }]}>{m.displayName}{isMe ? ' (tu)' : ''}</Text>
+                  <Text style={[mb.role, { color: colors.textMuted }]}>
+                    {m.role === 'admin' ? 'Administrador' : 'Membro'}
+                    {' · '}{status === 'active' ? 'ativo recentemente' : status === 'recent' ? 'visto este mês' : 'inativo'}
+                  </Text>
+                </View>
+                {isAdmin && !isMe && (
+                  <Pressable hitSlop={8} onPress={() => handleRemove(m.id)}>
+                    <Ionicons name="remove-circle-outline" size={20} color={colors.danger} />
+                  </Pressable>
+                )}
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[mb.name, { color: colors.text }]}>{m.displayName}</Text>
-                <Text style={[mb.role, { color: colors.textMuted }]}>
-                  {m.role === 'admin' ? 'Administrador' : 'Membro'}
-                  {m.userId === userId ? ' · tu' : ''}
-                </Text>
-              </View>
-              {isAdmin && m.id !== myMember?.id && (
-                <Pressable hitSlop={8} onPress={() => handleRemove(m.id)}>
-                  <Ionicons name="remove-circle-outline" size={20} color={colors.danger} />
-                </Pressable>
-              )}
             </View>
-          </View>
-        ))}
+          )
+        })}
       </View>
 
       {/* Pending approvals */}
@@ -150,6 +203,22 @@ export function Members({ spaceId, onBack }: Props) {
               </View>
             </View>
           ))}
+        </View>
+      )}
+
+      {/* Expired invite banner */}
+      {isAdmin && expiredInvite && !activeInvite && (
+        <View style={[mb.card, mb.expiredCard, { backgroundColor: colors.surface, borderColor: colors.warning ?? '#F2C200' }]}>
+          <View style={mb.expiredRow}>
+            <Ionicons name="time-outline" size={18} color={'#F2C200'} />
+            <View style={{ flex: 1 }}>
+              <Text style={[mb.name, { color: colors.text }]}>Código expirado</Text>
+              <Text style={[mb.role, { color: colors.textMuted }]}>
+                O último convite expirou. Gera um novo para convidar membros.
+              </Text>
+            </View>
+          </View>
+          <Button label="Regenerar convite" variant="secondary" size="sm" onPress={handleRegenerateInvite} fullWidth />
         </View>
       )}
 
@@ -210,10 +279,15 @@ const mb = StyleSheet.create({
   memberRow: { flexDirection: 'row', alignItems: 'center', gap: theme.sp3, paddingVertical: 4 },
   pendingRow:{ flexDirection: 'row', alignItems: 'center', gap: theme.sp2, paddingVertical: 4 },
 
-  avatar:  { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  avatarWrap:  { position: 'relative' },
+  avatar:      { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  activityDot: { position: 'absolute', bottom: 0, right: 0, width: 10, height: 10, borderRadius: 5, borderWidth: 2 },
   initial: { fontSize: 13, fontFamily: theme.fontBold },
   name:    { fontSize: 14, fontFamily: theme.fontBold, letterSpacing: -0.2 },
   role:    { fontSize: 11, fontFamily: theme.fontRegular, marginTop: 1 },
+
+  expiredCard: { borderWidth: 1 },
+  expiredRow:  { flexDirection: 'row', alignItems: 'flex-start', gap: theme.sp3 },
 
   approveBtn: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
   approveTxt: { fontSize: 12, fontFamily: theme.fontMedium },
