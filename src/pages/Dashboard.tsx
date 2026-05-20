@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import {
   View, Text, TouchableOpacity, Pressable, StyleSheet,
-  Platform, useWindowDimensions, Dimensions, TextInput,
+  Platform, useWindowDimensions, Dimensions,
 } from 'react-native'
 import { ScrollView } from 'react-native-gesture-handler'
 import { MotiView } from 'moti'
@@ -450,8 +450,6 @@ export function Dashboard() {
   const currency = store.settings.defaultCurrency ?? 'EUR'
   const symbol   = CURRENCY_SYMBOL[currency] ?? ''
 
-  const [searchQuery, setSearchQuery] = useState('')
-
   const monthly     = useMemo(() => totalMonthlySpend(store.subscriptions), [store.subscriptions])
   const coffeeCount = useMemo(() => coffees(monthly), [monthly])
   const monthEvents = useMemo(() => store.events.filter((e: any) => e.date?.startsWith(month)), [store.events, month])
@@ -466,31 +464,6 @@ export function Dashboard() {
       .map(({ s }) => s)
   }, [store.subscriptions])
   const activeSubs  = useMemo(() => store.subscriptions.filter((s: any) => s.active !== false), [store.subscriptions])
-
-  // Global search across all entry types
-  const searchResults = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase()
-    if (!q) return []
-    type Result = { id: string; emoji: string; name: string; subtitle: string; type: string; raw: any }
-    const results: Result[] = []
-    for (const s of store.subscriptions as any[]) {
-      if (s.name?.toLowerCase().includes(q))
-        results.push({ id: s.id, emoji: s.emoji ?? '💳', name: s.name, subtitle: `${symbol}${s.price ?? 0} · ${s.billingCycle ?? ''}`, type: s.type ?? 'subscription', raw: s })
-    }
-    for (const a of store.apps as any[]) {
-      if (a.name?.toLowerCase().includes(q))
-        results.push({ id: a.id, emoji: a.emoji ?? '📱', name: a.name, subtitle: `${symbol}${a.price ?? 0} · ${a.billingCycle ?? ''}`, type: 'app', raw: a })
-    }
-    for (const e of store.events as any[]) {
-      if (e.name?.toLowerCase().includes(q))
-        results.push({ id: e.id, emoji: e.emoji ?? '📅', name: e.name, subtitle: e.date ?? '', type: 'event', raw: e })
-    }
-    for (const t of store.tasks as any[]) {
-      if (t.name?.toLowerCase().includes(q))
-        results.push({ id: t.id, emoji: t.emoji ?? '✅', name: t.name, subtitle: t.dueDate ?? '', type: 'task', raw: t })
-    }
-    return results
-  }, [searchQuery, store.subscriptions, store.apps, store.events, store.tasks, symbol])
 
   const forecastItems = useMemo(() => activeSubs.map((s: any) => ({
     name:           s.name,
@@ -1161,55 +1134,32 @@ export function Dashboard() {
   }
 
   const header = (
-    <>
-      <MotiView from={{ opacity:0, translateY:-8 }} animate={{ opacity:1, translateY:0 }} transition={{ type:'spring', damping:20, stiffness:200 }} style={s.header}>
-        <Text style={[s.pageTitle, { color:colors.text }]}>Track</Text>
-        <View style={s.headerBtns}>
-          {editMode ? (
-            <IconButton variant="primary" size="md" onPress={() => setEditMode(false)} accessibilityLabel="Done editing layout">
-              <Text style={{ color: primaryFg, fontSize: 13, fontFamily: theme.fontBold, paddingHorizontal: 6 }}>Done</Text>
-            </IconButton>
-          ) : (
-            <IconButton variant="primary" size="md" onPress={() => setEditMode(true)} accessibilityLabel="Edit layout">
-              <View style={{ gap:3 }}>
-                <View style={{ flexDirection:'row', gap:3 }}>
-                  {[8,8].map((w,i) => <View key={i} style={{ width:w, height:8, borderRadius:2, backgroundColor:primaryFg }} />)}
-                </View>
-                <View style={{ flexDirection:'row', gap:3 }}>
-                  {[8,8].map((w,i) => <View key={i} style={{ width:w, height:8, borderRadius:2, backgroundColor:primaryFg }} />)}
-                </View>
+    <MotiView from={{ opacity:0, translateY:-8 }} animate={{ opacity:1, translateY:0 }} transition={{ type:'spring', damping:20, stiffness:200 }} style={s.header}>
+      <Text style={[s.pageTitle, { color:colors.text }]}>Track</Text>
+      <View style={s.headerBtns}>
+        {editMode ? (
+          <IconButton variant="primary" size="md" onPress={() => setEditMode(false)} accessibilityLabel="Done editing layout">
+            <Text style={{ color: primaryFg, fontSize: 13, fontFamily: theme.fontBold, paddingHorizontal: 6 }}>Done</Text>
+          </IconButton>
+        ) : (
+          <IconButton variant="primary" size="md" onPress={() => setEditMode(true)} accessibilityLabel="Edit layout">
+            <View style={{ gap:3 }}>
+              <View style={{ flexDirection:'row', gap:3 }}>
+                {[8,8].map((w,i) => <View key={i} style={{ width:w, height:8, borderRadius:2, backgroundColor:primaryFg }} />)}
               </View>
-            </IconButton>
-          )}
-          {!editMode && (
-            <IconButton variant="primary" size="md" onPress={() => setShowAddTrack(true)} accessibilityLabel="Add track">
-              <Text style={{ color:primaryFg, fontSize:22, fontFamily:theme.fontLight, lineHeight:24 }}>+</Text>
-            </IconButton>
-          )}
-        </View>
-      </MotiView>
-      {!editMode && (
-        <View style={[s.searchBar, { backgroundColor: colors.surfaceEl }]}>
-          <Text style={[s.searchIcon, { color: colors.textFaint }]}>🔍</Text>
-          <TextInput
-            style={[s.searchInput, { color: colors.text }]}
-            placeholder="Search..."
-            placeholderTextColor={colors.textFaint}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            returnKeyType="search"
-            clearButtonMode="while-editing"
-            autoCorrect={false}
-            autoCapitalize="none"
-          />
-          {searchQuery.length > 0 && (
-            <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
-              <Text style={[s.searchClear, { color: colors.textMuted }]}>✕</Text>
-            </Pressable>
-          )}
-        </View>
-      )}
-    </>
+              <View style={{ flexDirection:'row', gap:3 }}>
+                {[8,8].map((w,i) => <View key={i} style={{ width:w, height:8, borderRadius:2, backgroundColor:primaryFg }} />)}
+              </View>
+            </View>
+          </IconButton>
+        )}
+        {!editMode && (
+          <IconButton variant="primary" size="md" onPress={() => setShowAddTrack(true)} accessibilityLabel="Add track">
+            <Text style={{ color:primaryFg, fontSize:22, fontFamily:theme.fontLight, lineHeight:24 }}>+</Text>
+          </IconButton>
+        )}
+      </View>
+    </MotiView>
   )
 
   const modals = (
@@ -1281,60 +1231,22 @@ export function Dashboard() {
         scrollEventThrottle={16}
       >
           <View style={{ flex: 1 }}>
-            {searchQuery.trim() ? (
-              // ── Search results ──────────────────────────────────
-              <View style={isDesktop ? s.widgetColumn : undefined}>
-                {searchResults.length === 0 ? (
-                  <View style={s.searchEmpty}>
-                    <Text style={[s.searchEmptyText, { color: colors.textFaint }]}>
-                      No results for "{searchQuery.trim()}"
-                    </Text>
-                  </View>
-                ) : searchResults.map((r, i) => {
-                  const isLast = i === searchResults.length - 1
-                  return (
-                    <View key={r.id}>
-                      <Pressable
-                        style={[s.searchResultRow, { backgroundColor: colors.surface }]}
-                        onPress={() => {
-                          if (r.type === 'task') setEditTask(r.raw)
-                          else setEditTrack(r.raw)
-                          setSearchQuery('')
-                        }}
-                      >
-                        <Text style={s.searchResultEmoji}>{r.emoji}</Text>
-                        <View style={{ flex: 1 }}>
-                          <Text style={[s.searchResultName, { color: colors.text }]}>{r.name}</Text>
-                          {r.subtitle ? <Text style={[s.searchResultSub, { color: colors.textMuted }]}>{r.subtitle}</Text> : null}
-                        </View>
-                        <View style={[s.searchResultTag, { backgroundColor: colors.surfaceEl }]}>
-                          <Text style={[s.searchResultTagTxt, { color: colors.textFaint }]}>{r.type}</Text>
-                        </View>
-                      </Pressable>
-                      {!isLast && <View style={[s.searchRule, { backgroundColor: colors.border }]} />}
-                    </View>
-                  )
-                })}
-              </View>
-            ) : (
-              // ── Widget grid ──────────────────────────────────────
-              <View style={isDesktop ? s.widgetColumn : undefined}>
-                {order.length === 0 && !editMode && (
-                  <View style={s.emptyState}>
-                    <Text style={[s.emptyTitle, { color: colors.textMuted }]}>no widgets</Text>
-                    <Text style={[s.emptySub, { color: colors.textFaint }]}>press ⊞ to add widgets back</Text>
-                  </View>
-                )}
-                {renderAll()}
-                <HiddenWidgetTray
-                  visible={editMode}
-                  items={ALL_KEYS
-                    .filter(k => !order.includes(k))
-                    .map(k => ({ id: k, label: WIDGET_META[k].label, emoji: WIDGET_META[k].emoji }))}
-                  onAdd={(id) => setOrder(prev => [...prev, id as WKey])}
-                />
-              </View>
-            )}
+            <View style={isDesktop ? s.widgetColumn : undefined}>
+              {order.length === 0 && !editMode && (
+                <View style={s.emptyState}>
+                  <Text style={[s.emptyTitle, { color: colors.textMuted }]}>no widgets</Text>
+                  <Text style={[s.emptySub, { color: colors.textFaint }]}>press ⊞ to add widgets back</Text>
+                </View>
+              )}
+              {renderAll()}
+              <HiddenWidgetTray
+                visible={editMode}
+                items={ALL_KEYS
+                  .filter(k => !order.includes(k))
+                  .map(k => ({ id: k, label: WIDGET_META[k].label, emoji: WIDGET_META[k].emoji }))}
+                onAdd={(id) => setOrder(prev => [...prev, id as WKey])}
+              />
+            </View>
           </View>
         {modals}
       </ScrollView>
@@ -1390,22 +1302,5 @@ const s = StyleSheet.create({
   btnSecTxt: { fontSize:theme.textSm, fontFamily:theme.fontBold },
   btnDanger: { flex:1, paddingVertical:theme.sp3, borderRadius:theme.radiusMd, alignItems:'center' },
   btnDangerTxt: { fontSize:theme.textSm, fontFamily:theme.fontBold, color:'#fff' },
-
-  // Search bar
-  searchBar:    { flexDirection:'row', alignItems:'center', gap:8, height:40, borderRadius:12, paddingHorizontal:12, marginTop:theme.sp3 },
-  searchIcon:   { fontSize:15 },
-  searchInput:  { flex:1, fontSize:14, fontFamily:theme.fontRegular, paddingVertical:0 },
-  searchClear:  { fontSize:13, paddingHorizontal:2 },
-
-  // Search results
-  searchResultRow:    { flexDirection:'row', alignItems:'center', gap:12, paddingVertical:12, paddingHorizontal:theme.sp4, borderRadius:theme.radiusLg },
-  searchResultEmoji:  { fontSize:22, width:30, textAlign:'center' },
-  searchResultName:   { fontSize:14, fontFamily:theme.fontBold, letterSpacing:-0.2 },
-  searchResultSub:    { fontSize:11, fontFamily:theme.fontMono, marginTop:2 },
-  searchResultTag:    { paddingHorizontal:8, paddingVertical:3, borderRadius:6 },
-  searchResultTagTxt: { fontSize:10, fontFamily:theme.fontMono, textTransform:'lowercase' },
-  searchRule:         { height:StyleSheet.hairlineWidth, marginHorizontal:theme.sp4 },
-  searchEmpty:        { paddingTop:60, alignItems:'center' },
-  searchEmptyText:    { fontSize:13, fontFamily:theme.fontRegular, fontStyle:'italic' },
 })
 
