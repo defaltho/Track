@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Tabs, useRouter, usePathname } from 'expo-router'
 import { View, Text, Platform, StyleSheet, useWindowDimensions, TouchableOpacity, Pressable, Modal, TextInput } from 'react-native'
 import { MotiView } from 'moti'
@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { BottomTabBar } from '@react-navigation/bottom-tabs'
 import { useTheme } from '../../src/context/ThemeContext'
 import { useAuthStore } from '../../src/stores/auth'
+import { useDataStore } from '../../src/stores/data'
 import { Colors } from '../../src/theme'
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name']
@@ -41,15 +42,25 @@ const TAB_CFG: Record<string, { active: IoniconName; inactive: IoniconName; labe
   settings:  { active: 'settings',          inactive: 'settings-outline',         label: 'Settings' },
 }
 
-// Mock notification state — wire up real triggers later.
-const TAB_BADGES: Record<string, boolean> = {
-  index:    true,
-  calendar: true,
+function useTabBadges(): Record<string, boolean> {
+  const subscriptions = useDataStore(s => s.subscriptions)
+  return useMemo(() => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const in3Days = new Date(today.getTime() + 3 * 24 * 60 * 60 * 1000)
+    const hasOverdue  = subscriptions.some(s => s.active && new Date(s.nextChargeDate) < today)
+    const hasUpcoming = subscriptions.some(s => s.active && new Date(s.nextChargeDate) <= in3Days && new Date(s.nextChargeDate) >= today)
+    return {
+      index:    hasOverdue,
+      calendar: hasUpcoming,
+    }
+  }, [subscriptions])
 }
 
 function TabIcon({ name, focused, colors }: { name: string; focused: boolean; colors: Colors }) {
   const cfg = TAB_CFG[name] ?? { active: 'ellipse', inactive: 'ellipse-outline', label: name }
-  const hasBadge = !!TAB_BADGES[name]
+  const badges = useTabBadges()
+  const hasBadge = !!badges[name]
   return (
     <View style={s.iconWrap}>
       <Ionicons name={focused ? cfg.active : cfg.inactive} size={24} color={focused ? colors.text : colors.textMuted} />
