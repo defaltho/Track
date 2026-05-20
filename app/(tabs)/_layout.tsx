@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Tabs, useRouter, usePathname } from 'expo-router'
 import { View, Text, Platform, StyleSheet, useWindowDimensions, TouchableOpacity, Pressable, Modal, TextInput } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MotiView } from 'moti'
 import { Ionicons } from '@expo/vector-icons'
 import { BottomTabBar } from '@react-navigation/bottom-tabs'
@@ -23,6 +24,12 @@ const NAV_SECTIONS: NavSection[] = [
       { name: 'calendar',  href: '/calendar',  activeIc: 'calendar-outline'    as IoniconName, inactiveIc: 'calendar-outline'    as IoniconName, label: 'Calendar'  },
       { name: 'family',    href: '/family',    activeIc: 'people-outline'      as IoniconName, inactiveIc: 'people-outline'      as IoniconName, label: 'Família'   },
       { name: 'analytics', href: '/analytics', activeIc: 'stats-chart-outline' as IoniconName, inactiveIc: 'stats-chart-outline' as IoniconName, label: 'Analytics' },
+    ],
+  },
+  {
+    section: 'Trackers',
+    items: [
+      { name: 'trackers',  href: '/trackers',  activeIc: 'grid-outline'        as IoniconName, inactiveIc: 'grid-outline'        as IoniconName, label: 'All Trackers' },
     ],
   },
   {
@@ -324,7 +331,13 @@ function ControlCenter({
 export default function TabsLayout() {
   const { colors } = useTheme()
   const { width } = useWindowDimensions()
+  const insets = useSafeAreaInsets()
   const isDesktop = Platform.OS === 'web' && width >= BREAK
+
+  // Tab bar bottom adjusts for home indicator / gesture bar
+  const tabBarStyle = isDesktop
+    ? ({ display: 'none' } as const)
+    : { ...s.tabBar, bottom: 24 + insets.bottom }
 
   return (
     <View style={{ flex: 1, flexDirection: isDesktop ? 'row' : 'column', backgroundColor: isDesktop ? colors.bg : undefined }}>
@@ -340,7 +353,7 @@ export default function TabsLayout() {
           screenOptions={({ route }) => ({
             headerShown: false,
             tabBarShowLabel: false,
-            tabBarStyle: isDesktop ? { display: 'none' } : s.tabBar,
+            tabBarStyle,
             tabBarIcon: ({ focused }) => <TabIcon name={route.name} focused={focused} colors={colors} />,
             ...(isDesktop ? {} : {
               tabBarItemStyle: s.tabItem,
@@ -355,7 +368,8 @@ export default function TabsLayout() {
           <Tabs.Screen name="calendar"  options={{ title: 'Calendar'  }} />
           <Tabs.Screen name="family"    options={{ title: 'Família'   }} />
           <Tabs.Screen name="analytics" options={{ title: 'Analytics' }} />
-          <Tabs.Screen name="settings"  options={{ title: 'Settings', href: isDesktop ? '/settings' : null }} />
+          <Tabs.Screen name="settings"  options={{ title: 'Settings',  href: isDesktop ? '/settings'  : null }} />
+          <Tabs.Screen name="trackers"  options={{ title: 'Trackers',  href: (isDesktop ? '/trackers' : null) as any }} />
         </Tabs>
       </View>
     </View>

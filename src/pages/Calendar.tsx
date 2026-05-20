@@ -3,6 +3,7 @@ import {
   View, Text, ScrollView, StyleSheet,
   Platform, useWindowDimensions, Pressable,
 } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated'
 import { Ionicons } from '@expo/vector-icons'
 import {
@@ -109,6 +110,7 @@ export function Calendar() {
   const { colors } = useTheme()
   const store = useDataStore()
   const { width } = useWindowDimensions()
+  const insets = useSafeAreaInsets()
   const isDesktop = Platform.OS === 'web' && width >= 768
 
   const [current, setCurrent] = useState(new Date())
@@ -261,7 +263,7 @@ export function Calendar() {
       )}
       <ScrollView
         style={cs.page}
-        contentContainerStyle={[cs.scroll, isDesktop && cs.scrollDesktop]}
+        contentContainerStyle={[cs.scroll, isDesktop && cs.scrollDesktop, !isDesktop && { paddingBottom: 130 + insets.bottom }]}
         showsVerticalScrollIndicator={false}
       >
       <View style={[cs.container, isDesktop && cs.containerDesktop]}>

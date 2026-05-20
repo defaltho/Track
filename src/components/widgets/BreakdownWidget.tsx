@@ -1,5 +1,5 @@
-import React from 'react'
-import { View, Text, StyleSheet } from 'react-native'
+import React, { useState } from 'react'
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
 import { theme } from '../../theme'
 import { useTheme } from '../../context/ThemeContext'
 import { Widget } from '../ui/Widget'
@@ -25,18 +25,45 @@ interface Props {
   unit?: string       // e.g. "€" — prefixed before value
   action?: React.ReactNode
   maxRows?: number
+  // When provided, shows an Expense / Income toggle
+  incomeItems?: BreakdownItem[]
+  incomeTitle?: string
 }
 
 export function BreakdownWidget({
   tag = 'stats', title, items, unit, action, maxRows = 4,
+  incomeItems, incomeTitle,
 }: Props) {
   const { colors } = useTheme()
-  const visible = items.slice(0, maxRows)
-  const total = items.reduce((sum, it) => sum + it.value, 0)
+  const hasToggle = Array.isArray(incomeItems)
+  const [mode, setMode] = useState<'expense' | 'income'>('expense')
+
+  const activeItems = hasToggle && mode === 'income' ? (incomeItems ?? []) : items
+  const activeTitle = hasToggle && mode === 'income' ? (incomeTitle ?? 'Income') : title
+
+  const visible = activeItems.slice(0, maxRows)
+  const total = activeItems.reduce((sum, it) => sum + it.value, 0)
 
   return (
     <Widget tag={tag} action={action} size="rectangle">
-      <Text style={[bw.title, { color: colors.text }]}>{title}</Text>
+      <View style={bw.header}>
+        <Text style={[bw.title, { color: colors.text }]}>{activeTitle}</Text>
+        {hasToggle && (
+          <View style={[bw.toggle, { backgroundColor: colors.surfaceEl, borderColor: colors.border }]}>
+            {(['expense', 'income'] as const).map(m => (
+              <TouchableOpacity
+                key={m}
+                onPress={() => setMode(m)}
+                style={[bw.toggleBtn, mode === m && { backgroundColor: colors.accent }]}
+              >
+                <Text style={[bw.toggleLabel, { color: mode === m ? '#fff' : colors.textMuted }]}>
+                  {m === 'expense' ? 'Exp' : 'Inc'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+      </View>
 
       {/* Stacked color bar — proportional segments */}
       {total > 0 && (
@@ -90,8 +117,12 @@ export function BreakdownWidget({
 }
 
 const bw = StyleSheet.create({
+  header:     { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
   // Big bold title — echoes the notebook masthead
-  title:      { fontSize: 26, fontFamily: theme.fontBlack, letterSpacing: -1, lineHeight: 30 },
+  title:      { fontSize: 26, fontFamily: theme.fontBlack, letterSpacing: -1, lineHeight: 30, flex: 1 },
+  toggle:     { flexDirection: 'row', borderRadius: theme.radiusMd, borderWidth: 1, overflow: 'hidden', alignSelf: 'flex-start', marginTop: 4 },
+  toggleBtn:  { paddingHorizontal: 10, paddingVertical: 4 },
+  toggleLabel:{ fontSize: 11, fontFamily: theme.fontBold, textTransform: 'uppercase', letterSpacing: 0.3 },
 
   // Stacked bar — pill-shaped segments with gaps
   barRow:     { flexDirection: 'row', gap: 6, height: 6, marginTop: theme.sp3 },

@@ -1,0 +1,44 @@
+<h2>3 abordagens — qual é a tua?</h2>
+<p class="subtitle">Mesma stack base, scopes diferentes. Recomendação no topo.</p>
+
+<div class="options">
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Hybrid Studio + Generate <span style="color:var(--accent,#ce857a)">(recomendado)</span></h3>
+      <p><strong>Duas superfícies ligadas:</strong></p>
+      <ul>
+        <li><strong>Generate</strong> — hub estilo Lychee (barra central + galeria "My assets"). Prompts: copy, imagem, batch de variações ("3 posts Sardinia Maio").</li>
+        <li><strong>Studio</strong> — canvas real (Konva/Fabric) com brand-kit guardrails: paleta, fontes, logos sempre à mão. Cliente arrasta, edita, exporta.</li>
+        <li>Output do Generate cai direto no Studio para refinar.</li>
+        <li>4 formatos: email HTML, social 1:1/4:5, carrossel, story 9:16.</li>
+      </ul>
+      <p><em>Pros:</em> Honra "Express + AI". Wow-factor da Lychee + controlo do Express.<br>
+         <em>Cons:</em> Build maior. ~8–10 semanas até MVP útil.</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Phased: Studio primeiro, AI em v2</h3>
+      <p>v1 = canvas + template gallery + asset library + export. Zero AI no MVP.<br>
+         v2 = AI copy + AI imagem. v3 = agent orchestrator.</p>
+      <p><em>Pros:</em> Ship rápido (~4–5 semanas para v1), valida com Eleggia antes de AI.<br>
+         <em>Cons:</em> Falta a vibe AI que pediste — sem wow.</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>AI-first: agente é o produto, canvas é minimal</h3>
+      <p>v1 = barra central Lychee-style faz batches inteiros; "edit" é só swap de texto/imagem.<br>
+         Canvas real só em v2.</p>
+      <p><em>Pros:</em> Demo wow imediata, diferenciação grande.<br>
+         <em>Cons:</em> Inverte o que escolheste ("Open canvas"); se AI falhar, o cliente fica sem escape; difícil ajustar pixels finos.</p>
+    </div>
+  </div>
+
+</div>

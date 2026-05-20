@@ -30,6 +30,21 @@ Track is a mobile-first universal life tracker. The core idea is simple: anythin
 
 ---
 
+## Mobile Polish — Completed ✅
+
+Audited mobile behaviour and fixed all safe-area, layout, and touch-target bugs before continuing Wave B feature work.
+
+| # | File | Issue | Fix |
+|---|------|-------|-----|
+| 1 | `app/(tabs)/_layout.tsx` | Tab bar obscured by home indicator / gesture bar on iPhone | `useSafeAreaInsets()` — `bottom: 24 + insets.bottom` |
+| 2 | `src/pages/Dashboard.tsx` | Scroll content hidden under tab bar on devices with tall insets | Inline `paddingBottom: 130 + insets.bottom` on `contentContainerStyle` |
+| 3 | `src/pages/Calendar.tsx` | Same as #2 for the calendar scroll view | Same fix |
+| 4 | `src/components/ui/Modal.tsx` | `maxHeight` and `marginBottom` computed at module load — broke on orientation change | Replaced `Dimensions.get` with `useWindowDimensions()` + `useSafeAreaInsets()` inside component |
+| 5 | `src/components/ui/Button.tsx` | `sm` / `md` buttons below 44 px minimum touch target on native | `hitSlop` on `Pressable` for non-`lg` sizes (native only) |
+| 6 | `src/components/ui/TagInput.tsx` | `flexWrap: 'wrap'` chips expanded height unboundedly with many tags | Replaced wrapping `View` with horizontal `ScrollView` — chips stay in one row |
+
+---
+
 ## Phase 1 — Polish & Foundation (v0.2)
 
 ### Objective

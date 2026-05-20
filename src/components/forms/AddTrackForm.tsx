@@ -25,9 +25,11 @@ function displayDate(iso: string) {
   return `${String(d).padStart(2,'0')} ${CAL_MONTHS[m - 1]?.slice(0,3)} ${y}`
 }
 import { useTheme } from '../../context/ThemeContext'
+import { useDataStore } from '../../stores/data'
 import { theme } from '../../theme'
 import { Button, IconButton } from '../ui/Button'
 import { Segmented } from '../ui/Segmented'
+import { TagInput } from '../ui/TagInput'
 
 const TYPES = ['subscription', 'app', 'event'] as const
 const CURRENCIES = ['EUR', 'USD', 'GBP', 'BRL']
@@ -72,6 +74,10 @@ function isValidDate(s: string): boolean {
 
 export function AddTrackForm({ onSubmit, onCancel, initialValue, submitLabel }: Props) {
   const { colors } = useTheme()
+  const customCategories = useDataStore(s => s.settings.customCategories ?? [])
+  const allCategories = [...CATEGORIES, ...customCategories]
+  const customAccounts   = useDataStore(s => s.settings.customAccounts ?? [])
+  const allAccounts      = ['Personal', 'Business', ...customAccounts]
   const { width: screenWidth } = useWindowDimensions()
   const calWidth = Math.min(310, screenWidth - 48)
   const cellSize = Math.floor((calWidth - theme.sp5 * 2) / 7)
@@ -93,15 +99,19 @@ export function AddTrackForm({ onSubmit, onCancel, initialValue, submitLabel }: 
   const [nextDate, setNextDate]       = useState(
     initialValue?.nextChargeDate ?? initialValue?.date ?? ''
   )
+  const [startDate, setStartDate]     = useState(initialValue?.startDate ?? '')
   const [category, setCategory]       = useState(initialValue?.category ?? 'Other')
   const [payment, setPayment]         = useState(initialValue?.paymentMethod ?? 'Card')
+  const [account, setAccount]         = useState(initialValue?.account ?? '')
   const [note, setNote]               = useState(initialValue?.note ?? '')
+  const [tags, setTags]               = useState<string[]>(Array.isArray(initialValue?.tags) ? initialValue.tags : [])
   const [color, setColor]             = useState<string>(initialValue?.color ?? COLOR_PALETTE[0])
   const [customColor, setCustomColor] = useState('')
   const [error, setError]             = useState('')
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const [emojiCategory, setEmojiCategory]     = useState('Finance')
   const [showDatePicker, setShowDatePicker]   = useState(false)
+  const [pickerTarget, setPickerTarget]       = useState<'next' | 'start'>('next')
   const [calYear, setCalYear]   = useState(() => new Date().getFullYear())
   const [calMonth, setCalMonth] = useState(() => new Date().getMonth())
 
@@ -121,12 +131,13 @@ export function AddTrackForm({ onSubmit, onCancel, initialValue, submitLabel }: 
   function submit() {
     setError('')
     const finalColor = customColor.trim() || color
-    const base = { type, name: name.trim(), emoji, color: finalColor, currency, category, note: note.trim(), active: initialValue?.active ?? true }
+    const tagsClean = tags.length > 0 ? tags : undefined
+    const base = { type, name: name.trim(), emoji, color: finalColor, currency, category, note: note.trim(), tags: tagsClean, active: initialValue?.active ?? true }
     if (type === 'event') {
       onSubmit({ ...base, date: nextDate })
     } else {
       const p = parseFloat(price.replace(',', '.'))
-      onSubmit({ ...base, price: p, billingCycle, nextChargeDate: nextDate, purchaseDate: initialValue?.purchaseDate ?? nextDate, date: nextDate, paymentMethod: payment })
+      onSubmit({ ...base, price: p, billingCycle, nextChargeDate: nextDate, startDate: startDate || undefined, purchaseDate: initialValue?.purchaseDate ?? nextDate, date: nextDate, paymentMethod: payment, account: account || undefined })
     }
   }
 
@@ -225,7 +236,7 @@ export function AddTrackForm({ onSubmit, onCancel, initialValue, submitLabel }: 
             <Text style={[s.label, { color: colors.textMuted }]}>{dateLabel} *</Text>
             <TouchableOpacity
               style={[s.input, inputStyle, s.dateTouchable]}
-              onPress={() => setShowDatePicker(true)}
+              onPress={() => { setPickerTarget('next'); setShowDatePicker(true) }}
               accessibilityRole="button"
               accessibilityLabel="Select date"
             >
@@ -256,11 +267,29 @@ export function AddTrackForm({ onSubmit, onCancel, initialValue, submitLabel }: 
             </View>
           )}
 
+          {/* Start date — subscription only (optional, drives trial calc) */}
+          {type === 'subscription' && (
+            <View>
+              <Text style={[s.label, { color: colors.textMuted }]}>Start date</Text>
+              <TouchableOpacity
+                style={[s.input, inputStyle, s.dateTouchable]}
+                onPress={() => { setPickerTarget('start'); setShowDatePicker(true) }}
+                accessibilityRole="button"
+                accessibilityLabel="Select start date"
+              >
+                <Text style={{ color: startDate ? colors.text : colors.textFaint, fontSize: theme.textSm, fontFamily: theme.fontRegular }}>
+                  {startDate ? displayDate(startDate) : 'Optional — when did this start?'}
+                </Text>
+                <Text style={{ color: colors.textMuted, fontSize: 16 }}>📅</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
           {/* Category */}
           <View>
             <Text style={[s.label, { color: colors.textMuted }]}>Category</Text>
             <Segmented
-              options={CATEGORIES}
+              options={allCategories}
               value={category}
               onChange={setCategory}
               layout="scroll"
@@ -276,6 +305,20 @@ export function AddTrackForm({ onSubmit, onCancel, initialValue, submitLabel }: 
                 options={PAYMENTS}
                 value={payment}
                 onChange={setPayment}
+                layout="scroll"
+                size="sm"
+              />
+            </View>
+          )}
+
+          {/* Account — subscription + app */}
+          {type !== 'event' && (
+            <View>
+              <Text style={[s.label, { color: colors.textMuted }]}>Account</Text>
+              <Segmented
+                options={allAccounts}
+                value={account || 'Personal'}
+                onChange={v => setAccount(v === 'Personal' ? '' : v)}
                 layout="scroll"
                 size="sm"
               />
@@ -324,6 +367,12 @@ export function AddTrackForm({ onSubmit, onCancel, initialValue, submitLabel }: 
               numberOfLines={3}
               textAlignVertical="top"
             />
+          </View>
+
+          {/* Tags */}
+          <View>
+            <Text style={[s.label, { color: colors.textMuted }]}>Tags</Text>
+            <TagInput value={tags} onChange={setTags} />
           </View>
         </View>
       )}
@@ -385,14 +434,20 @@ export function AddTrackForm({ onSubmit, onCancel, initialValue, submitLabel }: 
               ))}
               {Array.from({ length: calDaysIn(calYear, calMonth) }, (_, i) => i + 1).map(day => {
                 const iso = fmtDate(calYear, calMonth, day)
-                const selected = nextDate === iso
+                const currentValue = pickerTarget === 'start' ? startDate : nextDate
+                const selected = currentValue === iso
                 const today = fmtDate(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()) === iso
                 return (
                   <TouchableOpacity
                     key={day}
                     style={[{ width: cellSize, height: cellSize, alignItems: 'center', justifyContent: 'center' },
                       selected && { backgroundColor: colors.accent, borderRadius: theme.radiusMd }]}
-                    onPress={() => { setNextDate(iso); setError(''); setShowDatePicker(false) }}
+                    onPress={() => {
+                      if (pickerTarget === 'start') setStartDate(iso)
+                      else setNextDate(iso)
+                      setError('')
+                      setShowDatePicker(false)
+                    }}
                   >
                     <Text style={[
                       s.calDayText,

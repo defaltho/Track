@@ -14,9 +14,27 @@ export interface Subscription {
   color: string
   active: boolean
   nextChargeDate: string
+  startDate?: string
   purchaseDate?: string
   paymentMethod?: string
+  account?: string
   note?: string
+  tags?: string[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface Habit {
+  id: string
+  name: string
+  emoji: string
+  cadence: 'daily' | 'weekly'
+  checkins: string[]
+  category?: string
+  color?: string
+  note?: string
+  tags?: string[]
+  active: boolean
   createdAt: string
   updatedAt: string
 }
@@ -31,6 +49,8 @@ export interface Task {
   note?: string
   amount?: number | null
   currency?: string | null
+  account?: string
+  tags?: string[]
   createdAt: string
   updatedAt: string
 }
@@ -49,6 +69,7 @@ export interface AppEntry {
   nextChargeDate: string
   purchaseDate?: string
   paymentMethod?: string
+  account?: string
   note?: string
   createdAt: string
   updatedAt: string
@@ -78,6 +99,7 @@ interface Settings {
   version: string
   devMode: boolean
   customCategories: string[]
+  customAccounts: string[]
 }
 
 interface DataStore {
@@ -85,6 +107,7 @@ interface DataStore {
   apps: AppEntry[]
   events: EventEntry[]
   tasks: Task[]
+  habits: Habit[]
   settings: Settings
   widgetOrder: string[]
   flippedWidgets: string[]
@@ -93,21 +116,26 @@ interface DataStore {
   addApp: (item: Omit<AppEntry, 'id' | 'createdAt' | 'updatedAt'>) => void
   addEvent: (item: Omit<EventEntry, 'id' | 'createdAt' | 'updatedAt'>) => void
   addTask: (item: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => void
+  addHabit: (item: Omit<Habit, 'id' | 'createdAt' | 'updatedAt'>) => void
 
   updateSubscription: (id: string, patch: Partial<Omit<Subscription, 'id' | 'createdAt'>>) => void
   updateApp: (id: string, patch: Partial<Omit<AppEntry, 'id' | 'createdAt'>>) => void
   updateEvent: (id: string, patch: Partial<Omit<EventEntry, 'id' | 'createdAt'>>) => void
   updateTask: (id: string, patch: Partial<Omit<Task, 'id' | 'createdAt'>>) => void
+  updateHabit: (id: string, patch: Partial<Omit<Habit, 'id' | 'createdAt'>>) => void
 
   removeSubscription: (id: string) => void
   removeApp: (id: string) => void
   removeEvent: (id: string) => void
   removeTask: (id: string) => void
+  removeHabit: (id: string) => void
+
+  toggleHabitCheckin: (id: string, dateISO: string) => void
 
   updateSettings: (patch: Partial<Settings>) => void
   setWidgetLayout: (order: string[], flipped: string[]) => void
   clearAll: () => void
-  importData: (data: Partial<{ subscriptions: Subscription[]; apps: AppEntry[]; events: EventEntry[]; tasks: Task[] }>) => void
+  importData: (data: Partial<{ subscriptions: Subscription[]; apps: AppEntry[]; events: EventEntry[]; tasks: Task[]; habits: Habit[] }>) => void
 }
 
 const defaultSettings: Settings = {
@@ -119,6 +147,7 @@ const defaultSettings: Settings = {
   version: '0.1.0',
   devMode: false,
   customCategories: [],
+  customAccounts: [],
 }
 
 // BUG M4 fix: fallback UUID generator when crypto.randomUUID is unavailable
@@ -154,6 +183,7 @@ export const useDataStore = create<DataStore>()(
       apps: [],
       events: [],
       tasks: [],
+      habits: [],
       settings: defaultSettings,
       widgetOrder: [],
       flippedWidgets: [],
@@ -166,6 +196,8 @@ export const useDataStore = create<DataStore>()(
         set((s) => ({ events: [...s.events, makeEntry(item) as EventEntry] })),
       addTask: (item) =>
         set((s) => ({ tasks: [...s.tasks, makeEntry(item) as Task] })),
+      addHabit: (item) =>
+        set((s) => ({ habits: [...s.habits, makeEntry(item) as Habit] })),
 
       updateSubscription: (id, patch) =>
         set((s) => ({
@@ -193,6 +225,24 @@ export const useDataStore = create<DataStore>()(
             i.id === id ? stampUpdate(i, patch) : i
           ),
         })),
+      updateHabit: (id, patch) =>
+        set((s) => ({
+          habits: s.habits.map((i) =>
+            i.id === id ? stampUpdate(i, patch) : i
+          ),
+        })),
+
+      toggleHabitCheckin: (id, dateISO) =>
+        set((s) => ({
+          habits: s.habits.map((h) => {
+            if (h.id !== id) return h
+            const exists = h.checkins.includes(dateISO)
+            const nextCheckins = exists
+              ? h.checkins.filter((d) => d !== dateISO)
+              : [...h.checkins, dateISO].sort()
+            return stampUpdate(h, { checkins: nextCheckins })
+          }),
+        })),
 
       removeSubscription: (id) =>
         set((s) => ({ subscriptions: s.subscriptions.filter((i) => i.id !== id) })),
@@ -204,6 +254,8 @@ export const useDataStore = create<DataStore>()(
         set((s) => ({ events: s.events.filter((i) => i.id !== id) })),
       removeTask: (id) =>
         set((s) => ({ tasks: s.tasks.filter((i) => i.id !== id) })),
+      removeHabit: (id) =>
+        set((s) => ({ habits: s.habits.filter((i) => i.id !== id) })),
 
       updateSettings: (patch) =>
         set((s) => ({ settings: { ...s.settings, ...patch } })),
@@ -212,7 +264,7 @@ export const useDataStore = create<DataStore>()(
         set(() => ({ widgetOrder: order, flippedWidgets: flipped })),
 
       clearAll: () =>
-        set(() => ({ subscriptions: [], apps: [], events: [], tasks: [] })),
+        set(() => ({ subscriptions: [], apps: [], events: [], tasks: [], habits: [] })),
 
       importData: (data) =>
         set((s) => ({
@@ -220,6 +272,7 @@ export const useDataStore = create<DataStore>()(
           apps: data.apps ?? s.apps,
           events: data.events ?? s.events,
           tasks: data.tasks ?? s.tasks,
+          habits: data.habits ?? s.habits,
         })),
     }),
     {

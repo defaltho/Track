@@ -4,6 +4,7 @@ import {
   Platform, useWindowDimensions, Dimensions,
 } from 'react-native'
 import { ScrollView } from 'react-native-gesture-handler'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MotiView } from 'moti'
 import Animated, {
   FadeInRight, ZoomIn, LinearTransition,
@@ -34,6 +35,9 @@ import { ForecastWidget }       from '../components/widgets/ForecastWidget'
 import { ScoreWidget }          from '../components/widgets/ScoreWidget'
 import { TopExpensesWidget }    from '../components/widgets/TopExpensesWidget'
 import { AnomalyWidget }        from '../components/widgets/AnomalyWidget'
+import { KpiStripWidget }       from '../components/widgets/KpiStripWidget'
+import { HabitStreakWidget }    from '../components/widgets/HabitStreakWidget'
+import { PeriodCompareWidget }  from '../components/widgets/PeriodCompareWidget'
 import { buildForecast }        from '../utils/forecast'
 import { AddTrackForm } from '../components/forms/AddTrackForm'
 import { AddTaskForm } from '../components/forms/AddTaskForm'
@@ -332,7 +336,7 @@ type WKey =
   | 'active' | 'spend' | 'coffees' | 'events' | 'topExpense' | 'ytd' | 'monthGoal' | 'clock'
   | 'categoryRings'
   | 'heatmap' | 'due' | 'category' | 'upcoming' | 'spendTrend' | 'radar' | 'budget' | 'forecast'
-  | 'score' | 'topExpenses' | 'anomaly'
+  | 'score' | 'topExpenses' | 'anomaly' | 'kpiStrip' | 'habits' | 'periodCompare'
 
 const WIDGET_SIZE: Record<WKey, 'square' | 'rectangle'> = {
   active:        'square',
@@ -355,6 +359,9 @@ const WIDGET_SIZE: Record<WKey, 'square' | 'rectangle'> = {
   score:         'square',
   topExpenses:   'rectangle',
   anomaly:       'rectangle',
+  kpiStrip:      'rectangle',
+  habits:        'rectangle',
+  periodCompare: 'rectangle',
 }
 
 const WIDGET_DELAY: Record<WKey, number> = {
@@ -362,7 +369,7 @@ const WIDGET_DELAY: Record<WKey, number> = {
   heatmap: 180, due: 210,    spendTrend: 240, category: 270,
   coffees: 300, events: 330, upcoming: 360,
   topExpense: 390, ytd: 420,  radar: 450, categoryRings: 480,
-  budget: 500, forecast: 520, score: 540, topExpenses: 560, anomaly: 580,
+  budget: 500, forecast: 520, score: 540, topExpenses: 560, anomaly: 580, kpiStrip: 600, habits: 620, periodCompare: 640,
 }
 
 const ALL_KEYS: WKey[] = Object.keys(WIDGET_SIZE) as WKey[]
@@ -388,6 +395,9 @@ const WIDGET_META: Record<WKey, { label: string; emoji: string }> = {
   score:         { label: 'score',          emoji: '🏅' },
   topExpenses:   { label: 'top expenses',   emoji: '💰' },
   anomaly:       { label: 'patterns',       emoji: '📊' },
+  kpiStrip:      { label: 'key metrics',    emoji: '📐' },
+  habits:        { label: 'habits',         emoji: '🎯' },
+  periodCompare: { label: 'period compare', emoji: '📊' },
 }
 
 const DEFAULT_WIDGET_ORDER: WKey[] = [
@@ -414,6 +424,7 @@ export function Dashboard() {
   const store = useDataStore()
   const toast = useToastStore()
   const { width } = useWindowDimensions()
+  const insets = useSafeAreaInsets()
   const isDesktop = Platform.OS === 'web' && width >= 768
 
   const now   = new Date()
@@ -498,6 +509,20 @@ export function Dashboard() {
       .map(([label, { value, color }]) => ({ label, value, color }))
       .sort((a, b) => b.value - a.value)
   }, [activeSubs, colors.accent])
+
+  // Income breakdown — tasks with a positive amount, grouped by category
+  const incomeBreakdown = useMemo<BreakdownItem[]>(() => {
+    const INCOME_COLORS = ['#4ade80','#34d399','#6ee7b7','#a7f3d0']
+    const byCat: Record<string, number> = {}
+    for (const t of store.tasks as any[]) {
+      if (!t.amount || t.amount <= 0) continue
+      const cat = t.category || 'Other'
+      byCat[cat] = (byCat[cat] ?? 0) + t.amount
+    }
+    return Object.entries(byCat)
+      .map(([label, value], i) => ({ label, value, color: INCOME_COLORS[i % INCOME_COLORS.length] }))
+      .sort((a, b) => b.value - a.value)
+  }, [store.tasks])
 
   // Top 4 categories as rings — share of total monthly spend (0..1)
   const categoryRingItems = useMemo<RingItem[]>(() => {
@@ -881,6 +906,8 @@ export function Dashboard() {
             title="by category"
             items={categoryBreakdown}
             unit={symbol}
+            incomeItems={incomeBreakdown}
+            incomeTitle="income"
           />
         )
       case 'categoryRings':
@@ -961,6 +988,20 @@ export function Dashboard() {
         )
       case 'anomaly':
         return <AnomalyWidget subscriptions={store.subscriptions} />
+      case 'kpiStrip':
+        return (
+          <KpiStripWidget
+            subscriptions={store.subscriptions}
+            tasks={store.tasks}
+            monthlyBudget={store.settings.monthlyBudget ?? null}
+            monthlySpend={monthly}
+            symbol={symbol}
+          />
+        )
+      case 'habits':
+        return <HabitStreakWidget habits={store.habits ?? []} />
+      case 'periodCompare':
+        return <PeriodCompareWidget subscriptions={store.subscriptions} symbol={symbol} />
     }
   }
 
@@ -1155,7 +1196,7 @@ export function Dashboard() {
       <ScrollView
         ref={scrollRef}
         style={{ flex: 1 }}
-        contentContainerStyle={[s.content, isDesktop && s.contentDesktop]}
+        contentContainerStyle={[s.content, isDesktop && s.contentDesktop, !isDesktop && { paddingBottom: 130 + insets.bottom }]}
         showsVerticalScrollIndicator={false}
         bounces={false}
         overScrollMode="never"

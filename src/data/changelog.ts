@@ -9,6 +9,11 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '0.1.6',
+    date: '2026-05-20',
+    summary: 'feat(wave-b): habits, accounts, palette, trackers hub, mobile polish',
+  },
+  {
     version: '0.1.5',
     date: '2026-05-16',
     summary: 'feat: widget DNA + 13 mono widgets + universal button DNA',

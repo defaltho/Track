@@ -63,6 +63,7 @@ export function Button({
       onHoverOut={() => { if (isWeb) { setHovered(false); scale.value = withSpring(1, { damping: 22, stiffness: 360 }) } }}
       onPress={isInteractive ? onPress : undefined}
       disabled={!isInteractive}
+      hitSlop={!isWeb && size === 'sm' ? { top: 8, bottom: 8, left: 8, right: 8 } : undefined}
       style={fullWidth ? { width: '100%' } : undefined}
     >
       <Animated.View
@@ -449,6 +450,7 @@ export function IconButton({
       onHoverOut={() => { if (isWeb) { setHovered(false); scale.value = withSpring(1, { damping: 22, stiffness: 360 }) } }}
       onPress={isInteractive ? onPress : undefined}
       disabled={!isInteractive}
+      hitSlop={!isWeb && size !== 'lg' ? { top: 6, bottom: 6, left: 6, right: 6 } : undefined}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
     >
