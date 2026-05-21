@@ -1,56 +1,59 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { View, Text, StyleSheet } from 'react-native'
 import Svg, { Circle } from 'react-native-svg'
 import { theme } from '../../theme'
 import { useTheme } from '../../context/ThemeContext'
 import { Widget } from '../ui/Widget'
 
-// ── RingGoalWidget ────────────────────────────────────────────────────
-// Square widget — radial progress ring with X / Y text in the center.
-// For Track: spending vs monthly target, items completed, days streak, etc.
-// Pattern from the reference: ring + big mono "value", small "/ target" below.
-
 interface Props {
   tag: string
   value: number
   target: number
   unit?: string
-  label?: string      // small label under ring (e.g. "monthly target")
-  size?: number       // ring diameter
+  label?: string
 }
 
-export function RingGoalWidget({ tag, value, target, unit, label, size = 140 }: Props) {
+export function RingGoalWidget({ tag, value, target, unit, label }: Props) {
   const { colors } = useTheme()
-  const stroke = Math.max(5, Math.round(size * 0.04))
-  const r = (size - stroke) / 2
-  const circ = 2 * Math.PI * r
-  const pct = target > 0 ? Math.min(value / target, 1) : 0
-  const fmt = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : Math.round(n).toLocaleString())
-  // Hero value scales with the ring
-  const valueSize = Math.round(size * 0.22)
-  const targetSize = Math.round(size * 0.085)
+  const [dim, setDim] = useState(90)
+
+  const stroke  = Math.max(5, Math.round(dim * 0.055))
+  const r       = (dim - stroke) / 2
+  const circ    = 2 * Math.PI * r
+  const pct     = target > 0 ? Math.min(value / target, 1) : 0
+  const fmt     = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : Math.round(n).toLocaleString()
+  const valSize = Math.round(dim * 0.22)
+  const tgtSize = Math.round(dim * 0.09)
 
   return (
     <Widget tag={tag} size="square">
-      <View style={rg.center}>
-        <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-          <Svg width={size} height={size} style={{ position: 'absolute', transform: [{ rotate: '-90deg' }] }}>
-            <Circle cx={size/2} cy={size/2} r={r} stroke={colors.border} strokeWidth={stroke} fill="none" />
+      <View
+        style={rg.center}
+        onLayout={(e) => {
+          const { width, height } = e.nativeEvent.layout
+          setDim(Math.min(width, height) - 4)
+        }}
+      >
+        <View style={{ width: dim, height: dim, alignItems: 'center', justifyContent: 'center' }}>
+          <Svg width={dim} height={dim} style={{ position: 'absolute', transform: [{ rotate: '-90deg' }] }}>
+            <Circle cx={dim / 2} cy={dim / 2} r={r} stroke={colors.border} strokeWidth={stroke} fill="none" />
             {pct > 0 && (
               <Circle
-                cx={size/2} cy={size/2} r={r}
+                cx={dim / 2} cy={dim / 2} r={r}
                 stroke={colors.text}
                 strokeWidth={stroke}
                 fill="none"
-                strokeDasharray={`${circ*pct} ${circ*(1-pct)}`}
+                strokeDasharray={`${circ * pct} ${circ * (1 - pct)}`}
                 strokeLinecap="round"
               />
             )}
           </Svg>
-          <Text style={[rg.value, { color: colors.text, fontSize: valueSize }]}>
+          <Text style={[rg.value, { color: colors.text, fontSize: valSize }]}>
             {unit}{fmt(value)}
           </Text>
-          <Text style={[rg.target, { color: colors.textMuted, fontSize: targetSize }]}>/ {unit}{fmt(target)}</Text>
+          <Text style={[rg.target, { color: colors.textMuted, fontSize: tgtSize }]}>
+            / {unit}{fmt(target)}
+          </Text>
         </View>
         {label ? <Text style={[rg.label, { color: colors.textMuted }]}>{label}</Text> : null}
       </View>
@@ -59,8 +62,8 @@ export function RingGoalWidget({ tag, value, target, unit, label, size = 140 }: 
 }
 
 const rg = StyleSheet.create({
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10 },
-  value:  { fontFamily: theme.fontMonoBold, letterSpacing: -1.4, marginTop: -2 },
-  target: { fontFamily: theme.fontMono, marginTop: 4 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
+  value:  { fontFamily: theme.fontMonoBold, letterSpacing: -1.4 },
+  target: { fontFamily: theme.fontMono, marginTop: 2 },
   label:  { fontSize: 11, fontFamily: theme.fontMedium, letterSpacing: 1.6, textTransform: 'lowercase' },
 })

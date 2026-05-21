@@ -96,17 +96,10 @@ export function EditableWidget<Id extends string> ({
   }, [isDragging, scale, tx, ty, scrollComp])
 
   // ── Gestures ────────────────────────────────────────────────────────
-  const enterEditPress = Gesture.LongPress()
-    .minDuration(LONG_PRESS_MS)
-    .maxDistance(30)   // more forgiving on mobile — finger drifts during hold
-    .enabled(!editMode)
-    .onStart(() => { runOnJS(onEnterEdit)() })
-
   const dragPan = Gesture.Pan()
-    .enabled(editMode)
-    .activateAfterLongPress(200)  // 200ms lets quick scrolls pass through in edit mode
+    .activateAfterLongPress(200)
     .onStart(() => {
-      scrollComp.value   = 0
+      scrollComp.value       = 0
       isDraggingShared.value = true
       runOnJS(onDragStart)(id)
     })
@@ -117,8 +110,6 @@ export function EditableWidget<Id extends string> ({
     })
     .onEnd(()      => { isDraggingShared.value = false; runOnJS(onDragEnd)() })
     .onFinalize(() => { isDraggingShared.value = false; runOnJS(onDragEnd)() })
-
-  const composed = Gesture.Race(enterEditPress, dragPan)
 
   const animStyle = useAnimatedStyle(() => ({
     transform: [
@@ -131,17 +122,30 @@ export function EditableWidget<Id extends string> ({
 
   return (
     <Animated.View style={[{ position: 'relative', overflow: 'visible' }, animStyle]}>
-      <GestureDetector gesture={composed}>
-        <View
-          ref={callbackRef}
-          style={[ew.container, isDragging && ew.dragging]}
+      {editMode ? (
+        // Edit mode: RNGH Pan handles drag; GestureDetector blocks scroll intentionally
+        <GestureDetector gesture={dragPan}>
+          <View ref={callbackRef} style={[ew.container, isDragging && ew.dragging]}>
+            {children}
+            {isDropTarget && !isDragging && (
+              <View style={ew.dropTarget} pointerEvents="none" />
+            )}
+          </View>
+        </GestureDetector>
+      ) : (
+        // Normal mode: native Pressable with onLongPress — yields to ScrollView
+        // on finger movement, so vertical scroll works anywhere on the widget.
+        // Inner RNGH Tap gestures (e.g. chart dots) use a separate native
+        // recognizer and still fire independently.
+        <Pressable
+          ref={callbackRef as any}
+          onLongPress={onEnterEdit}
+          delayLongPress={LONG_PRESS_MS}
+          style={ew.container}
         >
           {children}
-          {isDropTarget && !isDragging && (
-            <View style={ew.dropTarget} pointerEvents="none" />
-          )}
-        </View>
-      </GestureDetector>
+        </Pressable>
+      )}
       {editMode && (
         <Pressable onPress={onRemove} style={ew.removeBtnArea} accessibilityLabel="Remove widget">
           <View style={ew.removeBtnCircle}>

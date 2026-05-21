@@ -1255,7 +1255,7 @@ export function Dashboard() {
         scrollEventThrottle={16}
       >
           <View style={{ flex: 1 }}>
-            <View style={isDesktop ? s.widgetColumn : undefined}>
+            <View style={isDesktop ? s.widgetColumn : s.widgetMobile}>
               {order.length === 0 && !editMode && (
                 <View style={s.emptyState}>
                   <Text style={[s.emptyTitle, { color: colors.textMuted }]}>no widgets</Text>
@@ -1283,10 +1283,11 @@ const s = StyleSheet.create({
   // Header wrapper — always visible above the scroll area
   headerWrapper: { paddingHorizontal: theme.sp4, paddingTop: theme.sp4, paddingBottom: theme.sp3 },
   headerWrapperDesktop: { paddingHorizontal: 32, paddingTop: 40, paddingBottom: theme.sp3 },
-  content: { padding:theme.sp4, paddingTop: theme.sp3, gap:theme.sp4, paddingBottom:130 },
+  content: { padding:theme.sp5, paddingTop: theme.sp4, gap:theme.sp5, paddingBottom:130 },
   // Same widget grid on web — centered, single column matching mobile width
   contentDesktop: { paddingHorizontal: 32, paddingTop: 0, paddingBottom: 80, alignItems: 'center' },
-  widgetColumn: { width: '100%', maxWidth: 480, gap: theme.sp4 },
+  widgetColumn: { width: '100%', maxWidth: 480, gap: theme.sp5 },
+  widgetMobile: { gap: theme.sp5 },
   header: { flexDirection:'row', justifyContent:'space-between', alignItems:'center', width:'100%' },
   pageTitle: { fontSize:34, fontFamily:theme.fontBlack, letterSpacing:-1 },
   headerBtns: { flexDirection:'row', gap:theme.sp2 },
@@ -1299,7 +1300,7 @@ const s = StyleSheet.create({
   // both axes centered, fills the widget body
   metricCenter: { flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center', gap: theme.sp1 },
   // Row of two square widgets — mono spacing matches theme.sp4 (consistent vertical/horizontal rhythm)
-  squareRow: { flexDirection: 'row', gap: theme.sp4, overflow: 'visible' },
+  squareRow: { flexDirection: 'row', gap: theme.sp5, overflow: 'visible' },
   spendBlock: { flexDirection:'row', alignItems:'flex-end', gap:6 },
   // Hero numbers — Space Mono BOLD, sized to fill the widget (§Widget hero typo)
   spendMain: { fontSize:56, fontFamily:theme.fontMonoBold, letterSpacing:-2.5, lineHeight:60 },

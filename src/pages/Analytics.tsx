@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useRef } from 'react'
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native'
 import Svg, { Defs, LinearGradient, Stop, Path, Circle, Line } from 'react-native-svg'
+import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { useDataStore } from '../stores/data'
 import {
   totalMonthlySpend,
@@ -14,9 +15,10 @@ import { theme, CURRENCY_SYMBOL } from '../theme'
 
 type Bar = { label: string; value: number; isCurrent: boolean; isFuture: boolean }
 
-const CHART_H = 160
-const PAD_T   = 20
-const PAD_B   = 20
+const CHART_H   = 160
+const PAD_T     = 20
+const PAD_B     = 20
+const TOOLTIP_W = 108
 
 const COLOR_UP   = '#EF4444'
 const COLOR_DOWN = '#22C55E'
@@ -26,6 +28,11 @@ function SpendingChart({ bars, compBars, symbol, colors }: {
   bars: Bar[]; compBars: Bar[]; symbol: string; colors: any
 }) {
   const [w, setW] = useState(320)
+  const [selectedIdx, setSelectedIdx] = useState<number | null>(null)
+
+  const coordsRef      = useRef<typeof coords>([])
+  const selectedIdxRef = useRef(selectedIdx)
+  selectedIdxRef.current = selectedIdx
 
   const curValue  = bars.find(b => b.isCurrent)?.value ?? 0
   const compValue = compBars[bars.findIndex(b => b.isCurrent)]?.value ?? curValue
@@ -33,9 +40,9 @@ function SpendingChart({ bars, compBars, symbol, colors }: {
     : curValue > compValue ? COLOR_UP : COLOR_DOWN
   const trendUp = curValue > compValue
 
-  const { coords, pastPath, futurePath, areaPath, compPath, curCoord } = useMemo(() => {
+  const { coords, pastPath, areaPath, compPath, curCoord } = useMemo(() => {
     const maxValue = Math.max(...bars.map(b => b.value), ...compBars.map(b => b.value), 0.01)
-    if (bars.length < 2) return { coords: [], pastPath: '', futurePath: '', areaPath: '', compPath: '', curCoord: null }
+    if (bars.length < 2) return { coords: [], pastPath: '', areaPath: '', compPath: '', curCoord: null }
 
     const usableH = CHART_H - PAD_T - PAD_B
     const stepX   = w / (bars.length - 1)
@@ -53,17 +60,31 @@ function SpendingChart({ bars, compBars, symbol, colors }: {
 
     const curIdx     = coords.findIndex(c => c.isCurrent)
     const pastCoords = curIdx >= 0 ? coords.slice(0, curIdx + 1) : coords
-    const futCoords  = curIdx >= 0 ? coords.slice(curIdx) : []
 
-    const pastPath   = curvePath(pastCoords)
-    const futurePath = futCoords.length >= 2 ? curvePath(futCoords) : ''
-    const lastPast   = pastCoords[pastCoords.length - 1]
-    const areaPath   = `${pastPath} L ${lastPast.x.toFixed(1)} ${CHART_H} L 0 ${CHART_H} Z`
-    const compPath   = curvePath(compCoords)
-    const curCoord   = coords.find(c => c.isCurrent) ?? null
+    const pastPath = curvePath(pastCoords)
+    const lastPast = pastCoords[pastCoords.length - 1]
+    const areaPath = `${pastPath} L ${lastPast.x.toFixed(1)} ${CHART_H} L 0 ${CHART_H} Z`
+    const compPath = curvePath(compCoords)
+    const curCoord = coords.find(c => c.isCurrent) ?? null
 
-    return { coords, pastPath, futurePath, areaPath, compPath, curCoord }
+    return { coords, pastPath, areaPath, compPath, curCoord }
   }, [bars, compBars, w])
+
+  coordsRef.current = coords
+
+  const chartTap = useMemo(() => Gesture.Tap()
+    .runOnJS(true)
+    .onEnd((e, success) => {
+      if (!success) return
+      const TAP_R = 28
+      let closest = -1, minDist = Infinity
+      coordsRef.current.forEach((c, i) => {
+        if (c.isFuture) return
+        const d = Math.hypot(c.x - e.x, c.y - e.y)
+        if (d < minDist && d <= TAP_R) { minDist = d; closest = i }
+      })
+      setSelectedIdx(closest >= 0 ? (selectedIdxRef.current === closest ? null : closest) : null)
+    }), [])
 
   const gridYs = [0.25, 0.5, 0.75, 1.0].map(pct =>
     PAD_T + (CHART_H - PAD_T - PAD_B) * (1 - pct)
@@ -86,7 +107,36 @@ function SpendingChart({ bars, compBars, symbol, colors }: {
         )}
       </View>
 
-      <View onLayout={e => setW(Math.max(e.nativeEvent.layout.width, 1))}>
+      <GestureDetector gesture={chartTap}>
+      <View onLayout={e => setW(Math.max(e.nativeEvent.layout.width, 1))} style={{ position: 'relative' }}>
+        {/* Tooltip flutuante */}
+        {selectedIdx !== null && coords[selectedIdx] && (() => {
+          const sel   = coords[selectedIdx]
+          const comp  = compBars[selectedIdx]?.value ?? 0
+          const delta = comp > 0 ? ((sel.value - comp) / comp) * 100 : 0
+          const left  = Math.max(4, Math.min(w - TOOLTIP_W - 4, sel.x - TOOLTIP_W / 2))
+          const above = sel.y > 72
+          return (
+            <View style={[lc.tooltip, {
+              left, top: above ? sel.y - 88 : sel.y + 16,
+              backgroundColor: colors.surface, borderColor: colors.border,
+            }]}>
+              <Text style={[lc.ttMonth, { color: colors.textMuted }]}>{sel.label}</Text>
+              <Text style={[lc.ttValue, { color: colors.text }]}>{symbol}{sel.value.toFixed(2)}</Text>
+              {comp > 0 && (
+                <Text style={[lc.ttDelta, { color: delta > 0 ? COLOR_UP : COLOR_DOWN }]}>
+                  {delta > 0 ? '↑' : '↓'} {Math.abs(delta).toFixed(0)}%
+                </Text>
+              )}
+              {comp > 0 && (
+                <Text style={[lc.ttComp, { color: colors.textFaint }]}>
+                  prev: {symbol}{comp.toFixed(2)}
+                </Text>
+              )}
+            </View>
+          )
+        })()}
+
         <Svg width={w} height={CHART_H} viewBox={`0 0 ${w} ${CHART_H}`}>
           <Defs>
             <LinearGradient id="grad-main" x1="0" y1="0" x2="0" y2="1">
@@ -103,7 +153,7 @@ function SpendingChart({ bars, compBars, symbol, colors }: {
 
           {compPath ? (
             <Path d={compPath} fill="none" stroke={colors.textMuted}
-              strokeWidth={1.5} strokeDasharray="4 4" strokeOpacity={0.45}
+              strokeWidth={2} strokeDasharray="6 3" strokeOpacity={0.75}
               strokeLinejoin="round" strokeLinecap="round" />
           ) : null}
 
@@ -112,23 +162,19 @@ function SpendingChart({ bars, compBars, symbol, colors }: {
           <Path d={pastPath} fill="none" stroke={trendColor}
             strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
 
-          {futurePath ? (
-            <Path d={futurePath} fill="none" stroke={trendColor}
-              strokeWidth={2} strokeDasharray="5 5" strokeOpacity={0.4}
-              strokeLinejoin="round" strokeLinecap="round" />
-          ) : null}
-
           {curCoord && (
             <Line x1={curCoord.x} y1={curCoord.y + 10} x2={curCoord.x} y2={CHART_H - PAD_B}
               stroke={trendColor} strokeOpacity={0.25} strokeWidth={1} strokeDasharray="3 4" />
           )}
 
-          {coords.map((c, i) => !c.isCurrent && (
-            <Circle key={i} cx={c.x} cy={c.y} r={3}
-              fill={colors.surface} stroke={trendColor} strokeWidth={1.5}
-              strokeOpacity={c.isFuture ? 0.3 : 0.8} fillOpacity={c.isFuture ? 0.4 : 1} />
+          {/* Bolinhas passadas — apenas visuais (toque via Pressable overlay) */}
+          {coords.map((c, i) => !c.isCurrent && !c.isFuture && (
+            <Circle key={i} cx={c.x} cy={c.y} r={selectedIdx === i ? 4.5 : 3}
+              fill={colors.surface} stroke={trendColor}
+              strokeWidth={selectedIdx === i ? 2 : 1.5} strokeOpacity={0.8} />
           ))}
 
+          {/* Bolinha do mês atual — apenas visual */}
           {curCoord && (
             <>
               <Circle cx={curCoord.x} cy={curCoord.y} r={11} fill={trendColor} fillOpacity={0.12} />
@@ -137,7 +183,9 @@ function SpendingChart({ bars, compBars, symbol, colors }: {
             </>
           )}
         </Svg>
+
       </View>
+      </GestureDetector>
 
       <View style={lc.labelsRow}>
         {bars.map((bar, i) => (
@@ -176,8 +224,15 @@ const lc = StyleSheet.create({
   legend:       { flexDirection: 'row', justifyContent: 'center', gap: 20, marginTop: 12 },
   legendItem:   { flexDirection: 'row', alignItems: 'center', gap: 6 },
   legendLine:   { width: 16, height: 2.5, borderRadius: 2 },
-  legendLineDash:{ width: 16, height: 2, borderRadius: 2, opacity: 0.45 },
+  legendLineDash:{ width: 16, height: 2, borderRadius: 2, opacity: 0.75 },
   legendTxt:    { fontSize: 10, fontFamily: theme.fontRegular },
+
+  tooltip:  { position: 'absolute', zIndex: 20, borderWidth: StyleSheet.hairlineWidth,
+               borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, width: TOOLTIP_W },
+  ttMonth:  { fontSize: 10, fontFamily: theme.fontMono, marginBottom: 2 },
+  ttValue:  { fontSize: 15, fontFamily: theme.fontBlack, letterSpacing: -0.5 },
+  ttDelta:  { fontSize: 11, fontFamily: theme.fontMedium, marginTop: 2 },
+  ttComp:   { fontSize: 10, fontFamily: theme.fontRegular, marginTop: 3, opacity: 0.8 },
 })
 
 // ── Donut Chart ─────────────────────────────────────────────────────────────

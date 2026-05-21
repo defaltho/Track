@@ -3,7 +3,11 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { Toast } from '../src/components/ui/Toast'
 import { CommandPalette } from '../src/components/ui/CommandPalette'
-import { View, StyleSheet, Platform } from 'react-native'
+import { View, StyleSheet, Platform, LogBox } from 'react-native'
+
+// All errors/warnings are captured by loggerBridge → in-app Error Log.
+// Suppress the dev overlay so they don't also pop up as screen notifications.
+LogBox.ignoreAllLogs()
 import { ThemeProvider, useTheme } from '../src/context/ThemeContext'
 import { useAuthStore } from '../src/stores/auth'
 import { useDataStore } from '../src/stores/data'
