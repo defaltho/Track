@@ -10,6 +10,7 @@ import {
 } from 'react-native'
 import { useTheme } from '../../context/ThemeContext'
 import { useDataStore } from '../../stores/data'
+import { useToastStore } from '../../stores/toasts'
 import { theme } from '../../theme'
 import { Button } from '../ui/Button'
 import { TagInput } from '../ui/TagInput'
@@ -34,6 +35,7 @@ function isValidDate(s: string): boolean {
 
 export function AddTaskForm({ onSubmit, onCancel, initialValue, submitLabel }: Props) {
   const { colors } = useTheme()
+  const toast = useToastStore()
   const customCategories = useDataStore(s => s.settings.customCategories ?? [])
   const allCategories = [...CATEGORIES, ...customCategories]
   const customAccounts   = useDataStore(s => s.settings.customAccounts ?? [])
@@ -52,9 +54,14 @@ export function AddTaskForm({ onSubmit, onCancel, initialValue, submitLabel }: P
   const [tags, setTags] = useState<string[]>(Array.isArray(initialValue?.tags) ? initialValue.tags : [])
 
   function submit() {
-    if (!name.trim()) { setNameError('Task name is required'); return }
+    if (!name.trim()) {
+      setNameError('Task name is required')
+      toast.push('Task name is required', 'error')
+      return
+    }
     if (dueDate && !isValidDate(dueDate)) {
       setDueDateError('Use format YYYY-MM-DD')
+      toast.push('Due date: use format YYYY-MM-DD', 'error')
       return
     }
     setDueDateError('')

@@ -278,6 +278,28 @@ export const useDataStore = create<DataStore>()(
     {
       name: 'track-data',
       storage: createJSONStorage(() => AsyncStorage),
+      version: 2,
+      migrate: (persisted: any, fromVersion: number) => {
+        let s = persisted as any
+        if (fromVersion < 1) {
+          // v0 → v1: habits array may not exist on old installs
+          s = { ...s, habits: s.habits ?? [] }
+        }
+        if (fromVersion < 2) {
+          // v1 → v2: customCategories, customAccounts, startOfWeek added
+          s = {
+            ...s,
+            settings: {
+              ...defaultSettings,
+              ...s.settings,
+              customCategories: s.settings?.customCategories ?? [],
+              customAccounts:   s.settings?.customAccounts   ?? [],
+              startOfWeek:      s.settings?.startOfWeek      ?? 1,
+            },
+          }
+        }
+        return s
+      },
     }
   )
 )

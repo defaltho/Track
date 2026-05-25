@@ -12,6 +12,7 @@ import Animated, {
 } from 'react-native-reanimated'
 import Svg, { Circle as SvgCircle } from 'react-native-svg'
 import { format, differenceInCalendarDays, parseISO, subDays, eachDayOfInterval, getMonth } from 'date-fns'
+import { effectiveNextCharge } from '../utils/dates'
 import { useDataStore } from '../stores/data'
 import { useToastStore } from '../stores/toasts'
 import { useTheme } from '../context/ThemeContext'
@@ -465,12 +466,15 @@ export function Dashboard() {
   const coffeeCount = useMemo(() => coffees(monthly), [monthly])
   const monthEvents = useMemo(() => store.events.filter((e: any) => e.date?.startsWith(month)), [store.events, month])
   const todayTasks  = useMemo(() => store.tasks.filter((t: any) => t.dueDate === today), [store.tasks, today])
-  // Includes overdue (diff < 0) AND next 7 days; overdue pinned to the top.
+  // Subscriptions due in the next 7 days — nextChargeDate is auto-advanced so no overdue.
   const dueSubs     = useMemo(() => {
     return store.subscriptions
       .filter((s: any) => s.active !== false && s.nextChargeDate)
-      .map((s: any) => ({ s, diff: differenceInCalendarDays(parseISO(s.nextChargeDate), now) }))
-      .filter(({ diff }) => diff < 0 || diff <= 7)
+      .map((s: any) => {
+        const eff = effectiveNextCharge(s.nextChargeDate, s.billingCycle ?? 'monthly')
+        return { s: { ...s, nextChargeDate: eff }, diff: differenceInCalendarDays(parseISO(eff), now) }
+      })
+      .filter(({ diff }) => diff <= 7)
       .sort((a, b) => a.diff - b.diff)
       .map(({ s }) => s)
   }, [store.subscriptions])
@@ -805,8 +809,11 @@ export function Dashboard() {
   }
   function confirmRemove() {
     if (!confirm) return
-    if (confirm.kind === 'sub') { store.removeSubscription(confirm.id); toast.push(`Removed ${confirm.name}`) }
-    else if (confirm.kind === 'task') { store.removeTask(confirm.id); toast.push(`Removed ${confirm.name}`) }
+    if      (confirm.kind === 'sub')   { store.removeSubscription(confirm.id); toast.push(`Removed ${confirm.name}`) }
+    else if (confirm.kind === 'task')  { store.removeTask(confirm.id);         toast.push(`Removed ${confirm.name}`) }
+    else if (confirm.kind === 'app')   { store.removeApp(confirm.id);          toast.push(`Removed ${confirm.name}`) }
+    else if (confirm.kind === 'event') { store.removeEvent(confirm.id);        toast.push(`Removed ${confirm.name}`) }
+    else if (confirm.kind === 'habit') { store.removeHabit(confirm.id);        toast.push(`Removed ${confirm.name}`) }
     setConfirm(null)
   }
 

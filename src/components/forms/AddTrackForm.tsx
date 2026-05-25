@@ -26,6 +26,7 @@ function displayDate(iso: string) {
 }
 import { useTheme } from '../../context/ThemeContext'
 import { useDataStore } from '../../stores/data'
+import { useToastStore } from '../../stores/toasts'
 import { theme } from '../../theme'
 import { Button, IconButton } from '../ui/Button'
 import { Segmented } from '../ui/Segmented'
@@ -74,6 +75,7 @@ function isValidDate(s: string): boolean {
 
 export function AddTrackForm({ onSubmit, onCancel, initialValue, submitLabel }: Props) {
   const { colors } = useTheme()
+  const toast = useToastStore()
   const customCategories = useDataStore(s => s.settings.customCategories ?? [])
   const allCategories = [...CATEGORIES, ...customCategories]
   const customAccounts   = useDataStore(s => s.settings.customAccounts ?? [])
@@ -116,14 +118,39 @@ export function AddTrackForm({ onSubmit, onCancel, initialValue, submitLabel }: 
   const [calMonth, setCalMonth] = useState(() => new Date().getMonth())
 
   function goNext() {
-    if (!name.trim()) { setError('Name is required'); return }
+    if (!name.trim()) {
+      setError('Name is required')
+      toast.push('Name is required', 'error')
+      return
+    }
     if (type !== 'event') {
       const p = parseFloat(price.replace(',', '.'))
-      if (!price.trim() || Number.isNaN(p)) { setError('Price is required'); return }
-      if (p <= 0) { setError('Price must be greater than 0'); return }
+      if (!price.trim() || Number.isNaN(p)) {
+        setError('Price is required')
+        toast.push('Price is required', 'error')
+        return
+      }
+      if (p <= 0) {
+        setError('Price must be greater than 0')
+        toast.push('Price must be greater than 0', 'error')
+        return
+      }
     }
-    if (!nextDate.trim()) { setError('Date is required'); return }
-    if (!isValidDate(nextDate)) { setError('Use date format YYYY-MM-DD'); return }
+    if (!nextDate.trim()) {
+      setError('Date is required')
+      toast.push('Date is required', 'error')
+      return
+    }
+    if (!isValidDate(nextDate)) {
+      setError('Use date format YYYY-MM-DD')
+      toast.push('Use date format YYYY-MM-DD', 'error')
+      return
+    }
+    if (startDate && startDate > nextDate) {
+      setError('Start date must be before the next charge date')
+      toast.push('Start date must be before the next charge date', 'error')
+      return
+    }
     setError('')
     setStep(2)
   }
@@ -170,6 +197,21 @@ export function AddTrackForm({ onSubmit, onCancel, initialValue, submitLabel }: 
             size="md"
             capitalize
           />
+
+          {/* Billing cycle — subscription only */}
+          {type === 'subscription' && (
+            <View>
+              <Text style={[s.label, { color: colors.textMuted }]}>Billing cycle</Text>
+              <Segmented
+                options={CYCLES}
+                value={billingCycle}
+                onChange={setBillingCycle}
+                layout="equal"
+                size="sm"
+                capitalize
+              />
+            </View>
+          )}
 
           {/* Emoji + Name */}
           <View style={s.row}>
@@ -252,21 +294,6 @@ export function AddTrackForm({ onSubmit, onCancel, initialValue, submitLabel }: 
       {/* ════════════ STEP 2 ════════════ */}
       {step === 2 && (
         <View style={s.fields}>
-          {/* Billing cycle — subscription only */}
-          {type === 'subscription' && (
-            <View>
-              <Text style={[s.label, { color: colors.textMuted }]}>Billing cycle</Text>
-              <Segmented
-                options={CYCLES}
-                value={billingCycle}
-                onChange={setBillingCycle}
-                layout="equal"
-                size="sm"
-                capitalize
-              />
-            </View>
-          )}
-
           {/* Start date — subscription only (optional, drives trial calc) */}
           {type === 'subscription' && (
             <View>

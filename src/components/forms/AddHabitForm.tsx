@@ -9,6 +9,7 @@ import {
 } from 'react-native'
 import { useTheme } from '../../context/ThemeContext'
 import { useDataStore } from '../../stores/data'
+import { useToastStore } from '../../stores/toasts'
 import { theme } from '../../theme'
 import { Button } from '../ui/Button'
 import { Segmented } from '../ui/Segmented'
@@ -27,6 +28,7 @@ interface Props {
 
 export function AddHabitForm({ onSubmit, onCancel, initialValue, submitLabel }: Props) {
   const { colors } = useTheme()
+  const toast = useToastStore()
   const customCategories = useDataStore(s => s.settings.customCategories ?? [])
   const allCategories = [...CATEGORIES, ...customCategories]
   const isEdit = !!initialValue
@@ -40,7 +42,11 @@ export function AddHabitForm({ onSubmit, onCancel, initialValue, submitLabel }: 
   const [tags, setTags] = useState<string[]>(Array.isArray(initialValue?.tags) ? initialValue.tags : [])
 
   function submit() {
-    if (!name.trim()) { setNameError('Habit name is required'); return }
+    if (!name.trim()) {
+      setNameError('Habit name is required')
+      toast.push('Habit name is required', 'error')
+      return
+    }
     onSubmit({
       name: name.trim(),
       emoji,

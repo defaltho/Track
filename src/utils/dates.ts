@@ -1,4 +1,4 @@
-import { addMonths, addWeeks, addYears, format, parseISO } from 'date-fns'
+import { addMonths, addWeeks, addYears, format, isBefore, parseISO } from 'date-fns'
 
 // BUG L4 fix: added explicit default with console warning for unknown cycles
 export function computeNextChargeDate(billingCycle: string) {
@@ -11,6 +11,18 @@ export function computeNextChargeDate(billingCycle: string) {
       console.warn('[dates] Unknown billingCycle:', billingCycle, '— defaulting to monthly')
       return format(addMonths(today, 1), 'yyyy-MM-dd')
   }
+}
+
+export function effectiveNextCharge(nextChargeDate: string, billingCycle: string): string {
+  let date = parseISO(nextChargeDate)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  while (isBefore(date, today)) {
+    if (billingCycle === 'weekly')       date = addWeeks(date, 1)
+    else if (billingCycle === 'yearly')  date = addYears(date, 1)
+    else                                 date = addMonths(date, 1)
+  }
+  return format(date, 'yyyy-MM-dd')
 }
 
 export function todayStr() {

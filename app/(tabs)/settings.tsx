@@ -248,6 +248,20 @@ export default function Settings() {
         <View style={[s.divider, { backgroundColor: colors.border }]} />
         <View style={s.row}>
           <View>
+            <Text style={[s.rowLabel, { color: colors.text }]}>Week starts on</Text>
+            <Text style={[s.rowSub, { color: colors.textMuted }]}>affects the calendar view</Text>
+          </View>
+          <Segmented
+            options={['Monday', 'Sunday']}
+            value={store.settings.startOfWeek === 0 ? 'Sunday' : 'Monday'}
+            onChange={v => store.updateSettings({ startOfWeek: v === 'Sunday' ? 0 : 1 })}
+            layout="fit"
+            size="sm"
+          />
+        </View>
+        <View style={[s.divider, { backgroundColor: colors.border }]} />
+        <View style={s.row}>
+          <View>
             <Text style={[s.rowLabel, { color: colors.text }]}>Monthly Budget</Text>
             <Text style={[s.rowSub, { color: colors.textMuted }]}>shown in the budget widget</Text>
           </View>

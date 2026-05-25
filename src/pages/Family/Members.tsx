@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { View, Text, ScrollView, Pressable, TextInput, StyleSheet } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useFamilyStore } from '../../stores/familyData'
@@ -39,6 +39,13 @@ export function Members({ spaceId, onBack }: Props) {
   const auth       = useAuthStore()
   const toast      = useToastStore()
 
+  // Tick every second so time-based useMemos auto-recompute
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(t)
+  }, [])
+
   const members    = useMemo(() => store.members.filter(m => m.spaceId === spaceId), [store.members, spaceId])
   const userId     = auth.user?.email ?? 'local'
   const myMember   = members.find(m => m.userId === userId)
@@ -59,19 +66,30 @@ export function Members({ spaceId, onBack }: Props) {
   const activeInvite = useMemo(() =>
     store.invites.find(i =>
       i.spaceId === spaceId && !i.usedAt && !i.rejectedAt &&
-      new Date(i.expiresAt) > new Date()
+      new Date(i.expiresAt) > now
     ),
-    [store.invites, spaceId]
+    [store.invites, spaceId, now]
   )
 
   // Expired invite — naturally timed out (not used, not approved, not rejected)
   const expiredInvite = useMemo(() =>
     store.invites.find(i =>
       i.spaceId === spaceId && !i.usedAt && !i.approvedAt && !i.rejectedAt &&
-      new Date(i.expiresAt) <= new Date()
+      new Date(i.expiresAt) <= now
     ),
-    [store.invites, spaceId]
+    [store.invites, spaceId, now]
   )
+
+  // Hide code block automatically when the active invite expires
+  useEffect(() => {
+    if (!activeInvite) setShowInviteCode(false)
+  }, [activeInvite])
+
+  // Countdown derived from now — no extra state needed
+  const secsLeft = activeInvite
+    ? Math.max(0, Math.floor((new Date(activeInvite.expiresAt).getTime() - now.getTime()) / 1000))
+    : 0
+  const countdownLabel = `válido por ${String(Math.floor(secsLeft / 60)).padStart(2, '0')}:${String(secsLeft % 60).padStart(2, '0')}`
 
   const [showInviteCode, setShowInviteCode] = useState(false)
   const [inviteCode, setInviteCode]         = useState('')
@@ -226,9 +244,11 @@ export function Members({ spaceId, onBack }: Props) {
       {isAdmin && (
         <View style={[mb.card, { backgroundColor: colors.surface }]}>
           <Text style={[mb.cardTag, { color: colors.textMuted }]}>convidar</Text>
-          {showInviteCode ? (
+          {showInviteCode && activeInvite ? (
             <View style={mb.codeBlock}>
-              <Text style={[mb.codeLabel, { color: colors.textMuted }]}>partilha este código (válido 10 min)</Text>
+              <Text style={[mb.codeLabel, { color: secsLeft < 60 ? colors.danger : colors.textMuted }]}>
+                {countdownLabel}
+              </Text>
               <View style={[mb.codePill, { backgroundColor: colors.surfaceEl }]}>
                 <Text style={[mb.code, { color: colors.text }]}>{inviteCode}</Text>
               </View>

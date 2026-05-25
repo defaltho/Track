@@ -17,8 +17,9 @@ import { IconButton } from '../components/ui/Button'
 import { useTheme } from '../context/ThemeContext'
 import { theme, Colors, CURRENCY_SYMBOL } from '../theme'
 import { buildForecast } from '../utils/forecast'
+import { effectiveNextCharge } from '../utils/dates'
 
-const WEEKDAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']
+const ALL_DAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
 
 // ── Day cell with hover + press scale ─────────────────────────────────
 function DayCell({
@@ -117,6 +118,9 @@ export function Calendar() {
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
   const [hoveredDay, setHoveredDay] = useState<string | null>(null)
 
+  const startOfWeek = store.settings.startOfWeek ?? 1
+  const weekdays = Array.from({ length: 7 }, (_, i) => ALL_DAYS[(startOfWeek + i) % 7])
+
   const today = startOfDay(new Date())
   const todayStr = format(today, 'yyyy-MM-dd')
 
@@ -125,11 +129,11 @@ export function Calendar() {
   const panelMode: 'today' | 'pinned' | 'preview' =
     hoveredDay ? 'preview' : (selectedDay && selectedDay !== todayStr ? 'pinned' : 'today')
 
-  // 7-column grid covering the full visible weeks (week starts Monday)
+  // 7-column grid — lead offset respects startOfWeek (0=Sun, 1=Mon)
   const grid = useMemo(() => {
     const monthStart = startOfMonth(current)
     const monthEnd   = endOfMonth(current)
-    const lead       = (getDay(monthStart) + 6) % 7  // Mon = 0, Sun = 6
+    const lead       = (getDay(monthStart) - startOfWeek + 7) % 7
     const monthDays  = eachDayOfInterval({ start: monthStart, end: monthEnd })
     const total      = lead + monthDays.length
     const trail      = (7 - (total % 7)) % 7
@@ -162,8 +166,10 @@ export function Calendar() {
     for (const e of store.events as any[]) if (e.date) push(e.date, e.emoji, e.color)
     for (const s of store.subscriptions as any[]) {
       if (s.active === false || !s.nextChargeDate) continue
-      const overdue = isBefore(parseISO(s.nextChargeDate), today)
-      push(s.nextChargeDate, s.emoji, s.color, overdue)
+      const effDate = s.billingCycle
+        ? effectiveNextCharge(s.nextChargeDate, s.billingCycle)
+        : s.nextChargeDate
+      push(effDate, s.emoji, s.color, false)
     }
     return map
   }, [store.events, store.subscriptions, today])
@@ -286,7 +292,7 @@ export function Calendar() {
 
         {/* Weekday row — pill style, today's weekday highlighted */}
         <View style={cs.weekRow}>
-          {WEEKDAYS.map(w => {
+          {weekdays.map(w => {
             const todayDow = format(today, 'EEE').toUpperCase().slice(0, 3)
             const active = w === todayDow
             return (
