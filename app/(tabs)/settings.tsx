@@ -25,6 +25,7 @@ import { VERSION } from '../../src/data/version'
 import { CHANGELOG } from '../../src/data/changelog'
 import { loadSeedData } from '../../src/utils/seedData'
 import { ErrorLog } from '../../src/pages/Settings/ErrorLog'
+import { CategoryManager } from '../../src/components/settings/CategoryManager'
 
 const CURRENCIES = ['EUR', 'USD', 'GBP', 'BRL']
 
@@ -44,27 +45,14 @@ export default function Settings() {
   const [budgetText, setBudgetText] = useState(
     store.settings.monthlyBudget != null ? String(store.settings.monthlyBudget) : ''
   )
-  const [newCategory, setNewCategory] = useState('')
   const [newAccountName, setNewAccountName] = useState('')
   const devMode = store.settings.devMode
-  const customCategories: string[] = store.settings.customCategories ?? []
   const customAccounts: string[]   = store.settings.customAccounts ?? []
   const [showExportModal, setShowExportModal] = useState(false)
   const [exportSel, setExportSel] = useState({ subscriptions: true, apps: true, events: true, tasks: true, settings: true, logs: false })
   const [showErrorLog, setShowErrorLog] = useState(false)
   const logEntries = useLoggerStore(s => s.entries)
   const clearLogs = useLoggerStore(s => s.clear)
-
-  function handleAddCategory() {
-    const cat = newCategory.trim()
-    if (!cat || customCategories.includes(cat)) return
-    store.updateSettings({ customCategories: [...customCategories, cat] })
-    setNewCategory('')
-  }
-
-  function handleRemoveCategory(cat: string) {
-    store.updateSettings({ customCategories: customCategories.filter(c => c !== cat) })
-  }
 
   function handleAddAccount() {
     const acc = newAccountName.trim()
@@ -284,40 +272,7 @@ export default function Settings() {
 
       {/* ── Categories ── */}
       <Text style={[s.sectionLabel, { color: colors.textMuted }]}>categories</Text>
-      <View style={[s.card, { backgroundColor: colors.surface }]}>
-        <View style={{ padding: theme.sp5, gap: theme.sp3 }}>
-          {customCategories.length > 0 && (
-            <View style={s.pillRow}>
-              {customCategories.map(cat => (
-                <TouchableOpacity
-                  key={cat}
-                  style={[s.pill, { backgroundColor: colors.surfaceEl, borderColor: colors.border }]}
-                  onPress={() => handleRemoveCategory(cat)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[s.pillText, { color: colors.text }]}>{cat} ×</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-          <View style={{ flexDirection: 'row', gap: theme.sp2 }}>
-            <TextInput
-              style={[s.budgetInput, { flex: 1, width: undefined, textAlign: 'left', color: colors.text, borderColor: colors.border, backgroundColor: colors.surfaceEl }]}
-              value={newCategory}
-              onChangeText={setNewCategory}
-              onSubmitEditing={handleAddCategory}
-              placeholder="nova categoria"
-              placeholderTextColor={colors.textFaint}
-              returnKeyType="done"
-              autoCapitalize="words"
-            />
-            <Button label="+ add" variant="primary" size="sm" onPress={handleAddCategory} />
-          </View>
-          {customCategories.length === 0 && (
-            <Text style={[s.rowSub, { color: colors.textFaint, fontStyle: 'italic' }]}>toca num chip para remover</Text>
-          )}
-        </View>
-      </View>
+      <CategoryManager />
 
       {/* ── Accounts ── */}
       <Text style={[s.sectionLabel, { color: colors.textMuted }]}>accounts</Text>

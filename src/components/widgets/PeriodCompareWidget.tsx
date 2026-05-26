@@ -30,8 +30,10 @@ function mondayOf(d: Date): Date {
 
 function chargesOnDay(entries: Entry[], dateStr: string): number {
   return entries.reduce((sum, e) => {
-    if (!e.active) return sum
-    return isoDate(new Date(e.nextChargeDate)) === dateStr ? sum + e.price : sum
+    if (!e.active || !e.nextChargeDate) return sum
+    try {
+      return isoDate(new Date(e.nextChargeDate)) === dateStr ? sum + e.price : sum
+    } catch { return sum }
   }, 0)
 }
 

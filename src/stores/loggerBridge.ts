@@ -1,3 +1,4 @@
+import { Platform } from 'react-native'
 import { logger } from './logger'
 
 // One-time bridge that mirrors console.error / console.warn into the in-app
@@ -30,7 +31,7 @@ export function setupLoggerBridge(): void {
       const { message, context } = stringify(args)
       logger.error(message, context)
     } catch { /* never let the bridge itself crash */ }
-    origError(...args)
+    if (Platform.OS !== 'web') origError(...args)
   }
 
   console.warn = (...args: unknown[]) => {
@@ -38,7 +39,32 @@ export function setupLoggerBridge(): void {
       const { message, context } = stringify(args)
       logger.warn(message, context)
     } catch { /* never let the bridge itself crash */ }
-    origWarn(...args)
+    if (Platform.OS !== 'web') origWarn(...args)
+  }
+
+  // Web-only: intercept window errors to route to ErrorLog instead of the
+  // Metro dev overlay. Capture phase + stopImmediatePropagation ensures our
+  // handler runs before Metro's bubble-phase listener, suppressing the badge.
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    window.addEventListener('error', (event) => {
+      try {
+        const err = event.error
+        logger.error(
+          err?.message ?? event.message ?? 'Unknown error',
+          err?.stack ?? `at ${event.filename}:${event.lineno}:${event.colno}`,
+        )
+      } catch { /* never crash */ }
+      event.preventDefault()
+      event.stopImmediatePropagation()
+    }, true)
+
+    window.addEventListener('unhandledrejection', (event) => {
+      try {
+        const err = event.reason
+        logger.error(err?.message ?? String(err), err?.stack)
+      } catch { /* never crash */ }
+      event.preventDefault()
+    })
   }
 
   // React Native global error handler (no-op on web)

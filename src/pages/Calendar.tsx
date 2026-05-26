@@ -171,8 +171,11 @@ export function Calendar() {
         : s.nextChargeDate
       push(effDate, s.emoji, s.color, false)
     }
+    for (const g of (store.goals ?? []) as any[]) {
+      if (g.active !== false && g.deadline) push(g.deadline, g.emoji ?? '🎯', '#8B5CF6')
+    }
     return map
-  }, [store.events, store.subscriptions, today])
+  }, [store.events, store.subscriptions, store.goals, today])
 
   const dayEvents = useMemo(
     () => (selectedDay ? (store.events as any[]).filter(e => e.date === selectedDay) : []),
@@ -181,6 +184,10 @@ export function Calendar() {
   const daySubs = useMemo(
     () => (selectedDay ? (store.subscriptions as any[]).filter(s => s.active !== false && s.nextChargeDate === selectedDay) : []),
     [store.subscriptions, selectedDay]
+  )
+  const dayGoals = useMemo(
+    () => (selectedDay ? (store.goals ?? [] as any[]).filter((g: any) => g.active !== false && g.deadline === selectedDay) : []),
+    [store.goals, selectedDay]
   )
 
   // Panel data (for the desktop side panel — uses panelDay)
@@ -191,6 +198,10 @@ export function Calendar() {
   const panelSubs = useMemo(
     () => (store.subscriptions as any[]).filter(s => s.active !== false && s.nextChargeDate === panelDay),
     [store.subscriptions, panelDay]
+  )
+  const panelGoals = useMemo(
+    () => (store.goals ?? [] as any[]).filter((g: any) => g.active !== false && g.deadline === panelDay),
+    [store.goals, panelDay]
   )
   const panelTotal = useMemo(
     () => panelSubs.reduce((sum: number, s: any) => sum + (Number(s.price) || 0), 0),
@@ -261,6 +272,7 @@ export function Calendar() {
           panelMode={panelMode}
           events={panelEvents}
           subs={panelSubs}
+          goals={panelGoals}
           total={panelTotal}
           currency={panelCurrency}
           isPinned={selectedDay !== null && selectedDay !== todayStr}
@@ -420,7 +432,7 @@ export function Calendar() {
       >
         {selectedDay && (
           <View>
-            {dayEvents.length === 0 && daySubs.length === 0 && (
+            {dayEvents.length === 0 && daySubs.length === 0 && dayGoals.length === 0 && (
               <Text style={[cs.dayEmpty, { color: colors.textMuted }]}>Nothing on this day</Text>
             )}
             {dayEvents.map((ev: any) => (
@@ -439,6 +451,15 @@ export function Calendar() {
                 <Text style={[cs.dayPrice, { color: colors.text }]}>{symFor(sub.currency)}{sub.price?.toFixed(2)}</Text>
               </View>
             ))}
+            {dayGoals.map((g: any) => (
+              <View key={g.id} style={[cs.dayRow, { borderBottomColor: colors.border }]}>
+                <Text style={cs.dayEmoji}>{g.emoji ?? '🎯'}</Text>
+                <Text style={[cs.dayName, { color: colors.text }]}>{g.name}</Text>
+                <View style={[cs.dayPill, { backgroundColor: '#8B5CF622' }]}>
+                  <Text style={[cs.dayPillText, { color: '#8B5CF6' }]}>goal</Text>
+                </View>
+              </View>
+            ))}
           </View>
         )}
       </Modal>
@@ -449,13 +470,14 @@ export function Calendar() {
 
 // ── Side panel (Cal.com-style summary, desktop only) ──────────────────
 function SidePanel({
-  colors, panelDay, panelMode, events, subs, total, currency, isPinned, onUnpin,
+  colors, panelDay, panelMode, events, subs, goals, total, currency, isPinned, onUnpin,
 }: {
   colors: Colors
   panelDay: string
   panelMode: 'today' | 'pinned' | 'preview'
   events: any[]
   subs: any[]
+  goals?: any[]
   total: number
   currency?: string
   isPinned: boolean
@@ -480,9 +502,10 @@ function SidePanel({
     panelMode === 'preview' ? '👀' :
     panelMode === 'pinned'  ? '📌' :
                               '✨'
-  const isEmpty = events.length === 0 && subs.length === 0
+  const goalList = goals ?? []
+  const isEmpty = events.length === 0 && subs.length === 0 && goalList.length === 0
   const totalLabel = total > 0 ? `${symFor(currency)}${total.toFixed(2)}` : '—'
-  const itemCount = subs.length + events.length
+  const itemCount = subs.length + events.length + goalList.length
 
   return (
     <View style={sp.root} pointerEvents="box-none">
@@ -543,6 +566,13 @@ function SidePanel({
               {events.map((e: any) => (
                 <Text key={`e-${e.id}`} style={[sp.line, { color: colors.text }]}>
                   {e.emoji ?? '📅'}  <Text style={sp.bold}>{e.name}</Text> is on the books for today. Add a reminder if you need a nudge — it's the small things that compound. ✨
+                </Text>
+              ))}
+
+              {/* Goals with deadline today */}
+              {goalList.map((g: any) => (
+                <Text key={`g-${g.id}`} style={[sp.line, { color: colors.text }]}>
+                  {g.emoji ?? '🎯'}  <Text style={sp.bold}>{g.name}</Text> — deadline today. Check your progress and log an update to keep the momentum going. 🏁
                 </Text>
               ))}
 

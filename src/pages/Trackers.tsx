@@ -12,9 +12,11 @@ import { Button } from '../components/ui/Button'
 import { AddTrackForm } from '../components/forms/AddTrackForm'
 import { AddHabitForm } from '../components/forms/AddHabitForm'
 import { AddTaskForm } from '../components/forms/AddTaskForm'
+import { AddGoalForm } from '../components/forms/AddGoalForm'
+import { todayStr } from '../utils/dates'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-type Kind   = 'subscriptions' | 'apps' | 'events' | 'tasks' | 'habits'
+type Kind   = 'subscriptions' | 'apps' | 'events' | 'tasks' | 'habits' | 'goals'
 type Filter = 'all' | Kind
 
 const ACCENT: Record<Kind, string> = {
@@ -23,12 +25,13 @@ const ACCENT: Record<Kind, string> = {
   events:        '#F59E0B',
   tasks:         '#22C55E',
   habits:        '#EC4899',
+  goals:         '#8B5CF6',
 }
 const EMOJI: Record<Kind, string> = {
-  subscriptions: '💳', apps: '📱', events: '📅', tasks: '✅', habits: '🔥',
+  subscriptions: '💳', apps: '📱', events: '📅', tasks: '✅', habits: '🔥', goals: '🎯',
 }
 const BADGE: Record<Kind, string> = {
-  subscriptions: 'Sub', apps: 'App', events: 'Event', tasks: 'Task', habits: 'Habit',
+  subscriptions: 'Sub', apps: 'App', events: 'Event', tasks: 'Task', habits: 'Habit', goals: 'Goal',
 }
 const FILTERS: { key: Filter; emoji: string; label: string }[] = [
   { key: 'all',           emoji: '',   label: 'All'    },
@@ -37,6 +40,7 @@ const FILTERS: { key: Filter; emoji: string; label: string }[] = [
   { key: 'events',        emoji: '📅', label: 'Events' },
   { key: 'tasks',         emoji: '✅', label: 'Tasks'  },
   { key: 'habits',        emoji: '🔥', label: 'Habits' },
+  { key: 'goals',         emoji: '🎯', label: 'Goals'  },
 ]
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -53,6 +57,12 @@ function secondaryInfo(item: any, kind: Kind): string {
   if (kind === 'events')        return item.date ?? ''
   if (kind === 'tasks')         return item.done ? '✓ Done' : (item.dueDate ? `Due: ${item.dueDate}` : '')
   if (kind === 'habits')        return item.cadence ?? ''
+  if (kind === 'goals') {
+    const current = item.entries?.length > 0 ? item.entries[item.entries.length - 1].value : 0
+    const pct = item.targetValue > 0 ? Math.round((current / item.targetValue) * 100) : 0
+    const unit = item.unit ? ` ${item.unit}` : ''
+    return `${current} / ${item.targetValue}${unit} · ${pct}%`
+  }
   return ''
 }
 
@@ -66,9 +76,9 @@ function priceInfo(item: any, kind: Kind): string {
 }
 
 // ── ItemRow ───────────────────────────────────────────────────────────────────
-function ItemRow({ item, colors, onEdit, onRemove }: {
+function ItemRow({ item, colors, onEdit, onRemove, onLog }: {
   item: any; colors: any
-  onEdit: () => void; onRemove: () => void
+  onEdit: () => void; onRemove: () => void; onLog?: () => void
 }) {
   const { kind } = item
   const isOverdue = kind === 'subscriptions' && item.nextChargeDate && item.billingCycle
@@ -97,6 +107,11 @@ function ItemRow({ item, colors, onEdit, onRemove }: {
         </View>
       </View>
       <View style={ir.actions}>
+        {onLog && (
+          <Pressable onPress={onLog} style={[ir.btn, { backgroundColor: ACCENT.goals + '22' }]} hitSlop={8}>
+            <Text style={[ir.btnTxt, { color: ACCENT.goals }]}>＋</Text>
+          </Pressable>
+        )}
         <Pressable onPress={onEdit} style={[ir.btn, { backgroundColor: colors.surfaceEl }]} hitSlop={8}>
           <Text style={[ir.btnTxt, { color: colors.text }]}>✏️</Text>
         </Pressable>
@@ -119,6 +134,10 @@ export default function Trackers() {
   const [confirm,  setConfirm]  = useState<{ id: string; name: string; kind: Kind } | null>(null)
   const [editItem, setEditItem] = useState<any | null>(null)
   const [editKind, setEditKind] = useState<Kind | null>(null)
+  const [logGoal,     setLogGoal]     = useState<any | null>(null)
+  const [logValue,    setLogValue]    = useState('')
+  const [showAddGoal,  setShowAddGoal]  = useState(false)
+  const [showAddHabit, setShowAddHabit] = useState(false)
 
   // Merge all items into a flat list with 'kind' tag
   const allItems = useMemo(() => {
@@ -134,10 +153,11 @@ export default function Trackers() {
       ...store.events.map(e        => ({ ...e, kind: 'events'        as const })),
       ...store.tasks.map(t         => ({ ...t, kind: 'tasks'         as const })),
       ...(store.habits ?? []).map(h => ({ ...h, kind: 'habits'       as const })),
+      ...(store.goals  ?? []).map(g => ({ ...g, kind: 'goals'        as const })),
     ]
       .filter(i => filter === 'all' || i.kind === filter)
       .filter(i => !q || i.name.toLowerCase().includes(q))
-  }, [store.subscriptions, store.apps, store.events, store.tasks, store.habits, filter, search])
+  }, [store.subscriptions, store.apps, store.events, store.tasks, store.habits, store.goals, filter, search])
 
   function doRemove() {
     if (!confirm) return
@@ -147,6 +167,7 @@ export default function Trackers() {
     else if (kind === 'events')        store.removeEvent(id)
     else if (kind === 'tasks')         store.removeTask(id)
     else if (kind === 'habits')        store.removeHabit(id)
+    else if (kind === 'goals')         store.removeGoal(id)
     toast.push(`Removed ${name}`)
     setConfirm(null)
   }
@@ -159,6 +180,7 @@ export default function Trackers() {
     else if (editKind === 'events')        store.updateEvent(id, data)
     else if (editKind === 'tasks')         store.updateTask(id, data)
     else if (editKind === 'habits')        store.updateHabit(id, data)
+    else if (editKind === 'goals')         store.updateGoal(id, data)
     toast.push('Saved', 'success')
     setEditItem(null)
     setEditKind(null)
@@ -166,8 +188,11 @@ export default function Trackers() {
 
   function closeEdit() { setEditItem(null); setEditKind(null) }
 
+  function doAddGoal(data: any)  { store.addGoal(data);  toast.push('Goal added', 'success');  setShowAddGoal(false) }
+  function doAddHabit(data: any) { store.addHabit(data); toast.push('Habit added', 'success'); setShowAddHabit(false) }
+
   const editTypeLabel = editKind
-    ? ({ subscriptions: 'Subscription', apps: 'App', events: 'Event', tasks: 'Task', habits: 'Habit' })[editKind]
+    ? ({ subscriptions: 'Subscription', apps: 'App', events: 'Event', tasks: 'Task', habits: 'Habit', goals: 'Goal' })[editKind]
     : ''
 
   return (
@@ -179,6 +204,15 @@ export default function Trackers() {
           <View style={[t.countPill, { backgroundColor: colors.surfaceEl }]}>
             <Text style={[t.countBadge, { color: colors.textMuted }]}>{allItems.length} items</Text>
           </View>
+          {(filter === 'goals' || filter === 'habits') && (
+            <Pressable
+              onPress={() => filter === 'goals' ? setShowAddGoal(true) : setShowAddHabit(true)}
+              style={[t.addBtn, { backgroundColor: ACCENT[filter] + '22' }]}
+              hitSlop={8}
+            >
+              <Text style={[t.addBtnTxt, { color: ACCENT[filter] }]}>+ New</Text>
+            </Pressable>
+          )}
         </View>
 
         {/* Search */}
@@ -243,6 +277,7 @@ export default function Trackers() {
             colors={colors}
             onEdit={() => { setEditItem(item); setEditKind(item.kind) }}
             onRemove={() => setConfirm({ id: item.id, name: item.name, kind: item.kind })}
+            onLog={item.kind === 'goals' ? () => { setLogGoal(item); setLogValue('') } : undefined}
           />
         )}
       />
@@ -291,6 +326,52 @@ export default function Trackers() {
           <AddHabitForm initialValue={editItem} submitLabel="Save" onSubmit={doEdit} onCancel={closeEdit} />
         </Modal>
       )}
+      {editItem && editKind === 'goals' && (
+        <Modal open title="Edit Goal" onClose={closeEdit}>
+          <AddGoalForm initialValue={editItem} submitLabel="Save" onSubmit={doEdit} onCancel={closeEdit} />
+        </Modal>
+      )}
+
+      {/* Add new Goal / Habit */}
+      <Modal open={showAddGoal} title="New Goal" onClose={() => setShowAddGoal(false)}>
+        <AddGoalForm onSubmit={doAddGoal} onCancel={() => setShowAddGoal(false)} />
+      </Modal>
+      <Modal open={showAddHabit} title="New Habit" onClose={() => setShowAddHabit(false)}>
+        <AddHabitForm onSubmit={doAddHabit} onCancel={() => setShowAddHabit(false)} />
+      </Modal>
+
+      {/* Log goal entry */}
+      <Modal open={logGoal !== null} title={logGoal ? `Log · ${logGoal.name}` : 'Log'} onClose={() => setLogGoal(null)}>
+        {logGoal && (
+          <View style={{ gap: theme.sp4 }}>
+            <Text style={{ color: '#8B5CF6', fontSize: 12, fontFamily: theme.fontMedium }}>
+              Current: {logGoal.entries?.length > 0 ? logGoal.entries[logGoal.entries.length - 1].value : 0}
+              {logGoal.unit ? ` ${logGoal.unit}` : ''} · Target: {logGoal.targetValue}{logGoal.unit ? ` ${logGoal.unit}` : ''}
+            </Text>
+            <TextInput
+              style={[{ paddingHorizontal: theme.sp4, paddingVertical: theme.sp3, borderWidth: 1, borderRadius: theme.radiusLg, fontSize: theme.textSm, fontFamily: theme.fontRegular }, { backgroundColor: colors.surfaceEl, borderColor: colors.border, color: colors.text }]}
+              value={logValue}
+              onChangeText={setLogValue}
+              placeholder={logGoal.unit ? `New value in ${logGoal.unit}` : 'New value'}
+              keyboardType="numeric"
+              autoFocus
+            />
+            <View style={{ flexDirection: 'row', gap: theme.sp3 }}>
+              <Button label="Cancel" variant="secondary" size="md" onPress={() => setLogGoal(null)} />
+              <View style={{ flex: 1 }}>
+                <Button label="Save" variant="primary" size="md" fullWidth onPress={() => {
+                  const v = parseFloat(logValue)
+                  if (!isNaN(v)) {
+                    store.logGoalEntry(logGoal.id, { date: todayStr(), value: v })
+                    toast.push('Progress logged', 'success')
+                    setLogGoal(null)
+                  }
+                }} />
+              </View>
+            </View>
+          </View>
+        )}
+      </Modal>
     </View>
   )
 }
@@ -337,4 +418,7 @@ const t = StyleSheet.create({
 
   confirmTxt:  { fontSize: theme.textSm, lineHeight: 22, marginBottom: theme.sp5 },
   confirmBtns: { flexDirection: 'row', gap: theme.sp3 },
+
+  addBtn:    { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20 },
+  addBtnTxt: { fontSize: theme.textXs, fontFamily: theme.fontBold, letterSpacing: 0.3 },
 })

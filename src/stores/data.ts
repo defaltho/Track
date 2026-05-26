@@ -24,6 +24,23 @@ export interface Subscription {
   updatedAt: string
 }
 
+export interface Goal {
+  id: string
+  name: string
+  emoji: string
+  targetValue: number
+  unit: string
+  entries: { date: string; value: number }[]
+  deadline?: string
+  category?: string
+  color?: string
+  note?: string
+  tags?: string[]
+  active: boolean
+  createdAt: string
+  updatedAt: string
+}
+
 export interface Habit {
   id: string
   name: string
@@ -108,6 +125,7 @@ interface DataStore {
   events: EventEntry[]
   tasks: Task[]
   habits: Habit[]
+  goals: Goal[]
   settings: Settings
   widgetOrder: string[]
   flippedWidgets: string[]
@@ -117,25 +135,29 @@ interface DataStore {
   addEvent: (item: Omit<EventEntry, 'id' | 'createdAt' | 'updatedAt'>) => void
   addTask: (item: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => void
   addHabit: (item: Omit<Habit, 'id' | 'createdAt' | 'updatedAt'>) => void
+  addGoal: (item: Omit<Goal, 'id' | 'createdAt' | 'updatedAt'>) => void
 
   updateSubscription: (id: string, patch: Partial<Omit<Subscription, 'id' | 'createdAt'>>) => void
   updateApp: (id: string, patch: Partial<Omit<AppEntry, 'id' | 'createdAt'>>) => void
   updateEvent: (id: string, patch: Partial<Omit<EventEntry, 'id' | 'createdAt'>>) => void
   updateTask: (id: string, patch: Partial<Omit<Task, 'id' | 'createdAt'>>) => void
   updateHabit: (id: string, patch: Partial<Omit<Habit, 'id' | 'createdAt'>>) => void
+  updateGoal: (id: string, patch: Partial<Omit<Goal, 'id' | 'createdAt'>>) => void
 
   removeSubscription: (id: string) => void
   removeApp: (id: string) => void
   removeEvent: (id: string) => void
   removeTask: (id: string) => void
   removeHabit: (id: string) => void
+  removeGoal: (id: string) => void
 
   toggleHabitCheckin: (id: string, dateISO: string) => void
+  logGoalEntry: (id: string, entry: { date: string; value: number }) => void
 
   updateSettings: (patch: Partial<Settings>) => void
   setWidgetLayout: (order: string[], flipped: string[]) => void
   clearAll: () => void
-  importData: (data: Partial<{ subscriptions: Subscription[]; apps: AppEntry[]; events: EventEntry[]; tasks: Task[]; habits: Habit[] }>) => void
+  importData: (data: Partial<{ subscriptions: Subscription[]; apps: AppEntry[]; events: EventEntry[]; tasks: Task[]; habits: Habit[]; goals: Goal[] }>) => void
 }
 
 const defaultSettings: Settings = {
@@ -184,6 +206,7 @@ export const useDataStore = create<DataStore>()(
       events: [],
       tasks: [],
       habits: [],
+      goals: [],
       settings: defaultSettings,
       widgetOrder: [],
       flippedWidgets: [],
@@ -198,6 +221,8 @@ export const useDataStore = create<DataStore>()(
         set((s) => ({ tasks: [...s.tasks, makeEntry(item) as Task] })),
       addHabit: (item) =>
         set((s) => ({ habits: [...s.habits, makeEntry(item) as Habit] })),
+      addGoal: (item) =>
+        set((s) => ({ goals: [...s.goals, makeEntry(item) as Goal] })),
 
       updateSubscription: (id, patch) =>
         set((s) => ({
@@ -231,6 +256,12 @@ export const useDataStore = create<DataStore>()(
             i.id === id ? stampUpdate(i, patch) : i
           ),
         })),
+      updateGoal: (id, patch) =>
+        set((s) => ({
+          goals: s.goals.map((g) =>
+            g.id === id ? stampUpdate(g, patch) : g
+          ),
+        })),
 
       toggleHabitCheckin: (id, dateISO) =>
         set((s) => ({
@@ -256,6 +287,16 @@ export const useDataStore = create<DataStore>()(
         set((s) => ({ tasks: s.tasks.filter((i) => i.id !== id) })),
       removeHabit: (id) =>
         set((s) => ({ habits: s.habits.filter((i) => i.id !== id) })),
+      removeGoal: (id) =>
+        set((s) => ({ goals: s.goals.filter((g) => g.id !== id) })),
+
+      logGoalEntry: (id, entry) =>
+        set((s) => ({
+          goals: s.goals.map((g) => {
+            if (g.id !== id) return g
+            return stampUpdate(g, { entries: [...g.entries, entry] })
+          }),
+        })),
 
       updateSettings: (patch) =>
         set((s) => ({ settings: { ...s.settings, ...patch } })),
@@ -264,7 +305,7 @@ export const useDataStore = create<DataStore>()(
         set(() => ({ widgetOrder: order, flippedWidgets: flipped })),
 
       clearAll: () =>
-        set(() => ({ subscriptions: [], apps: [], events: [], tasks: [], habits: [] })),
+        set(() => ({ subscriptions: [], apps: [], events: [], tasks: [], habits: [], goals: [] })),
 
       importData: (data) =>
         set((s) => ({
@@ -273,20 +314,19 @@ export const useDataStore = create<DataStore>()(
           events: data.events ?? s.events,
           tasks: data.tasks ?? s.tasks,
           habits: data.habits ?? s.habits,
+          goals: data.goals ?? s.goals,
         })),
     }),
     {
       name: 'track-data',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 2,
+      version: 3,
       migrate: (persisted: any, fromVersion: number) => {
         let s = persisted as any
         if (fromVersion < 1) {
-          // v0 → v1: habits array may not exist on old installs
           s = { ...s, habits: s.habits ?? [] }
         }
         if (fromVersion < 2) {
-          // v1 → v2: customCategories, customAccounts, startOfWeek added
           s = {
             ...s,
             settings: {
@@ -297,6 +337,9 @@ export const useDataStore = create<DataStore>()(
               startOfWeek:      s.settings?.startOfWeek      ?? 1,
             },
           }
+        }
+        if (fromVersion < 3) {
+          s = { ...s, goals: s.goals ?? [] }
         }
         return s
       },

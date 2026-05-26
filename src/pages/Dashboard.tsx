@@ -11,7 +11,7 @@ import Animated, {
   useSharedValue, useAnimatedStyle, withSpring,
 } from 'react-native-reanimated'
 import Svg, { Circle as SvgCircle } from 'react-native-svg'
-import { format, differenceInCalendarDays, parseISO, subDays, eachDayOfInterval, getMonth } from 'date-fns'
+import { format, differenceInCalendarDays, parseISO, subDays, eachDayOfInterval, getMonth, subMonths, startOfMonth, isBefore, subWeeks, subYears, endOfMonth, addMonths } from 'date-fns'
 import { effectiveNextCharge } from '../utils/dates'
 import { useDataStore } from '../stores/data'
 import { useToastStore } from '../stores/toasts'
@@ -42,6 +42,7 @@ import { PeriodCompareWidget }  from '../components/widgets/PeriodCompareWidget'
 import { buildForecast }        from '../utils/forecast'
 import { AddTrackForm } from '../components/forms/AddTrackForm'
 import { AddTaskForm } from '../components/forms/AddTaskForm'
+import { AddGoalForm } from '../components/forms/AddGoalForm'
 import { theme, CURRENCY_SYMBOL, Colors } from '../theme'
 import { useAuthStore, OnboardingAnswers } from '../stores/auth'
 
@@ -123,47 +124,70 @@ function RingBadge({ value, max = 20, size = 56, colors }: { value: number; max?
 // ── Activity heatmap ───────────────────────────────────────────────────
 const HM_GAP = 3, HM_CELL_TARGET = 11, HM_MAX_WEEKS = 26
 
-function buildHeatmap(subs: any[], events: any[], weeks: number) {
-  const today = new Date(), start = subDays(today, weeks * 7 - 1)
-  const map: Record<string, number> = {}
-  for (const s of subs) if (s.nextChargeDate) map[s.nextChargeDate] = (map[s.nextChargeDate] || 0) + 1
-  for (const e of events) if (e.date) map[e.date] = (map[e.date] || 0) + 1
-  const cols: { date: string; count: number }[][] = []; let week: { date: string; count: number }[] = []
-  for (const d of eachDayOfInterval({ start, end: today })) {
-    const ds = format(d, 'yyyy-MM-dd'); week.push({ date: ds, count: map[ds] || 0 })
+function buildHeatmap(subs: any[], events: any[], _weeks: number) {
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const windowStart = startOfMonth(subMonths(today, 4))
+  const windowEnd = today.getDate() >= 15 ? endOfMonth(addMonths(today, 1)) : endOfMonth(today)
+  const windowStartStr = format(windowStart, 'yyyy-MM-dd')
+  const windowEndStr = format(windowEnd, 'yyyy-MM-dd')
+  const todayStr = format(today, 'yyyy-MM-dd')
+  const map: Record<string, { count: number; names: string[] }> = {}
+  const mark = (ds: string, name: string) => {
+    if (!map[ds]) map[ds] = { count: 0, names: [] }
+    map[ds].count++; map[ds].names.push(name)
+  }
+  for (const e of events) {
+    if (e.date && e.date >= windowStartStr && e.date <= todayStr)
+      mark(e.date, `${e.emoji ?? ''} ${e.name ?? ''}`.trim())
+  }
+  for (const s of subs) {
+    if (!s.nextChargeDate) continue
+    const cycle = s.billingCycle ?? 'monthly'
+    let d = parseISO(effectiveNextCharge(s.nextChargeDate, cycle))
+    while (!isBefore(d, windowStart)) {
+      const ds = format(d, 'yyyy-MM-dd')
+      if (ds <= windowEndStr) mark(ds, `${s.emoji ?? ''} ${s.name ?? ''}`.trim())
+      if (cycle === 'weekly')      d = subWeeks(d, 1)
+      else if (cycle === 'yearly') d = subYears(d, 1)
+      else                         d = subMonths(d, 1)
+    }
+  }
+  const cols: { date: string; count: number; names: string[] }[][] = []
+  let week: { date: string; count: number; names: string[] }[] = []
+  for (const d of eachDayOfInterval({ start: windowStart, end: windowEnd })) {
+    const ds = format(d, 'yyyy-MM-dd')
+    const entry = map[ds] ?? { count: 0, names: [] }
+    week.push({ date: ds, ...entry })
     if (week.length === 7) { cols.push(week); week = [] }
   }
-  if (week.length > 0) { while (week.length < 7) week.push({ date: '', count: 0 }); cols.push(week) }
+  if (week.length > 0) { while (week.length < 7) week.push({ date: '', count: 0, names: [] }); cols.push(week) }
   return cols
 }
 
 function ActivityHeatmap({ subs, events, colors }: { subs: any[]; events: any[]; colors: Colors }) {
   const isDark = colors.bg !== '#F2F1EE'
   const [containerW, setContainerW] = useState(0)
+  const [tip, setTip] = useState<{ date: string; names: string[] } | null>(null)
 
-  // Fit as many weeks as possible at target cell size; fill remaining width
-  const weeksToShow = containerW > 0
-    ? Math.min(HM_MAX_WEEKS, Math.floor((containerW + HM_GAP) / (HM_CELL_TARGET + HM_GAP)))
-    : HM_MAX_WEEKS
-  const cellSize = containerW > 0
-    ? Math.floor((containerW + HM_GAP) / weeksToShow) - HM_GAP
+  const cols = useMemo(() => { try { return buildHeatmap(subs, events, HM_MAX_WEEKS) } catch { return [] } }, [subs, events])
+  const cellSize = containerW > 0 && cols.length > 0
+    ? Math.floor((containerW + HM_GAP) / cols.length) - HM_GAP
     : HM_CELL_TARGET
   const radius = Math.max(2, Math.round(cellSize * 0.28))
-
-  const cols = useMemo(() => buildHeatmap(subs, events, weeksToShow), [subs, events, weeksToShow])
   const monthLabels = useMemo(() => {
     const labels: { col: number; label: string }[] = []; let last = -1
     cols.forEach((week, ci) => {
       if (!week[0]?.date) return
       const m = getMonth(parseISO(week[0].date))
-      if (m !== last) { labels.push({ col: ci, label: format(parseISO(week[0].date), 'MMM') }); last = m }
+      const lastCol = labels.length > 0 ? labels[labels.length - 1].col : -4
+      if (m !== last && ci - lastCol >= 3) { labels.push({ col: ci, label: format(parseISO(week[0].date), 'MMM') }); last = m }
     })
     return labels
   }, [cols])
 
   const dotColor = (count: number) => isDark
-    ? (!count ? 'rgba(255,255,255,0.07)' : count===1 ? 'rgba(255,255,255,0.28)' : count===2 ? colors.accentRed+'88' : colors.accentRed)
-    : (!count ? 'rgba(0,0,0,0.07)' : count===1 ? 'rgba(0,0,0,0.28)' : count===2 ? 'rgba(0,0,0,0.55)' : '#111')
+    ? (!count ? 'rgba(255,255,255,0.07)' : count===1 ? 'rgba(255,255,255,0.18)' : count===2 ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.55)')
+    : (!count ? 'rgba(0,0,0,0.07)' : count===1 ? 'rgba(0,0,0,0.18)' : count===2 ? 'rgba(0,0,0,0.35)' : 'rgba(0,0,0,0.55)')
 
   return (
     <View onLayout={e => setContainerW(e.nativeEvent.layout.width)}>
@@ -176,16 +200,27 @@ function ActivityHeatmap({ subs, events, colors }: { subs: any[]; events: any[];
         {cols.map((week, ci) => (
           <View key={ci} style={{ gap:HM_GAP }}>
             {week.map((cell, ri) => (
-              <View key={ri} style={{ width:cellSize, height:cellSize, borderRadius:radius, backgroundColor:dotColor(cell.count) }} />
+              <Pressable key={ri} onPress={() => {
+                if (!cell.date || !cell.count) { setTip(null); return }
+                setTip(tip?.date === cell.date ? null : { date: cell.date, names: cell.names })
+              }}>
+                <View style={{ width:cellSize, height:cellSize, borderRadius:radius, backgroundColor: cell.date ? dotColor(cell.count) : 'transparent' }} />
+              </Pressable>
             ))}
           </View>
         ))}
       </View>
+      {tip && (
+        <Text style={[hm.tip, { color: isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.45)' }]} numberOfLines={1}>
+          {format(parseISO(tip.date), 'd MMM').toLowerCase()} · {tip.names.join(' · ')}
+        </Text>
+      )}
     </View>
   )
 }
 const hm = StyleSheet.create({
   label: { fontSize: 9, fontFamily: theme.fontMono, letterSpacing: 0.3 },
+  tip: { marginTop: 8, fontSize: 10, fontFamily: theme.fontMono, letterSpacing: 0.2 },
 })
 
 // ── Phantom drop zone (empty slot next to a lone square widget) ────────
@@ -338,7 +373,7 @@ type WKey =
   | 'active' | 'spend' | 'coffees' | 'events' | 'topExpense' | 'ytd' | 'monthGoal' | 'clock'
   | 'categoryRings'
   | 'heatmap' | 'due' | 'category' | 'upcoming' | 'spendTrend' | 'radar' | 'budget' | 'forecast'
-  | 'score' | 'topExpenses' | 'anomaly' | 'kpiStrip' | 'habits' | 'periodCompare'
+  | 'score' | 'topExpenses' | 'anomaly' | 'kpiStrip' | 'habits' | 'periodCompare' | 'goals'
 
 const WIDGET_SIZE: Record<WKey, 'square' | 'rectangle'> = {
   active:        'square',
@@ -364,6 +399,7 @@ const WIDGET_SIZE: Record<WKey, 'square' | 'rectangle'> = {
   kpiStrip:      'rectangle',
   habits:        'rectangle',
   periodCompare: 'rectangle',
+  goals:         'square',
 }
 
 const WIDGET_DELAY: Record<WKey, number> = {
@@ -371,7 +407,7 @@ const WIDGET_DELAY: Record<WKey, number> = {
   heatmap: 180, due: 210,    spendTrend: 240, category: 270,
   coffees: 300, events: 330, upcoming: 360,
   topExpense: 390, ytd: 420,  radar: 450, categoryRings: 480,
-  budget: 500, forecast: 520, score: 540, topExpenses: 560, anomaly: 580, kpiStrip: 600, habits: 620, periodCompare: 640,
+  budget: 500, forecast: 520, score: 540, topExpenses: 560, anomaly: 580, kpiStrip: 600, habits: 620, periodCompare: 640, goals: 660,
 }
 
 const ALL_KEYS: WKey[] = Object.keys(WIDGET_SIZE) as WKey[]
@@ -400,6 +436,7 @@ const WIDGET_META: Record<WKey, { label: string; emoji: string }> = {
   kpiStrip:      { label: 'key metrics',    emoji: '📐' },
   habits:        { label: 'habits',         emoji: '🎯' },
   periodCompare: { label: 'period compare', emoji: '📊' },
+  goals:         { label: 'goals',          emoji: '🎯' },
 }
 
 const DEFAULT_WIDGET_ORDER: WKey[] = [
@@ -421,14 +458,15 @@ const DEFAULT_WIDGET_ORDER: WKey[] = [
   'kpiStrip',
   'habits',
   'periodCompare',
+  'goals',
 ]
 
 const UC_ORDER: Record<string, WKey[]> = {
-  trading:   ['spend', 'spendTrend', 'budget', 'forecast', 'periodCompare', 'active', 'monthGoal', 'anomaly', 'heatmap', 'topExpenses', 'category', 'categoryRings', 'topExpense', 'radar', 'due', 'coffees', 'events', 'upcoming', 'clock', 'score', 'ytd', 'kpiStrip', 'habits'],
-  developer: ['active', 'spend', 'heatmap', 'clock', 'budget', 'spendTrend', 'due', 'categoryRings', 'topExpense', 'monthGoal', 'forecast', 'anomaly', 'periodCompare', 'topExpenses', 'events', 'category', 'radar', 'upcoming', 'coffees', 'score', 'ytd', 'kpiStrip', 'habits'],
-  designer:  ['clock', 'events', 'active', 'categoryRings', 'spend', 'category', 'due', 'monthGoal', 'spendTrend', 'budget', 'topExpense', 'heatmap', 'forecast', 'periodCompare', 'topExpenses', 'anomaly', 'radar', 'upcoming', 'coffees', 'score', 'ytd', 'kpiStrip', 'habits'],
-  work:      ['active', 'due', 'upcoming', 'events', 'spend', 'budget', 'monthGoal', 'clock', 'category', 'heatmap', 'spendTrend', 'forecast', 'periodCompare', 'categoryRings', 'topExpense', 'anomaly', 'topExpenses', 'radar', 'coffees', 'score', 'ytd', 'kpiStrip', 'habits'],
-  casual:    ['clock', 'events', 'active', 'spend', 'due', 'category', 'upcoming', 'monthGoal', 'coffees', 'heatmap', 'spendTrend', 'budget', 'categoryRings', 'topExpense', 'forecast', 'periodCompare', 'anomaly', 'topExpenses', 'radar', 'score', 'ytd', 'kpiStrip', 'habits'],
+  trading:   ['spend', 'spendTrend', 'budget', 'forecast', 'periodCompare', 'active', 'monthGoal', 'anomaly', 'heatmap', 'topExpenses', 'category', 'categoryRings', 'topExpense', 'radar', 'due', 'coffees', 'events', 'upcoming', 'clock', 'score', 'ytd', 'kpiStrip', 'habits', 'goals'],
+  developer: ['active', 'spend', 'heatmap', 'clock', 'budget', 'spendTrend', 'due', 'categoryRings', 'topExpense', 'monthGoal', 'forecast', 'anomaly', 'periodCompare', 'topExpenses', 'events', 'category', 'radar', 'upcoming', 'coffees', 'score', 'ytd', 'kpiStrip', 'habits', 'goals'],
+  designer:  ['clock', 'events', 'active', 'categoryRings', 'spend', 'category', 'due', 'monthGoal', 'spendTrend', 'budget', 'topExpense', 'heatmap', 'forecast', 'periodCompare', 'topExpenses', 'anomaly', 'radar', 'upcoming', 'coffees', 'score', 'ytd', 'kpiStrip', 'habits', 'goals'],
+  work:      ['active', 'due', 'upcoming', 'events', 'spend', 'budget', 'monthGoal', 'clock', 'category', 'heatmap', 'spendTrend', 'forecast', 'periodCompare', 'categoryRings', 'topExpense', 'anomaly', 'topExpenses', 'radar', 'coffees', 'score', 'ytd', 'kpiStrip', 'habits', 'goals'],
+  casual:    ['clock', 'events', 'active', 'spend', 'due', 'category', 'upcoming', 'monthGoal', 'coffees', 'heatmap', 'spendTrend', 'budget', 'categoryRings', 'topExpense', 'forecast', 'periodCompare', 'anomaly', 'topExpenses', 'radar', 'score', 'ytd', 'kpiStrip', 'habits', 'goals'],
 }
 
 function personalizeOrder(ob: OnboardingAnswers | null): WKey[] {
@@ -590,6 +628,7 @@ export function Dashboard() {
 
   const [showAddTrack, setShowAddTrack] = useState(false)
   const [showAddTask, setShowAddTask]   = useState(false)
+  const [showAddGoal, setShowAddGoal]   = useState(false)
   const [editTrack, setEditTrack]       = useState<any | null>(null)
   const [editTask, setEditTask]         = useState<any | null>(null)
   const [confirm, setConfirm]           = useState<{ kind: string; id: string; name: string } | null>(null)
@@ -792,6 +831,7 @@ export function Dashboard() {
     setShowAddTrack(false)
   }
   function handleAddTask(data: any) { store.addTask(data); toast.push('Task added', 'success'); setShowAddTask(false) }
+  function handleAddGoal(data: any) { store.addGoal(data); toast.push('Goal added', 'success'); setShowAddGoal(false) }
   function handleEditTrack(data: any) {
     if (!editTrack) return
     const id = editTrack.id
@@ -914,12 +954,26 @@ export function Dashboard() {
             invertDelta
           />
         )
-      case 'heatmap':
+      case 'heatmap': {
+        const hmDark = colors.bg !== '#F2F1EE'
         return (
-          <Widget tag="the year, in dots" size="rectangle">
+          <Widget
+            tag="the year, in dots"
+            size="rectangle"
+            action={
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Text style={{ fontSize: 9, fontFamily: theme.fontMono, color: hmDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.25)', letterSpacing: 0.3 }}>less</Text>
+                {([0.07, 0.18, 0.35, 0.55] as number[]).map((op, i) => (
+                  <View key={i} style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: hmDark ? `rgba(255,255,255,${op})` : `rgba(0,0,0,${op})` }} />
+                ))}
+                <Text style={{ fontSize: 9, fontFamily: theme.fontMono, color: hmDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.25)', letterSpacing: 0.3 }}>more</Text>
+              </View>
+            }
+          >
             <ActivityHeatmap subs={store.subscriptions} events={store.events} colors={colors} />
           </Widget>
         )
+      }
       case 'due':
         return (
           <Widget
@@ -1056,6 +1110,25 @@ export function Dashboard() {
         return <HabitStreakWidget habits={store.habits ?? []} />
       case 'periodCompare':
         return <PeriodCompareWidget subscriptions={activeSubs} unit={symbol} />
+      case 'goals': {
+        const activeGoals = (store.goals ?? []).filter((g: any) => g.active !== false)
+        if (!activeGoals.length) return (
+          <Widget tag="goals" size="square">
+            <Text style={{ color: colors.textFaint, fontSize: 11, fontFamily: theme.fontRegular }}>no active goals</Text>
+          </Widget>
+        )
+        const g = activeGoals[0]
+        const current = g.entries?.length > 0 ? g.entries[g.entries.length - 1].value : 0
+        return (
+          <RingGoalWidget
+            tag="goals"
+            value={current}
+            target={g.targetValue}
+            unit={g.unit}
+            label={g.name}
+          />
+        )
+      }
     }
   }
 
@@ -1200,6 +1273,9 @@ export function Dashboard() {
       </Modal>
       <Modal open={showAddTask} title="Add Task" onClose={() => setShowAddTask(false)}>
         <AddTaskForm onSubmit={handleAddTask} onCancel={() => setShowAddTask(false)} />
+      </Modal>
+      <Modal open={showAddGoal} title="Add Goal" onClose={() => setShowAddGoal(false)}>
+        <AddGoalForm onSubmit={handleAddGoal} onCancel={() => setShowAddGoal(false)} />
       </Modal>
       <Modal open={editTrack !== null} title="Edit Track" onClose={() => setEditTrack(null)}>
         {editTrack && (
