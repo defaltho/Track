@@ -167,9 +167,10 @@ export default function Settings() {
     toast.push('All data cleared', 'info')
   }
 
-  const themeOptions: Array<{ key: 'light' | 'dark'; label: string; icon: 'sunny' | 'moon'; desc: string }> = [
-    { key: 'light', label: 'Light', icon: 'sunny', desc: 'Clean, minimal' },
-    { key: 'dark',  label: 'Dark',  icon: 'moon',  desc: 'Easy on the eyes' },
+  const themeOptions: Array<{ key: 'light' | 'dark' | 'auto'; label: string; icon: 'sunny' | 'moon' | 'phone-portrait'; desc: string }> = [
+    { key: 'auto',  label: 'Auto',  icon: 'phone-portrait', desc: 'Follows system' },
+    { key: 'light', label: 'Light', icon: 'sunny',          desc: 'Clean, minimal' },
+    { key: 'dark',  label: 'Dark',  icon: 'moon',           desc: 'Easy on the eyes' },
   ]
 
   if (showErrorLog) return <ErrorLog onBack={() => setShowErrorLog(false)} />
@@ -201,7 +202,7 @@ export default function Settings() {
                     },
                   ]}>
                     <Ionicons
-                      name={opt.icon}
+                      name={opt.icon as any}
                       size={16}
                       color={opt.key === 'dark' ? '#FFFFFF' : colors.text}
                     />

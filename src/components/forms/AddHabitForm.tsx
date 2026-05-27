@@ -31,6 +31,8 @@ export function AddHabitForm({ onSubmit, onCancel, initialValue, submitLabel }: 
   const toast = useToastStore()
   const customCategories = useDataStore(s => s.settings.customCategories ?? [])
   const allCategories = [...CATEGORIES, ...customCategories]
+  const customAccounts = useDataStore(s => s.settings.customAccounts ?? [])
+  const allAccounts = ['Personal', 'Business', ...customAccounts]
   const isEdit = !!initialValue
 
   const [name, setName] = useState(initialValue?.name ?? '')
@@ -38,6 +40,7 @@ export function AddHabitForm({ onSubmit, onCancel, initialValue, submitLabel }: 
   const [emoji, setEmoji] = useState(initialValue?.emoji ?? '🎯')
   const [cadence, setCadence] = useState<typeof CADENCES[number]>(initialValue?.cadence ?? 'daily')
   const [category, setCategory] = useState(initialValue?.category ?? 'Routine')
+  const [account, setAccount] = useState(initialValue?.account ?? '')
   const [note, setNote] = useState(initialValue?.note ?? '')
   const [tags, setTags] = useState<string[]>(Array.isArray(initialValue?.tags) ? initialValue.tags : [])
 
@@ -52,6 +55,7 @@ export function AddHabitForm({ onSubmit, onCancel, initialValue, submitLabel }: 
       emoji,
       cadence,
       category,
+      account: account || undefined,
       note: note.trim(),
       tags: tags.length > 0 ? tags : undefined,
       checkins: initialValue?.checkins ?? [],
@@ -121,6 +125,27 @@ export function AddHabitForm({ onSubmit, onCancel, initialValue, submitLabel }: 
           />
         </View>
 
+        {/* Account */}
+        <View>
+          <Text style={[s.label, { color: colors.textMuted }]}>Account</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.pillsScroll}>
+            {allAccounts.map(a => (
+              <TouchableOpacity
+                key={a}
+                style={[s.pill, {
+                  backgroundColor: (account || 'Personal') === a ? colors.accent : colors.surfaceEl,
+                  borderColor: (account || 'Personal') === a ? colors.accent : colors.border,
+                }]}
+                onPress={() => setAccount(a === 'Personal' ? '' : a)}
+              >
+                <Text style={[s.pillText, { color: (account || 'Personal') === a ? colors.accentFg : colors.textMuted }]}>
+                  {a}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+
         {/* Note */}
         <View>
           <Text style={[s.label, { color: colors.textMuted }]}>Note</Text>
@@ -174,6 +199,15 @@ const s = StyleSheet.create({
     fontSize: theme.textSm,
     fontFamily: theme.fontRegular,
   },
+  pillsScroll: { gap: theme.sp2 },
+  pill: {
+    paddingVertical: theme.sp2,
+    paddingHorizontal: theme.sp3,
+    borderRadius: theme.radiusMd,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  pillText: { fontSize: theme.textXs, fontFamily: theme.fontBold },
   errText: { fontSize: 12, fontFamily: theme.fontMedium, marginTop: 6 },
   actions: { flexDirection: 'row', gap: theme.sp3, marginTop: theme.sp4 },
 })

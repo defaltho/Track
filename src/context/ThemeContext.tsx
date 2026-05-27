@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useMemo } from 'react'
+import { useColorScheme } from 'react-native'
 import { lightColors, darkColors, Colors } from '../theme'
 import { useDataStore } from '../stores/data'
 
-export type ThemeKey = 'light' | 'dark'
+export type ThemeKey = 'light' | 'dark' | 'auto'
 
 interface ThemeCtx {
   colors: Colors
@@ -14,20 +15,22 @@ interface ThemeCtx {
 const Ctx = createContext<ThemeCtx>({
   colors: lightColors,
   isDark: false,
-  themeKey: 'light',
+  themeKey: 'auto',
   setTheme: () => {},
 })
-
-function resolveColors(key: string): Colors {
-  if (key === 'dark') return darkColors
-  return lightColors
-}
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const themeKey = useDataStore(s => s.settings.theme) as ThemeKey
   const updateSettings = useDataStore(s => s.updateSettings)
-  const isDark = themeKey === 'dark'
-  const colors = resolveColors(themeKey)
+  const systemScheme = useColorScheme()
+
+  const resolvedKey: 'light' | 'dark' = themeKey === 'auto'
+    ? (systemScheme === 'dark' ? 'dark' : 'light')
+    : themeKey
+
+  const isDark = resolvedKey === 'dark'
+  const colors = isDark ? darkColors : lightColors
+
   const value = useMemo(
     () => ({
       colors,

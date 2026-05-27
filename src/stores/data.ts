@@ -36,6 +36,7 @@ export interface Goal {
   color?: string
   note?: string
   tags?: string[]
+  account?: string
   active: boolean
   createdAt: string
   updatedAt: string
@@ -51,6 +52,7 @@ export interface Habit {
   color?: string
   note?: string
   tags?: string[]
+  account?: string
   active: boolean
   createdAt: string
   updatedAt: string
@@ -103,6 +105,8 @@ export interface EventEntry {
   color: string
   active: boolean
   note?: string
+  tags?: string[]
+  account?: string
   createdAt: string
   updatedAt: string
 }
@@ -164,7 +168,7 @@ const defaultSettings: Settings = {
   defaultCurrency: 'EUR',
   coffeePrice: 4.50,
   monthlyBudget: null,
-  theme: 'light',
+  theme: 'auto',
   startOfWeek: 1,
   version: '0.1.0',
   devMode: false,
@@ -320,7 +324,7 @@ export const useDataStore = create<DataStore>()(
     {
       name: 'track-data',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 3,
+      version: 4,
       migrate: (persisted: any, fromVersion: number) => {
         let s = persisted as any
         if (fromVersion < 1) {
@@ -340,6 +344,14 @@ export const useDataStore = create<DataStore>()(
         }
         if (fromVersion < 3) {
           s = { ...s, goals: s.goals ?? [] }
+        }
+        if (fromVersion < 4) {
+          s = {
+            ...s,
+            events: (s.events ?? []).map((e: any) => ({ tags: [], account: '', ...e })),
+            habits: (s.habits ?? []).map((h: any) => ({ account: '', ...h })),
+            goals:  (s.goals  ?? []).map((g: any) => ({ account: '', ...g })),
+          }
         }
         return s
       },

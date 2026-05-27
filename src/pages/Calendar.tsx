@@ -174,8 +174,13 @@ export function Calendar() {
     for (const g of (store.goals ?? []) as any[]) {
       if (g.active !== false && g.deadline) push(g.deadline, g.emoji ?? '🎯', '#8B5CF6')
     }
+    for (const h of (store.habits ?? []) as any[]) {
+      for (const dateStr of (h.checkins ?? [])) {
+        push(dateStr, h.emoji ?? '🔥', '#EC4899')
+      }
+    }
     return map
-  }, [store.events, store.subscriptions, store.goals, today])
+  }, [store.events, store.subscriptions, store.goals, store.habits, today])
 
   const dayEvents = useMemo(
     () => (selectedDay ? (store.events as any[]).filter(e => e.date === selectedDay) : []),

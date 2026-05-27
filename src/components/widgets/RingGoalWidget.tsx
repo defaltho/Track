@@ -11,9 +11,10 @@ interface Props {
   target: number
   unit?: string
   label?: string
+  onPress?: () => void
 }
 
-export function RingGoalWidget({ tag, value, target, unit, label }: Props) {
+export function RingGoalWidget({ tag, value, target, unit, label, onPress }: Props) {
   const { colors } = useTheme()
   const [dim, setDim] = useState(90)
 
@@ -26,7 +27,7 @@ export function RingGoalWidget({ tag, value, target, unit, label }: Props) {
   const tgtSize = Math.round(dim * 0.09)
 
   return (
-    <Widget tag={tag} size="square">
+    <Widget tag={tag} size="square" onPress={onPress}>
       <View
         style={rg.center}
         onLayout={(e) => {

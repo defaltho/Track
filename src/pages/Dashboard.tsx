@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import {
-  View, Text, TouchableOpacity, Pressable, StyleSheet,
+  View, Text, TextInput, TouchableOpacity, Pressable, StyleSheet,
   Platform, useWindowDimensions, Dimensions,
 } from 'react-native'
 import { ScrollView } from 'react-native-gesture-handler'
@@ -629,6 +629,8 @@ export function Dashboard() {
   const [showAddTrack, setShowAddTrack] = useState(false)
   const [showAddTask, setShowAddTask]   = useState(false)
   const [showAddGoal, setShowAddGoal]   = useState(false)
+  const [logGoalItem,  setLogGoalItem]  = useState<any | null>(null)
+  const [logGoalValue, setLogGoalValue] = useState('')
   const [editTrack, setEditTrack]       = useState<any | null>(null)
   const [editTask, setEditTask]         = useState<any | null>(null)
   const [confirm, setConfirm]           = useState<{ kind: string; id: string; name: string } | null>(null)
@@ -1126,6 +1128,7 @@ export function Dashboard() {
             target={g.targetValue}
             unit={g.unit}
             label={g.name}
+            onPress={() => { setLogGoalItem(g); setLogGoalValue('') }}
           />
         )
       }
@@ -1307,6 +1310,38 @@ export function Dashboard() {
               </View>
               <View style={{ flex: 1 }}>
                 <Button label="Remove" variant="danger" size="md" onPress={confirmRemove} fullWidth />
+              </View>
+            </View>
+          </View>
+        )}
+      </Modal>
+      <Modal open={logGoalItem !== null} title={logGoalItem ? `Log · ${logGoalItem.name}` : 'Log'} onClose={() => setLogGoalItem(null)}>
+        {logGoalItem && (
+          <View style={{ gap: theme.sp4 }}>
+            <Text style={{ color: '#8B5CF6', fontSize: 12, fontFamily: theme.fontMedium }}>
+              Current: {logGoalItem.entries?.length > 0 ? logGoalItem.entries[logGoalItem.entries.length - 1].value : 0}
+              {logGoalItem.unit ? ` ${logGoalItem.unit}` : ''} · Target: {logGoalItem.targetValue}{logGoalItem.unit ? ` ${logGoalItem.unit}` : ''}
+            </Text>
+            <TextInput
+              style={[{ paddingHorizontal: theme.sp4, paddingVertical: theme.sp3, borderWidth: 1, borderRadius: theme.radiusLg, fontSize: theme.textSm, fontFamily: theme.fontRegular }, { backgroundColor: colors.surfaceEl, borderColor: colors.border, color: colors.text }]}
+              value={logGoalValue}
+              onChangeText={setLogGoalValue}
+              placeholder={logGoalItem.unit ? `New value in ${logGoalItem.unit}` : 'New value'}
+              placeholderTextColor={colors.textFaint}
+              keyboardType="numeric"
+              autoFocus
+            />
+            <View style={{ flexDirection: 'row', gap: theme.sp3 }}>
+              <Button label="Cancel" variant="secondary" size="md" onPress={() => setLogGoalItem(null)} />
+              <View style={{ flex: 1 }}>
+                <Button label="Save" variant="primary" size="md" fullWidth onPress={() => {
+                  const v = parseFloat(logGoalValue)
+                  if (!isNaN(v)) {
+                    store.logGoalEntry(logGoalItem.id, { date: new Date().toISOString().split('T')[0], value: v })
+                    toast.push('Progress logged', 'success')
+                    setLogGoalItem(null)
+                  }
+                }} />
               </View>
             </View>
           </View>

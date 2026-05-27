@@ -129,8 +129,10 @@ export default function Trackers() {
   const store = useDataStore()
   const toast = useToastStore()
 
-  const [search,   setSearch]   = useState('')
-  const [filter,   setFilter]   = useState<Filter>('all')
+  const [search,        setSearch]        = useState('')
+  const [filter,        setFilter]        = useState<Filter>('all')
+  const [activeTag,     setActiveTag]     = useState<string | null>(null)
+  const [activeAccount, setActiveAccount] = useState<string | null>(null)
   const [confirm,  setConfirm]  = useState<{ id: string; name: string; kind: Kind } | null>(null)
   const [editItem, setEditItem] = useState<any | null>(null)
   const [editKind, setEditKind] = useState<Kind | null>(null)
@@ -138,6 +140,21 @@ export default function Trackers() {
   const [logValue,    setLogValue]    = useState('')
   const [showAddGoal,  setShowAddGoal]  = useState(false)
   const [showAddHabit, setShowAddHabit] = useState(false)
+
+  // Collect unique tags and accounts from the whole store for filter chips
+  const allTags = useMemo(() => {
+    const s = new Set<string>()
+    const all = [...store.subscriptions, ...store.apps, ...store.events, ...store.tasks, ...(store.habits ?? []), ...(store.goals ?? [])]
+    all.forEach(i => (i as any).tags?.forEach((t: string) => s.add(t)))
+    return [...s].sort()
+  }, [store.subscriptions, store.apps, store.events, store.tasks, store.habits, store.goals])
+
+  const allAccountChips = useMemo(() => {
+    const s = new Set<string>()
+    const all = [...store.subscriptions, ...store.apps, ...store.events, ...store.tasks, ...(store.habits ?? []), ...(store.goals ?? [])]
+    all.forEach(i => { const a = (i as any).account; if (a) s.add(a) })
+    return [...s].sort()
+  }, [store.subscriptions, store.apps, store.events, store.tasks, store.habits, store.goals])
 
   // Merge all items into a flat list with 'kind' tag
   const allItems = useMemo(() => {
@@ -157,7 +174,9 @@ export default function Trackers() {
     ]
       .filter(i => filter === 'all' || i.kind === filter)
       .filter(i => !q || i.name.toLowerCase().includes(q))
-  }, [store.subscriptions, store.apps, store.events, store.tasks, store.habits, store.goals, filter, search])
+      .filter(i => !activeTag || (i as any).tags?.includes(activeTag))
+      .filter(i => !activeAccount || (i as any).account === activeAccount)
+  }, [store.subscriptions, store.apps, store.events, store.tasks, store.habits, store.goals, filter, search, activeTag, activeAccount])
 
   function doRemove() {
     if (!confirm) return
@@ -256,6 +275,48 @@ export default function Trackers() {
             )
           })}
         </View>
+
+        {/* Tag chips */}
+        {allTags.length > 0 && (
+          <View style={t.chipsWrap}>
+            <Text style={[t.chipsLabel, { color: colors.textFaint }]}>Tags</Text>
+            <View style={t.filterRow}>
+              {allTags.map(tag => {
+                const active = activeTag === tag
+                return (
+                  <Pressable
+                    key={tag}
+                    onPress={() => setActiveTag(active ? null : tag)}
+                    style={[t.filterTab, { backgroundColor: active ? colors.accent + '22' : colors.surfaceEl, borderColor: active ? colors.accent : 'transparent' }]}
+                  >
+                    <Text style={[t.filterLabel, { color: active ? colors.accent : colors.textMuted }]}>#{tag}</Text>
+                  </Pressable>
+                )
+              })}
+            </View>
+          </View>
+        )}
+
+        {/* Account chips */}
+        {allAccountChips.length > 0 && (
+          <View style={t.chipsWrap}>
+            <Text style={[t.chipsLabel, { color: colors.textFaint }]}>Account</Text>
+            <View style={t.filterRow}>
+              {allAccountChips.map(acc => {
+                const active = activeAccount === acc
+                return (
+                  <Pressable
+                    key={acc}
+                    onPress={() => setActiveAccount(active ? null : acc)}
+                    style={[t.filterTab, { backgroundColor: active ? colors.accent + '22' : colors.surfaceEl, borderColor: active ? colors.accent : 'transparent' }]}
+                  >
+                    <Text style={[t.filterLabel, { color: active ? colors.accent : colors.textMuted }]}>{acc}</Text>
+                  </Pressable>
+                )
+              })}
+            </View>
+          </View>
+        )}
       </View>
 
       {/* List */}
@@ -411,6 +472,8 @@ const t = StyleSheet.create({
   filterRow:  { flexDirection: 'row', gap: theme.sp2, flexWrap: 'wrap' },
   filterTab:  { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1 },
   filterLabel:{ fontSize: 12, fontFamily: theme.fontMedium },
+  chipsWrap:  { gap: theme.sp2 },
+  chipsLabel: { fontSize: 10, fontFamily: theme.fontBold, textTransform: 'uppercase', letterSpacing: 0.4 },
 
   list:  { paddingBottom: 120 },
   empty: { padding: theme.sp8, alignItems: 'center' },
