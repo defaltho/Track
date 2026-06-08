@@ -111,6 +111,13 @@ export interface EventEntry {
   updatedAt: string
 }
 
+export interface Budget {
+  id: string
+  category: string
+  amount: number
+  period: 'monthly' | 'yearly'
+}
+
 interface Settings {
   defaultCurrency: string
   coffeePrice: number
@@ -121,6 +128,8 @@ interface Settings {
   devMode: boolean
   customCategories: string[]
   customAccounts: string[]
+  privacyMode: boolean
+  seeded: boolean
 }
 
 interface DataStore {
@@ -130,6 +139,7 @@ interface DataStore {
   tasks: Task[]
   habits: Habit[]
   goals: Goal[]
+  budgets: Budget[]
   settings: Settings
   widgetOrder: string[]
   flippedWidgets: string[]
@@ -140,6 +150,7 @@ interface DataStore {
   addTask: (item: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => void
   addHabit: (item: Omit<Habit, 'id' | 'createdAt' | 'updatedAt'>) => void
   addGoal: (item: Omit<Goal, 'id' | 'createdAt' | 'updatedAt'>) => void
+  addBudget: (item: Omit<Budget, 'id'>) => void
 
   updateSubscription: (id: string, patch: Partial<Omit<Subscription, 'id' | 'createdAt'>>) => void
   updateApp: (id: string, patch: Partial<Omit<AppEntry, 'id' | 'createdAt'>>) => void
@@ -147,6 +158,7 @@ interface DataStore {
   updateTask: (id: string, patch: Partial<Omit<Task, 'id' | 'createdAt'>>) => void
   updateHabit: (id: string, patch: Partial<Omit<Habit, 'id' | 'createdAt'>>) => void
   updateGoal: (id: string, patch: Partial<Omit<Goal, 'id' | 'createdAt'>>) => void
+  updateBudget: (id: string, patch: Partial<Omit<Budget, 'id'>>) => void
 
   removeSubscription: (id: string) => void
   removeApp: (id: string) => void
@@ -154,6 +166,7 @@ interface DataStore {
   removeTask: (id: string) => void
   removeHabit: (id: string) => void
   removeGoal: (id: string) => void
+  removeBudget: (id: string) => void
 
   toggleHabitCheckin: (id: string, dateISO: string) => void
   logGoalEntry: (id: string, entry: { date: string; value: number }) => void
@@ -174,9 +187,10 @@ const defaultSettings: Settings = {
   devMode: false,
   customCategories: [],
   customAccounts: [],
+  privacyMode: false,
+  seeded: false,
 }
 
-// BUG M4 fix: fallback UUID generator when crypto.randomUUID is unavailable
 function generateId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID()
@@ -211,6 +225,7 @@ export const useDataStore = create<DataStore>()(
       tasks: [],
       habits: [],
       goals: [],
+      budgets: [],
       settings: defaultSettings,
       widgetOrder: [],
       flippedWidgets: [],
@@ -227,6 +242,8 @@ export const useDataStore = create<DataStore>()(
         set((s) => ({ habits: [...s.habits, makeEntry(item) as Habit] })),
       addGoal: (item) =>
         set((s) => ({ goals: [...s.goals, makeEntry(item) as Goal] })),
+      addBudget: (item) =>
+        set((s) => ({ budgets: [...s.budgets, { ...item, id: generateId() }] })),
 
       updateSubscription: (id, patch) =>
         set((s) => ({
@@ -234,14 +251,12 @@ export const useDataStore = create<DataStore>()(
             i.id === id ? stampUpdate(i, patch) : i
           ),
         })),
-      // BUG M5 fix: added updateApp
       updateApp: (id, patch) =>
         set((s) => ({
           apps: s.apps.map((i) =>
             i.id === id ? stampUpdate(i, patch) : i
           ),
         })),
-      // BUG M5 fix: added updateEvent
       updateEvent: (id, patch) =>
         set((s) => ({
           events: s.events.map((i) =>
@@ -266,6 +281,12 @@ export const useDataStore = create<DataStore>()(
             g.id === id ? stampUpdate(g, patch) : g
           ),
         })),
+      updateBudget: (id, patch) =>
+        set((s) => ({
+          budgets: s.budgets.map((b) =>
+            b.id === id ? { ...b, ...patch } : b
+          ),
+        })),
 
       toggleHabitCheckin: (id, dateISO) =>
         set((s) => ({
@@ -281,10 +302,8 @@ export const useDataStore = create<DataStore>()(
 
       removeSubscription: (id) =>
         set((s) => ({ subscriptions: s.subscriptions.filter((i) => i.id !== id) })),
-      // BUG M5 fix: added removeApp
       removeApp: (id) =>
         set((s) => ({ apps: s.apps.filter((i) => i.id !== id) })),
-      // BUG M5 fix: added removeEvent
       removeEvent: (id) =>
         set((s) => ({ events: s.events.filter((i) => i.id !== id) })),
       removeTask: (id) =>
@@ -293,6 +312,8 @@ export const useDataStore = create<DataStore>()(
         set((s) => ({ habits: s.habits.filter((i) => i.id !== id) })),
       removeGoal: (id) =>
         set((s) => ({ goals: s.goals.filter((g) => g.id !== id) })),
+      removeBudget: (id) =>
+        set((s) => ({ budgets: s.budgets.filter((b) => b.id !== id) })),
 
       logGoalEntry: (id, entry) =>
         set((s) => ({
@@ -324,7 +345,7 @@ export const useDataStore = create<DataStore>()(
     {
       name: 'track-data',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 4,
+      version: 7,
       migrate: (persisted: any, fromVersion: number) => {
         let s = persisted as any
         if (fromVersion < 1) {
@@ -351,6 +372,49 @@ export const useDataStore = create<DataStore>()(
             events: (s.events ?? []).map((e: any) => ({ tags: [], account: '', ...e })),
             habits: (s.habits ?? []).map((h: any) => ({ account: '', ...h })),
             goals:  (s.goals  ?? []).map((g: any) => ({ account: '', ...g })),
+          }
+        }
+        if (fromVersion < 5) {
+          s = {
+            ...s,
+            budgets: s.budgets ?? [],
+            settings: { ...defaultSettings, ...s.settings, privacyMode: s.settings?.privacyMode ?? false },
+          }
+        }
+        if (fromVersion < 6) {
+          s = {
+            ...s,
+            settings: { ...s.settings, seeded: (s.subscriptions?.length ?? 0) > 0 },
+          }
+        }
+        if (fromVersion < 7) {
+          const HIST_SUB_NAMES = new Set([
+            'Netflix', 'HBO Max', 'Disney+', 'Spotify', 'Apple Music', 'Xbox Game Pass',
+            'iCloud+', 'Google One', 'GitHub Pro', 'Notion', 'Linear', 'NYT',
+            'Strava Premium', 'Headspace', 'Duolingo Super', 'Vodafone Fiber',
+          ])
+          const HIST_EVT_NAMES = new Set([
+            'Coffee with Ana', 'Gym session', 'Dentist check-up', 'Movie night', 'Run',
+            'Dinner out', 'Concert', 'Doctor visit', 'Birthday party', 'Yoga class',
+            'Concert tickets', 'Family lunch', 'Team standup', 'Client call', 'Date night',
+            'Football match', 'Beach day', 'Bookstore', 'Cooking class', 'Hiking trip',
+            'Art exhibition', 'Therapy',
+          ])
+          const today = new Date().toISOString().split('T')[0]
+          s = {
+            ...s,
+            subscriptions: (s.subscriptions ?? []).map((sub: any) => {
+              if (!sub.active && sub.nextChargeDate < today && HIST_SUB_NAMES.has(sub.name) && !sub.note) {
+                return { ...sub, note: 'Historical charge' }
+              }
+              return sub
+            }),
+            events: (s.events ?? []).map((evt: any) => {
+              if (evt.date < today && HIST_EVT_NAMES.has(evt.name) && evt.note === undefined) {
+                return { ...evt, note: 'Historical event' }
+              }
+              return evt
+            }),
           }
         }
         return s

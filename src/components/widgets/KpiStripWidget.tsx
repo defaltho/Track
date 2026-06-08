@@ -4,13 +4,16 @@ import { theme } from '../../theme'
 import { useTheme } from '../../context/ThemeContext'
 import { Widget } from '../ui/Widget'
 import { monthlyEquivalent } from '../../utils/calculations'
+import type { Subscription, Task } from '../../stores/data'
+import { mask } from '../../utils/format'
 
 interface Props {
-  subscriptions: any[]
-  tasks: any[]
+  subscriptions: Subscription[]
+  tasks: Task[]
   monthlyBudget: number | null
   monthlySpend: number
   symbol: string
+  isPrivate?: boolean
 }
 
 function formatCompact(n: number): string {
@@ -18,7 +21,7 @@ function formatCompact(n: number): string {
   return n.toFixed(0)
 }
 
-export function KpiStripWidget({ subscriptions, tasks, monthlyBudget, monthlySpend, symbol }: Props) {
+export function KpiStripWidget({ subscriptions, tasks, monthlyBudget, monthlySpend, symbol, isPrivate = false }: Props) {
   const { colors } = useTheme()
 
   const today = new Date().toISOString().slice(0, 10)
@@ -30,11 +33,11 @@ export function KpiStripWidget({ subscriptions, tasks, monthlyBudget, monthlySpe
 
   const todaySpend = useMemo(() => {
     const subToday = subscriptions
-      .filter((s: any) => s.active !== false && s.nextChargeDate === today)
-      .reduce((sum: number, s: any) => sum + (Number(s.price) || 0), 0)
+      .filter(s => s.active !== false && s.nextChargeDate === today)
+      .reduce((sum, s) => sum + (Number(s.price) || 0), 0)
     const taskToday = tasks
-      .filter((t: any) => t.dueDate === today && typeof t.amount === 'number')
-      .reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0)
+      .filter(t => t.dueDate === today && typeof t.amount === 'number')
+      .reduce((sum, t) => sum + (Number(t.amount) || 0), 0)
     return subToday + taskToday
   }, [subscriptions, tasks, today])
 
@@ -58,25 +61,25 @@ export function KpiStripWidget({ subscriptions, tasks, monthlyBudget, monthlySpe
   const cells = [
     {
       icon: '🎯',
-      value: budgetPct != null ? `${budgetPct}%` : '—',
+      value: mask(budgetPct != null ? `${budgetPct}%` : '—', isPrivate),
       label: 'budget',
       tone: budgetPct == null ? 'muted' : budgetPct >= 100 ? 'danger' : budgetPct >= 80 ? 'warning' : 'success',
     },
     {
       icon: '☀️',
-      value: `${symbol}${formatCompact(todaySpend)}`,
+      value: mask(`${symbol}${formatCompact(todaySpend)}`, isPrivate),
       label: 'today',
       tone: 'normal',
     },
     {
       icon: '📊',
-      value: `${symbol}${formatCompact(perDayAvg)}`,
+      value: mask(`${symbol}${formatCompact(perDayAvg)}`, isPrivate),
       label: 'per day',
       tone: 'normal',
     },
     {
       icon: '🥇',
-      value: `${symbol}${formatCompact(topCategory.value)}`,
+      value: mask(`${symbol}${formatCompact(topCategory.value)}`, isPrivate),
       label: topCategory.name.toLowerCase(),
       tone: 'normal',
     },

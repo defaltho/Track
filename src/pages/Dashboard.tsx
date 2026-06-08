@@ -13,6 +13,7 @@ import Animated, {
 import Svg, { Circle as SvgCircle } from 'react-native-svg'
 import { format, differenceInCalendarDays, parseISO, subDays, eachDayOfInterval, getMonth, subMonths, startOfMonth, isBefore, subWeeks, subYears, endOfMonth, addMonths } from 'date-fns'
 import { effectiveNextCharge } from '../utils/dates'
+import { mask } from '../utils/format'
 import { useDataStore } from '../stores/data'
 import { useToastStore } from '../stores/toasts'
 import { useTheme } from '../context/ThemeContext'
@@ -32,6 +33,7 @@ import { SpendTrendWidget } from '../components/widgets/SpendTrendWidget'
 import { ClockWidget } from '../components/widgets/ClockWidget'
 import { RadarWidget, RadarCategory } from '../components/widgets/RadarWidget'
 import { BudgetWidget }         from '../components/widgets/BudgetWidget'
+import { CashflowWidget }      from '../components/widgets/CashflowWidget'
 import { ForecastWidget }       from '../components/widgets/ForecastWidget'
 import { ScoreWidget }          from '../components/widgets/ScoreWidget'
 import { TopExpensesWidget }    from '../components/widgets/TopExpensesWidget'
@@ -373,7 +375,7 @@ type WKey =
   | 'active' | 'spend' | 'coffees' | 'events' | 'topExpense' | 'ytd' | 'monthGoal' | 'clock'
   | 'categoryRings'
   | 'heatmap' | 'due' | 'category' | 'upcoming' | 'spendTrend' | 'radar' | 'budget' | 'forecast'
-  | 'score' | 'topExpenses' | 'anomaly' | 'kpiStrip' | 'habits' | 'periodCompare' | 'goals'
+  | 'score' | 'topExpenses' | 'anomaly' | 'kpiStrip' | 'habits' | 'periodCompare' | 'goals' | 'cashflow'
 
 const WIDGET_SIZE: Record<WKey, 'square' | 'rectangle'> = {
   active:        'square',
@@ -400,6 +402,7 @@ const WIDGET_SIZE: Record<WKey, 'square' | 'rectangle'> = {
   habits:        'rectangle',
   periodCompare: 'rectangle',
   goals:         'square',
+  cashflow:      'rectangle',
 }
 
 const WIDGET_DELAY: Record<WKey, number> = {
@@ -407,7 +410,7 @@ const WIDGET_DELAY: Record<WKey, number> = {
   heatmap: 180, due: 210,    spendTrend: 240, category: 270,
   coffees: 300, events: 330, upcoming: 360,
   topExpense: 390, ytd: 420,  radar: 450, categoryRings: 480,
-  budget: 500, forecast: 520, score: 540, topExpenses: 560, anomaly: 580, kpiStrip: 600, habits: 620, periodCompare: 640, goals: 660,
+  budget: 500, forecast: 520, score: 540, topExpenses: 560, anomaly: 580, kpiStrip: 600, habits: 620, periodCompare: 640, goals: 660, cashflow: 680,
 }
 
 const ALL_KEYS: WKey[] = Object.keys(WIDGET_SIZE) as WKey[]
@@ -437,6 +440,7 @@ const WIDGET_META: Record<WKey, { label: string; emoji: string }> = {
   habits:        { label: 'habits',         emoji: '🎯' },
   periodCompare: { label: 'period compare', emoji: '📊' },
   goals:         { label: 'goals',          emoji: '🎯' },
+  cashflow:      { label: 'cashflow',       emoji: '💹' },
 }
 
 const DEFAULT_WIDGET_ORDER: WKey[] = [
@@ -489,6 +493,7 @@ export function Dashboard() {
   const primaryFg = usePrimaryFg()
   const store = useDataStore()
   const toast = useToastStore()
+  const isPrivate = store.settings.privacyMode ?? false
   const { width } = useWindowDimensions()
   const insets = useSafeAreaInsets()
   const isDesktop = Platform.OS === 'web' && width >= 768
@@ -878,8 +883,8 @@ export function Dashboard() {
           <Widget tag="this month" size="square">
             <View style={s.metricCenter}>
               <View style={s.spendBlock}>
-                <Text style={[s.spendMain, { color:colors.text }]}>{monthly.toFixed(0)}</Text>
-                <Text style={[s.spendUnit, { color:colors.textMuted }]}>{symbol}</Text>
+                <Text style={[s.spendMain, { color:colors.text }]}>{mask(monthly.toFixed(0), isPrivate)}</Text>
+                <Text style={[s.spendUnit, { color:colors.textMuted }]}>{isPrivate ? '' : symbol}</Text>
               </View>
             </View>
           </Widget>
@@ -888,8 +893,8 @@ export function Dashboard() {
         return (
           <Widget tag="coffees / mo" size="square">
             <View style={s.metricCenter}>
-              <Text style={[s.statNum, { color:colors.text }]}>{coffeeCount}</Text>
-              <Text style={[s.statSub, { color:colors.textFaint }]}>at {symbol}{store.settings.coffeePrice?.toFixed(2)}</Text>
+              <Text style={[s.statNum, { color:colors.text }]}>{mask(String(coffeeCount), isPrivate)}</Text>
+              <Text style={[s.statSub, { color:colors.textFaint }]}>{isPrivate ? '' : `at ${symbol}${store.settings.coffeePrice?.toFixed(2)}`}</Text>
             </View>
           </Widget>
         )
@@ -912,7 +917,7 @@ export function Dashboard() {
                     {topExpense.emoji ?? '💳'}  {topExpense.name}
                   </Text>
                   <Text style={[s.topPrice, { color:colors.text }]}>
-                    {symbol}{Number(topExpense.price || 0).toFixed(2)}
+                    {mask(`${symbol}${Number(topExpense.price || 0).toFixed(2)}`, isPrivate)}
                   </Text>
                 </>
               ) : (
@@ -926,8 +931,8 @@ export function Dashboard() {
           <Widget tag="year-to-date" size="square">
             <View style={s.metricCenter}>
               <View style={s.spendBlock}>
-                <Text style={[s.spendMain, { color:colors.text }]}>{ytdSpend.toFixed(0)}</Text>
-                <Text style={[s.spendUnit, { color:colors.textMuted }]}>{symbol}</Text>
+                <Text style={[s.spendMain, { color:colors.text }]}>{mask(ytdSpend.toFixed(0), isPrivate)}</Text>
+                <Text style={[s.spendUnit, { color:colors.textMuted }]}>{isPrivate ? '' : symbol}</Text>
               </View>
               <Text style={[s.statSub, { color:colors.textFaint }]}>jan → {format(now, 'MMM').toLowerCase()}</Text>
             </View>
@@ -1071,6 +1076,18 @@ export function Dashboard() {
             spent={monthly}
             budget={store.settings.monthlyBudget ?? null}
             currency={currency}
+            budgets={store.budgets}
+            subscriptions={store.subscriptions}
+            isPrivate={isPrivate}
+          />
+        )
+      case 'cashflow':
+        return (
+          <CashflowWidget
+            subscriptions={activeSubs}
+            tasks={store.tasks}
+            symbol={symbol}
+            isPrivate={isPrivate}
           />
         )
       case 'forecast':
@@ -1078,6 +1095,7 @@ export function Dashboard() {
           <ForecastWidget
             items={forecastItems}
             symbol={symbol}
+            isPrivate={isPrivate}
           />
         )
       case 'score':
@@ -1106,6 +1124,7 @@ export function Dashboard() {
             monthlyBudget={store.settings.monthlyBudget ?? null}
             monthlySpend={monthly}
             symbol={symbol}
+            isPrivate={isPrivate}
           />
         )
       case 'habits':
@@ -1260,6 +1279,14 @@ export function Dashboard() {
             </View>
           </IconButton>
         )}
+        <IconButton
+          variant="primary"
+          size="md"
+          onPress={() => store.updateSettings({ privacyMode: !isPrivate })}
+          accessibilityLabel={isPrivate ? 'Show values' : 'Hide values'}
+        >
+          <Text style={{ fontSize: 15, opacity: isPrivate ? 0.4 : 1 }}>{isPrivate ? '🙈' : '👁'}</Text>
+        </IconButton>
         {!editMode && (
           <IconButton variant="primary" size="md" onPress={() => setShowAddTrack(true)} accessibilityLabel="Add track">
             <Text style={{ color:primaryFg, fontSize:22, fontFamily:theme.fontLight, lineHeight:24 }}>+</Text>
@@ -1401,7 +1428,7 @@ const s = StyleSheet.create({
   // Header wrapper — always visible above the scroll area
   headerWrapper: { paddingHorizontal: theme.sp4, paddingTop: theme.sp4, paddingBottom: theme.sp3 },
   headerWrapperDesktop: { paddingHorizontal: 32, paddingTop: 40, paddingBottom: theme.sp3 },
-  content: { padding:theme.sp5, paddingTop: theme.sp4, gap:theme.sp5, paddingBottom:130 },
+  content: { padding:theme.sp5, paddingTop: theme.sp4, gap:theme.sp6, paddingBottom:130 },
   // Same widget grid on web — centered, single column matching mobile width
   contentDesktop: { paddingHorizontal: 32, paddingTop: 0, paddingBottom: 80, alignItems: 'center' },
   widgetColumn: { width: '100%', maxWidth: 480, gap: theme.sp5 },

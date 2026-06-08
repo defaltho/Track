@@ -7,14 +7,16 @@ import { useTheme } from '../../context/ThemeContext'
 import { Widget } from '../ui/Widget'
 import { buildForecast, forecastTotal, nextUpcoming } from '../../utils/forecast'
 import type { ChargeItem } from '../../utils/forecast'
+import { mask } from '../../utils/format'
 
 interface Props {
   items:  ChargeItem[]
   days?:  number
   symbol: string
+  isPrivate?: boolean
 }
 
-export function ForecastWidget({ items, days = 30, symbol }: Props) {
+export function ForecastWidget({ items, days = 30, symbol, isPrivate = false }: Props) {
   const { colors } = useTheme()
   const forecast   = buildForecast(items, days)
   const total      = forecastTotal(forecast)
@@ -37,7 +39,7 @@ export function ForecastWidget({ items, days = 30, symbol }: Props) {
       {/* Hero */}
       <View style={fw.heroRow}>
         <Text style={[fw.hero, { color: colors.text }]}>
-          {symbol}{total.toFixed(2)}
+          {mask(`${symbol}${total.toFixed(2)}`, isPrivate)}
         </Text>
         <Text style={[fw.heroSub, { color: colors.textMuted }]}>comprometido</Text>
       </View>
@@ -73,7 +75,7 @@ export function ForecastWidget({ items, days = 30, symbol }: Props) {
           <View style={fw.spacer} />
           <Text style={[fw.nextWhen, { color: colors.textFaint }]}>{nextLabel}</Text>
           <Text style={[fw.nextAmt, { color: colors.text }]}>
-            {symbol}{next.total.toFixed(2)}
+            {mask(`${symbol}${next.total.toFixed(2)}`, isPrivate)}
           </Text>
         </View>
       )}
