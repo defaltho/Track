@@ -26,6 +26,7 @@ import { CHANGELOG } from '../../src/data/changelog'
 import { loadSeedData } from '../../src/utils/seedData'
 import { ErrorLog } from '../../src/pages/Settings/ErrorLog'
 import { CategoryManager } from '../../src/components/settings/CategoryManager'
+import { BudgetManager } from '../../src/components/settings/BudgetManager'
 
 const CURRENCIES = ['EUR', 'USD', 'GBP', 'BRL']
 
@@ -89,6 +90,7 @@ export default function Settings() {
 
   function reloadSeed() {
     store.clearAll()
+    store.updateSettings({ seeded: false })
     setTimeout(() => loadSeedData(store), 50)
     toast.push('Seed data reloaded', 'success')
   }
@@ -270,6 +272,10 @@ export default function Settings() {
           />
         </View>
       </View>
+
+      {/* ── Budgets ── */}
+      <Text style={[s.sectionLabel, { color: colors.textMuted }]}>budgets</Text>
+      <BudgetManager />
 
       {/* ── Categories ── */}
       <Text style={[s.sectionLabel, { color: colors.textMuted }]}>categories</Text>

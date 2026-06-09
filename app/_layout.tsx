@@ -74,7 +74,8 @@ function AppShell() {
   useEffect(() => {
     function maybeSeed() {
       const s = useDataStore.getState()
-      const empty = s.subscriptions.length === 0 && s.apps.length === 0 && s.events.length === 0 && s.tasks.length === 0
+      const alreadySeeded = s.settings?.seeded === true
+      const empty = !alreadySeeded && s.subscriptions.length === 0 && s.apps.length === 0 && s.events.length === 0 && s.tasks.length === 0 && (s.habits ?? []).length === 0 && (s.goals ?? []).length === 0
       if (empty) loadSeedData(s)
     }
     if (useDataStore.persist.hasHydrated()) {

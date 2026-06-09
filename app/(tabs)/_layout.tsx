@@ -468,8 +468,8 @@ const sb = StyleSheet.create({
   },
 
   userCard:     { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: 14 },
-  userAvatar:   { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
-  userInitial:  { fontSize: 13, fontFamily: 'Roboto_700Bold' },
+  userAvatar:   { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  userInitial:  { fontSize: 14, fontFamily: 'Roboto_700Bold' },
   userName:     { fontSize: 13, fontFamily: 'Roboto_700Bold', letterSpacing: -0.2 },
   userRole:     { fontSize: 11, fontFamily: 'Roboto_400Regular', marginTop: 1 },
 })

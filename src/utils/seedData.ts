@@ -183,7 +183,7 @@ function generateHistoricalEvents(years: number = 3, perMonth: number = 6): Omit
     const n = Math.floor(perMonth * (0.6 + Math.random() * 0.8)) // 60–140% variance
     for (let i = 0; i < n; i++) {
       const template = PAST_EVENT_POOL[Math.floor(Math.random() * PAST_EVENT_POOL.length)]
-      out.push({ ...template, date: randomDateBetween(monthStart, monthEnd) })
+      out.push({ ...template, date: randomDateBetween(monthStart, monthEnd), note: 'Historical event' })
     }
   }
   return out
@@ -226,6 +226,7 @@ export function loadSeedData(store: {
   addApp: (item: Omit<AppEntry, 'id' | 'createdAt' | 'updatedAt'>) => void
   addEvent: (item: Omit<EventEntry, 'id' | 'createdAt' | 'updatedAt'>) => void
   addTask: (item: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => void
+  updateSettings?: (patch: Record<string, unknown>) => void
 }) {
   // Current active data
   seedSubscriptions.forEach(s => store.addSubscription(s))
@@ -236,6 +237,9 @@ export function loadSeedData(store: {
   // 3 years of history — historical events + dormant subscription charges
   generateHistoricalEvents(3, 6).forEach(e => store.addEvent(e))
   generateHistoricalCharges(3).forEach(s => store.addSubscription(s))
+
+  // Mark store as seeded so this never runs again automatically
+  store.updateSettings?.({ seeded: true })
 }
 
 // ─── Coverage notes ──────────────────────────────────────────────────────────
